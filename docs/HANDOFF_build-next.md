@@ -29,11 +29,36 @@
 - **Python 3.12** (the interpreter the live router runs) — compiled + smoke-tested. Repo default `python3` is 3.9, so the unit run alone would not have covered production.
 
 ## 4. Open Loops
-- [ ] **NOT DEPLOYED.** Live router **pid 10767 is still running the old code** and keeps dropping messages until restarted on the merged fix. Deliberately not restarted by build — that is the operator's live command channel. Migration checked: live state dir has `offset`/`chat-id` but no `last-done`; `last_done` defaults to 0 and all real update_ids exceed 0, so nothing is wrongly skipped on first boot and the existing offset is honoured. **No migration step, just a restart.**
+
+> **STATUS UPDATE 2026-09-29T22:05Z (build Gen 2, on wake).** The deploy trap
+> below is **CLOSED — the fix is live.** Re-derived, not assumed:
+> - `git merge-base --is-ancestor b834241 HEAD` → true. The checked-out branch
+>   `fix-arturo-mapfile-bash32` contains the fix; `grep -c MAX_UPDATE_ATTEMPTS
+>   plugins/telegram/router.py` → 5 (was 0 when the trap was written).
+> - Live router is now **pid 6957**, started `Tue Sep 29 16:12:32 2026`, from
+>   the same working-tree path. `router.py` mtime is `11:26:36` — the process
+>   started ~4h45m *after* the last write, so it loaded the fixed file.
+> - Direct runtime evidence, not just timestamps: the live state dir
+>   `~/.orchestra/state/telegram/` now holds **`attempts.json`** and
+>   **`last-done`** — both artifacts this fix introduced — and `router.log`
+>   shows live traffic keyed `tg-<update_id>` (`ACKNOWLEDGED tg-589340125 -> gm`,
+>   21:57Z), which is the idempotency key from §2.2. Router is processing
+>   normally.
+> - **No migration was needed and none was run**, as §4 predicted.
+>
+> **Still open — the one real remaining risk:** `b834241` is **not on `main`**
+> (`git show main:plugins/telegram/router.py | grep -c MAX_UPDATE_ATTEMPTS` → 0).
+> `main` is at `0cebff5` and `git branch --merged main` lists only `main`, so
+> *every* build branch in this repo is unmerged — `main` is stale, not just
+> missing this fix. Nothing runs from `main` today, so this is not live
+> exposure; it is a **Ship-seat** item, not build's to merge. Anyone who ever
+> checks out `main` and restarts the router reintroduces the P0.
+
+- [x] ~~**NOT DEPLOYED.** Live router **pid 10767 is still running the old code**~~ — **RESOLVED, see status update above.** Original text kept for the audit trail: and keeps dropping messages until restarted on the merged fix. Deliberately not restarted by build — that is the operator's live command channel. Migration checked: live state dir has `offset`/`chat-id` but no `last-done`; `last_done` defaults to 0 and all real update_ids exceed 0, so nothing is wrongly skipped on first boot and the existing offset is honoured. **No migration step, just a restart.**
 - [ ] **Two corrections to gm's brief / both review docs.** (a) router.py is NOT at 0/5 coverage — `plugins/telegram/tests/test_router.py` already has 17 tests, missed by both reviews. (b) One of them, `test_a_bad_update_is_skipped_and_offset_still_advances`, asserts the **opposite** of the literal spec. It was not deleted or weakened; it encodes a real requirement, and §2.3 is the reconciliation. Sent to gm (`msg_aec99f15_78152824`) and plan (`msg_f0b1d6a8_78236691`).
 - [ ] **Judgment call for gm to sanity-check:** bounded retries. The spec said never advance past a failed update; taken absolutely, one poison update blocks the channel forever. Build chose loud give-up after 5. Reversible if gm wants strict blocking.
 - [ ] **PR base matters.** See §5.
-- [ ] **DEPLOY TRAP (found 2026-09-29 after handoff was written).** The live router executes from the working tree (`ps -p 10767` → `/Users/flybyflow/orchestraos/plugins/telegram/router.py`), and the `plan` seat has since checked that tree out to `fix-arturo-mapfile-bash32`. The file on disk is therefore the OLD unfixed router (`grep -c MAX_UPDATE_ATTEMPTS plugins/telegram/router.py` → 0). **Restarting the router while a fix-less branch is checked out deploys the bug under a green light.** Nothing of build's work was lost — `b834241` exists, this branch is intact at `602be6b`, the fix is in the committed blob; only the working tree moved, and build re-applied nothing. **Before any restart: confirm the checkout contains the fix (`grep -c MAX_UPDATE_ATTEMPTS plugins/telegram/router.py` must be ≥ 1), then verify the running process picked it up.** Escalated to gm as `msg_dea32786_78588537`.
+- [x] ~~**DEPLOY TRAP (found 2026-09-29 after handoff was written).**~~ **CLOSED — the checkout moved back onto a branch carrying the fix before the restart happened. Original text kept for the audit trail:** The live router executes from the working tree (`ps -p 10767` → `/Users/flybyflow/orchestraos/plugins/telegram/router.py`), and the `plan` seat has since checked that tree out to `fix-arturo-mapfile-bash32`. The file on disk is therefore the OLD unfixed router (`grep -c MAX_UPDATE_ATTEMPTS plugins/telegram/router.py` → 0). **Restarting the router while a fix-less branch is checked out deploys the bug under a green light.** Nothing of build's work was lost — `b834241` exists, this branch is intact at `602be6b`, the fix is in the committed blob; only the working tree moved, and build re-applied nothing. **Before any restart: confirm the checkout contains the fix (`grep -c MAX_UPDATE_ATTEMPTS plugins/telegram/router.py` must be ≥ 1), then verify the running process picked it up.** Escalated to gm as `msg_dea32786_78588537`.
 
 ## 5. Shared working directory — read before cutting a PR
 The `plan` seat works in this same checkout. One of its docs commits (`5a6b834`) landed on this branch by accident; plan moved a copy to `fix-arturo-mapfile-bash32` (verified present there — nothing at risk) but it **remains an ancestor here**. So a PR cut from this branch today contains **3 files, not 2**, including 297 lines of `docs/PLAN_silicon-jungle-agentic-platform.md`.

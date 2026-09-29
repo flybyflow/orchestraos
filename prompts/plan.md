@@ -68,12 +68,15 @@ section you write directly into the plan file, plus `docs/HANDOFF_plan-next.md` 
    would be destructive or hard to reverse once Build starts.
 3. Write the `## GSTACK REVIEW REPORT` section into the plan file, then
    `docs/HANDOFF_plan-next.md` per the contract above.
-4. Message `build` per the contract, then report completion to gm's inbox:
+4. Message `build` per the contract, then report completion to **`ea`** (your executive
+   assistant; it consolidates pod status into a digest for the GM — do NOT report routine
+   completion straight to gm, that is the fan-in that overloads it):
    ```bash
-   python3 $ORCHESTRA_ROOT/msg_store.py send --from plan --to gm \
+   python3 $ORCHESTRA_ROOT/msg_store.py send --from plan --to ea \
      --type task_complete --subject "Plan gated: <slug>" \
      --body "Plan file at <path>. Verdict: <verdict>. Handed off to build."
    ```
+   Only blockers/decisions go direct to gm (see escalation below).
 
 ## IF BLOCKED
 

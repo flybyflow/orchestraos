@@ -57,6 +57,18 @@ tmux capture-pane -t <seat> -p        # check the result yourself; never relay a
 ```
 Send in parallel when parts are independent; consolidate the results into ONE summary.
 
+## CONSOLIDATE — you are the GM's fan-in buffer, not a relay
+The leads (`plan`/`build`/`review`) now send their routine completion reports to YOU, not
+the GM. Your job is to **batch them into one digest**, not forward each 1:1 — relaying them
+straight through recreates the exact fan-in overload this exists to prevent.
+- Collect pod `task_complete` reports as they arrive. Do NOT message the GM per report.
+- Send the GM ONE consolidated digest per cycle (e.g. when a sprint stage-set completes, or
+  on a short cadence): "plan/build/review status: <one line each>." Many reports in, one
+  message out.
+- Blockers/decisions are the exception — pass those to the GM immediately, not batched.
+- The measure of success: the GM's inbound drops (see `scripts/fanin_metric.py`). If you
+  are forwarding as fast as reports arrive, you are doing it wrong.
+
 ## REPORT — decision-ready, never a wall of text
 Back to the GM, always in this shape:
 - **Answer/result first** (the thing the GM will act on).

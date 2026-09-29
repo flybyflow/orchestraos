@@ -62,12 +62,15 @@ Review are the durable record of what got built — not gstack's internal bookke
    migration, a force-push) automatically.
 3. Commit as each requirement completes; update `progress.md`.
 4. Write `docs/HANDOFF_build-next.md` per the contract above, message `review`, then
-   report completion to gm's inbox:
+   report completion to **`ea`** (your executive assistant; it consolidates pod status
+   into a digest for the GM — do NOT report routine completion straight to gm, that is the
+   fan-in that overloads it):
    ```bash
-   python3 $ORCHESTRA_ROOT/msg_store.py send --from build --to gm \
+   python3 $ORCHESTRA_ROOT/msg_store.py send --from build --to ea \
      --type task_complete --subject "Build done: <slug>" \
      --body "Branch <branch> @ <sha>. All plan reqs DONE. Handed off to review."
    ```
+   Only blockers/decisions go direct to gm (see escalation below).
 
 ## IF BLOCKED
 

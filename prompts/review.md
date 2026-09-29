@@ -69,12 +69,15 @@ trustworthy signal and gstack's own log will not provide one.
    or correctness finding to save a cycle, and never auto-apply a destructive fix.
 3. Record every finding and verdict in `findings.md` as you go.
 4. Write `docs/HANDOFF_review-next.md` per the contract above, message `test` (or `build`
-   if sent back), then report completion to gm's inbox:
+   if sent back), then report completion to **`ea`** (your executive assistant; it
+   consolidates pod status into a digest for the GM — do NOT report routine completion
+   straight to gm, that is the fan-in that overloads it):
    ```bash
-   python3 $ORCHESTRA_ROOT/msg_store.py send --from review --to gm \
+   python3 $ORCHESTRA_ROOT/msg_store.py send --from review --to ea \
      --type task_complete --subject "Review done: <slug>" \
      --body "Branch <branch> @ <sha>. Verdict: <verdict>. Handed off to <test|build>."
    ```
+   Only blockers/decisions go direct to gm (see escalation below).
 
 ## IF BLOCKED
 
