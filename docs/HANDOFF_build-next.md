@@ -3,7 +3,7 @@
 - **Timestamp:** 2026-09-30T00:05:00Z
 - **Working Directory:** /Users/flybyflow/orchestraos (**shared with plan/review/ship — commit only through `scripts/git-lock.sh` with explicit pathspecs**)
 - **Second working tree:** `/tmp/sec01-toddito` (clone of `brollistika/toddito`, branch `main`) — the Pulse/Toddito security work. In `/tmp`, so treat it as disposable and push after every commit.
-- **Last Commit SHA (orchestraos):** `1cfdf9e` on `fix-arturo-mapfile-bash32`
+- **Last Commit SHA (orchestraos):** `d71e6ef` on `fix-arturo-mapfile-bash32` (feature commits `47a3314`, `1cfdf9e`)
 - **Last Commit SHA (toddito):** `4f83b9f` on `main`, pushed and remote-verified
 
 ## 1. Current Goal & Phase State
@@ -12,7 +12,8 @@ Two workstreams, both at a clean stopping point. Nothing half-applied in either 
 - **Toddito security backlog** (gm): SEC-01/02/04/05/06 closed earlier; **SEC-03 closed tonight** (`4f83b9f`), **SEC-08 partial landed** (`f7c3111`).
 
 ## 2. Open Loops
-- [ ] **API server has not been restarted**, so `GET /api/messages/pair-counts` and `/pair/:a/:b` 404 against the running dashboard and the two new panels show nothing. Deliberate: the live process runs from this shared tree, so a restart deploys whatever branch is checked out at that moment. **Before any restart, confirm the checkout still contains `47a3314`.** Flagged to plan and review; not build's call.
+- [x] ~~**API server has not been restarted.**~~ **DONE** — plan authorized it (`msg_fa262296_25738934`), restarted and verified live. Kept for the trap it exposed: the live API runs `api/dist/server.js`, i.e. COMPILED output, and `dist/routes/messages.js` was 8 hours stale. Restarting first would have respawned the old code and come up green. So `cd api && npm run build` **then** restart, and grep `dist/` for the change, not `src/`. Restart method: `kill` the one recorded child pid from `./bin/orchestra status` and let the supervisor respawn it (api is now pid 60913, `restarts=1`); never `pkill -f` in this install. Verified end to end: `total_in_window` for build⇄gm (130) is identical to that pair's line label, the `hours=1` window really narrows it, `/api/agents` still 14/13, and the served bundle at `:8891` is the one `vite build` produced.
+- [ ] **Nobody has looked at the rendered page.** There is no browser in this seat, so every DATA path is verified and zero PIXELS are. The sticky bar under scroll, the panel at narrow widths, and whether line counts read clearly at real density are unconfirmed by eye — a design-review job, and the honest gap between "live and correct" and "looks right".
 - [ ] **One design decision awaiting plan's confirmation.** The pair endpoint returns `total_in_window` AND `total_all_time` because §6 wants a header total and unbounded "load older", and one number cannot be both. If plan wants a single number, either the line and the header disagree again or pagination has to stop at the window edge. Asked in `msg_8aba98d1_25657252`.
 - [ ] **gm is holding a correction, not a deliverable.** `msg_b076d726_25616041`: the SEC-03/SEC-08 "real fix" I recommended and gm authorized **does not exist** for this app. Nothing was built. gm had planned a morning go/no-go for the operator built on my wrong premise; the correction reached gm before that. Do not resurrect the ElevenLabs initiation-webhook plan without re-reading it.
 - [ ] **My two 2D commits land inside PR #133**, whose head branch is the checked-out `fix-arturo-mapfile-bash32`. That PR is now 85 files spanning a router P0 fix, API identity-spoofing fixes, org hardening and this feature. A review problem, not a build problem, but nobody should be surprised by it.
@@ -32,7 +33,7 @@ Two workstreams, both at a clean stopping point. Nothing half-applied in either 
 ## 5. Next 3 Immediate Actions
 1. Read plan's answer on the two-count decision (open loop 2) before anyone builds step 9's window picker on top of it.
 2. If 2D work continues: step 6 (selection highlight and fade) is the natural next one — `selectedAgentId` already reaches `TopologyDiagram` and drives a ring, so the fade-others half is what remains.
-3. Do NOT restart the API server without first confirming the checkout contains `47a3314` (open loop 1).
+3. If anything here needs re-deploying: `npm run build` in `api/` (and `npx vite build` in `dashboard/`) BEFORE restarting, then grep `dist/`. Both `dist/` trees are currently ahead of what is committed — they are untracked build artefacts, not lost work.
 
 ## 6. Grounding Canary Questions (Questions Only — No Answers!)
 1. **Q1:** What single property of the `created_at` column made a string comparison unsafe for the window filter, and which value writes it that way (jsonl:msg_8aba98d1_25657252 regarding the julianday decision)?
