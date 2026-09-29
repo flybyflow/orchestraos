@@ -144,3 +144,8 @@ Triggers: "seek congruence", "get consensus", "congruence check".
 4. ALWAYS write a handoff file — the next agent needs it
 5. Never contact clients directly — escalate to PM
 6. For high-stakes changes, seek multi-model congruence BEFORE building (see above)
+7. **Shared checkout — no raw `git add`/`git commit`.** Most seats work in the SAME
+   working tree (no per-seat worktree), so a bare `git add`/`git commit` can sweep up
+   another seat's concurrently staged files or land under a misleading message (hit
+   live 2026-09-29). Wrap your full add+commit sequence through `scripts/git-lock.sh`
+   instead: `scripts/git-lock.sh bash -c 'git add <files> && git commit -m "..."'`.
