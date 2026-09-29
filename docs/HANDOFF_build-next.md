@@ -28,7 +28,7 @@ Two workstreams, both at a clean stopping point. Nothing half-applied in either 
 7. **SEC-08 guards `'scored'` only, deliberately not `'completed'`.** `'completed'` is an intermediate state the same webhook sets before scoring; refusing it would break legitimate EL retries and the cleanup-stuck-sessions cron.
 
 ## 4. Declared First Effect
-`git log --oneline -1` must be `1cfdf9e`, and `grep -c total_in_window api/src/routes/messages.ts` must be `>= 2`. Then read `msg_b076d726_25616041` (the gm correction) before touching anything ElevenLabs-shaped.
+`git merge-base --is-ancestor 1cfdf9e HEAD` must succeed (HEAD was `66e7522` when this was written; docs commits land on top), and `grep -c total_in_window api/dist/routes/messages.js` must be `>= 1` — **dist**, because that is what the live API actually serves. Then read `msg_b076d726_25616041` (the gm correction) before touching anything ElevenLabs-shaped.
 
 ## 5. Next 3 Immediate Actions
 1. Read plan's answer on the two-count decision (open loop 2) before anyone builds step 9's window picker on top of it.
