@@ -279,3 +279,61 @@ sequencing (§5's last point).
   connection) be raised with Todd in the same conversation as OD4, given this synthesis
   adds two more independent data points (V1, V2) to a pattern the engineering plan
   already flagged from one (1987 only)?
+
+---
+
+## Addendum (2026-09-29, same day, later pass) — a correction to §0/§1's lineage framing, and three follow-up findings
+
+Prompted by three new operator-supplied leads (relayed via gm), a follow-up research
+pass found a repo not covered above — `daern91/koherent-mvp` on GitHub — and it changes
+one load-bearing claim in this document enough to warrant a correction rather than a
+silent edit.
+
+**Correction:** §0/§1 above treat Toddito/Pulse as sitting apart from the V1→V2→V3
+chain — "the current form," implicitly a clean-room build informed by but not built on
+the earlier versions. **That framing is likely wrong, or at least unverified in the
+direction that matters.** `daern91/koherent-mvp` (284 commits, 2024-11-20→2025-05-04 on
+`main`; the operator is a direct committer, 90 commits) has unmerged branches
+(`mo/update-ui-to-shared-mind` → `feature/spectacle`, work continuing through
+2025-08-08) that show the operator's own commits evolving the Koherent codebase
+*directly* into "Team Pulse admin," "Hivemind reflection," and ElevenLabs voice
+interviews — while the folder is still literally named `components/koherent-guide/`.
+This is evidence of a **direct code-level ancestor line into Toddito/Pulse**, not just
+the thematic/conceptual lineage this document describes elsewhere. This was not
+confirmed or refuted with a direct diff against the Toddito/Pulse repo itself — that
+specific check (does Toddito's actual codebase contain code traceable to this branch)
+is real follow-up work this document flags rather than closes.
+
+**Three smaller follow-ups, run in the same pass:**
+
+1. **The What/So-What/Now-What prompt text was never deleted from git anywhere** — not
+   in `koherent-organizations` (already known) and not in `daern91/koherent-mvp` either;
+   it survives intact through the last commit on `feature/spectacle`. The operator's own
+   account ("eventually I wiped things off") likely refers to a **Notion-hosted prompt
+   database** (`daern91/koherent-mvp`'s `promptRepository.ts` fetches live prompt
+   content from Notion at runtime, by title — titles matching V2's `.md` filenames
+   1:1) — a wipe there would be invisible to git entirely, and this document's earlier
+   claim that the prompt text was "reportedly gone" should be read as "gone from Notion,
+   recoverable from git" rather than "gone."
+2. **"Nugget" was searched a third time, still zero hits** — this repo makes it three
+   for three (V2, V3, and now `daern91/koherent-mvp`) with no code-level trace anywhere.
+   §6's hypothesis — that it may never have existed as more than a planned Notion field
+   name — is now better supported, not resolved.
+3. **relationalOS's non-`main` branches were checked and are dead ends** — confirmed via
+   `git reflog` that most (`missoula`, `design-system-relationalos`,
+   `visual-design-exploration`, `relational-os-b2b-pitch-description`, one with an
+   LLM-refusal-message name) are zero-commit stubs, byte-identical to `main`'s tip
+   despite promising names. `relational-os-b2b-pitch-description` in particular looked
+   like it might hold the first-person vision writing this document notes is absent
+   everywhere else — it does not; it's an untouched, renamed placeholder. `main`'s git
+   history (already mined in §2 above) remains the full extent of what's recoverable
+   from this repo.
+
+**A fourth finding, out of scope for this document but reported to gm directly:** the
+same pass verified/reconciled a separate operator claim — that the 1987 THOR system
+already contains most of Todd's unbuilt Application Suite modules — against a full
+inventory of the 1987 binaries. It does not hold up broadly (2 of 5 checked modules have
+real but component-level evidence, 1 is a naming false-friend, 2 have none) and
+incidentally resolved the A–T industry-letter mapping that both companion documents
+flagged as blocked on Todd. That finding belongs to the engineering plan and product
+roadmap, not this synthesis — reported to gm, not reproduced here.
