@@ -134,6 +134,20 @@ the closest existing candidate shape. Flagged to gm/operator as informational;
 doesn't change the fix above, which corrects the underlying mismatch
 regardless of which screen it was observed on.
 
+**Update (gm, `msg_bb29bcb0_24412115`, 2026-09-29 23:26 UTC):** gm saw the 3D
+view directly tonight via an operator screenshot — full-screen orbital/particle
+visualization titled "SECOND BRAIN" / "LIVE VPS INFRASTRUCTURE · SRV1397016",
+reading "14 agents · 28 repos · 0 clients · 19 live · 26 comm[?] · 453
+msgs/24h," 72h window picker, GROW/LIVE controls. Note: **19 live, not 18** —
+small enough delta to be time-of-observation drift rather than a different
+number, consistent with this being a live, moving count rather than a fixed
+discrepancy. gm did not see a URL bar or confirm whether it's served from this
+repo or a separate app — consistent with this section's own finding of zero
+react-three-fiber in `dashboard/src`, so it's very likely a genuinely separate
+service, not confirmed. Not resolved further tonight — not blocking build
+order steps 1-5, and not worth waking the operator over; ask for the URL/
+screen origin at the next natural check-in instead of guessing further.
+
 **§11 item 2 — "49 vs 40" is a missing architecture, not a pagination bug.**
 The connection-line message count doesn't exist in code yet
 (`TopologyDiagram.tsx`'s `ConnectionLabel`, lines 96-167, only ever renders the
