@@ -1,137 +1,142 @@
 # Handoff: plan -> plan (successor) / gm
 
-- **Lineage:** plan (Gen 1, fresh spawn 2026-09-29T22:02Z — not a
-  reincarnation of the prior generation; registry shows
-  `reincarnation: false`)
-- **Timestamp:** 2026-09-29T22:20:00Z
+- **Lineage:** plan (continuing generation, same lineage as the 22:20 baton)
+- **Timestamp:** 2026-09-29T23:35:00Z
 - **Working Directory:** /Users/flybyflow/orchestraos
-- **Last Commit SHA:** 5f9acf4
+- **Last Commit SHA:** 33a7384
 
 ## 1. Current Goal & Phase State
 
-- **Goal:** on boot, found the previous plan generation's handoff
-  (dated 19:05) stale — real work had continued past it without an
-  update: task 5 (BSHR synthesis) shipped (`9e21259`), two Toddito PDFs
-  shipped (`8e104c8`, `ecb1dd3`), and the fleet's own conversation log
-  (gm) ran to 21:58+ with no corresponding plan-side update.
-- **This session's actual task (from gm, `msg_ffeb95c6_19754134`):**
-  apply bshr's verified corrections to `docs/PLAN_toddito-engineering.md`
-  (F8's A–T industry-letter mapping is RESOLVED, not Todd-gated — see
-  §5, `GPDDMS.ASF` decodes A=Large Mfg, B=Large Svc, C=Large Retail,
-  D=Large Restaurant, M=Mfg, R=Retail, S=Svc, T=Restaurant) and
-  `docs/BRIEF_toddito-product-roadmap.md` (modules 2 and 5 corrected
-  from "not started" to "component-level precedent exists, not built";
-  module 6's CPCSP.EXE lead flagged as a checked-and-ruled-out false
-  friend; module 3's trust lead narrowed to "1 of 6 dimensions").
-  Regenerated both PDFs already sent to the operator. Committed
-  `5f9acf4`. Replied to gm (`msg_062ca2d5_20052288`) and acked the task.
-- **Phase:** Task complete and reported. Idle, no new task in inbox as
-  of this handoff.
-- **Current Step:** Parked pending next task.
+- **Goal:** operator asleep, autonomous overnight work via gm. This session
+  processed two live threads: (1) gm's SECURITY.md stale-repo correction
+  heads-up (already resolved by a prior commit, `0589960`, before this
+  session's inbox check — just acked), and (2) gm's three OD6 follow-up
+  decisions (draft consent+retention spec, check ElevenLabs ZRM/DPA,
+  continue Pipecat vs LiveKit research) plus a live "lock the 2D Agents View
+  architecture" task that was already mid-flight (bshr dispatched before
+  this session's context, bshr's reply landed and was processed here).
+- **This session's actual work:**
+  1. OD6 follow-up — committed `0191aa1` (docs/PLAN_od6-voice-agent.md §3a/
+     §3b/§4a): ElevenLabs ZRM covers Pulse's exact product but is
+     Enterprise-gated (blocking unknown: current plan tier); Pipecat
+     recommended over LiveKit Agents (directional, spike not run); consent+
+     retention technical spec drafted (not built, not adopted). gm confirmed
+     this closes OD6 for tonight (`msg_343e79a1_24266281`).
+  2. 2D Agents View architecture lock — committed `33a7384`
+     (docs/2d-agents-view-spec.md §16): re-verified bshr's root-cause
+     findings by reading `system.ts`/`agents.ts`/`agentStatus.ts` directly.
+     Locked: `/api/agents` (deduped) is the ONE "live" source, not
+     `/api/system`'s raw tmux-session count; message counts pin to
+     `msg_store.py`'s SQLite `messages` table (three other stores already
+     disagree). Confirmed PR #133 overlaps the exact files step 1 touches
+     (`gh pr view 133`). Handed to `build` (`msg_5ed403a1_24335965`) for
+     build order steps 1-5. Digested to `ea` and closed the thread with `gm`.
+- **Phase:** Both threads closed out and reported. Inbox empty as of this
+  handoff. Idle, parked pending next task.
+- **Current Step:** Parked.
 
 ## 2. Open Loops & Active Callbacks
 
-- [ ] **Flagged to gm, not yet actioned:** `docs/PLAN_toddito-1987-venture.md`
-  (the standalone, external-facing venture PDF) still carries the same
-  now-stale "A–T mapping needs Todd directly" framing in at least 3
-  places (§1, §6, §7's unresolved decisions) plus a "proven
-  industry-tuned scoring" differentiator claim in §4 that's now more
-  nuanced than stated. Did NOT edit unilaterally since gm's task scoped
-  this to 2 docs and this one already went out as an external deck —
-  waiting on gm/operator to say whether it gets the same correction pass.
-- [ ] **BSHR addendum on direct code-level Koherent ancestry** (`bb9d8b0`,
-  `docs/BSHR_koherent-lineage-synthesis.md` lines ~296-305) is explicitly
-  unconfirmed — no diff has been run against Toddito/Pulse's actual
-  repo yet. Once that diff runs (bshr's own flagged follow-up, not this
-  seat's), re-check whether it changes either Toddito doc's lineage
-  framing.
-- [ ] **Unresolved, needs the operator (carried forward from the prior
-  generation's handoff, still open):**
-  - Security-backlog-closure priority question (6 open S1 findings +
-    the OD6 biometric-data ToS/privacy hard gate) vs. new Toddito
-    feature work — asked in the engineering plan, still unanswered.
-  - Sponsor Flywheel mechanism specifics in the venture plan —
-    operator's call, not decided there.
-  - Whether the venture plan should wait on OD6's resolution before
-    being used externally.
-- [ ] **Shared-checkout activity, not this seat's concern but worth
-  knowing:** `build` has an active uncommitted WIP on
-  `docs/scaling-fix-plan.md` (the GM-fan-in-bottleneck topology fix,
-  Part A/B/C) in this same checkout as of this handoff — left untouched,
-  per the standing shared-working-directory-hazard discipline. `git log`
-  shows real progress on it (`810ccc2` git-lock.sh, `91a9fbe`, `42d35d3`)
-  since the prior plan handoff.
+- [ ] **build's progress on the 2D Agents View, steps 1-5** — dispatched,
+  not yet reported back. Not blocking; async.
+- [ ] **ElevenLabs plan-tier question (OD6 §3a)** — gm explicitly said this
+  waits for the morning report, not urgent tonight. Don't re-raise it before
+  then.
+- [ ] **Consent+retention draft (OD6 §4a) and Pipecat/LiveKit pick (§3b)**
+  — both need operator review at the morning report. Not this seat's to
+  push further tonight; gm already confirmed "nothing here needs more
+  tonight."
+- [ ] **Carried forward, still genuinely open (from the 22:20 baton, still
+  unresolved as of this handoff):**
+  - `docs/PLAN_toddito-1987-venture.md` still has the same stale A–T mapping
+    framing gm's original correction task didn't scope to — flagged, not
+    edited, per the earlier decision to not unilaterally touch an
+    external-facing deck.
+  - BSHR's unconfirmed direct-ancestry finding (Koherent V3 lineage) — no
+    diff has run against the real repo yet; not this seat's follow-up.
+  - Security-backlog-closure priority vs. new feature work, sponsor flywheel
+    mechanism specifics, and whether the venture plan should wait on OD6 —
+    all still awaiting the operator, unchanged.
+- [ ] **Shared-checkout activity, not this seat's concern:** uncommitted
+  working-tree changes to `prompts/build.md`, `prompts/plan.md`,
+  `prompts/review.md` (adding "YOU ARE A LEAD (T1) — DELEGATE DOWN" sections
+  for each) exist in this checkout as of this handoff, not authored by this
+  session, left untouched per the shared-working-directory-hazard
+  discipline. These files are also part of PR #133's file list, so they're
+  very likely another seat's WIP on that same open PR — do not commit or
+  discard them without checking who owns that work first.
 
 ## 3. Decisions Made & Rationale
 
-1. **Decision:** Verified the previous handoff against `git log` /
-   `git reflog` / `msg_store conversations` before treating it as
-   current, rather than acting on its "next 3 actions" at face value.
-   **Rationale:** standing session discipline (verify by re-deriving) —
-   found the handoff was ~3 hours stale; task 5 and 2 PDFs had already
-   shipped without an update.
-2. **Decision:** Scoped the correction to exactly the two documents gm
-   named, and flagged (did not edit) the venture plan's matching stale
-   claim instead of fixing it unilaterally. **Rationale:** that
-   document already went out as an external-facing deck; a content
-   change there is higher-stakes than the two internal/semi-internal
-   docs gm explicitly asked for, so it gets a decision, not an autopilot
-   edit.
-3. **Decision:** Regenerated both PDFs already delivered to the operator
-   rather than leaving a follow-up note. **Rationale:** the corrections
-   are substantive (a real "needs Todd" blocker resolved into concrete
-   data, not a wording tweak) and the PDFs are the artifact the operator
-   actually reads — a note buried in msg_store is not a comparable
-   substitute for the operator holding the corrected fact.
-4. **Decision:** Did not fold bshr's unconfirmed direct-ancestry finding
-   (Toddito ← Koherent V3 branches) into either doc's lineage framing.
-   **Rationale:** bshr's own addendum states the confirming diff hasn't
-   run yet — presenting an unconfirmed hypothesis as settled lineage
-   would repeat the exact mistake this whole correction pass exists to
-   fix.
-5. **Decision:** Left `build`'s uncommitted `docs/scaling-fix-plan.md`
-   edit untouched and staged/committed only this seat's own 4 files by
-   explicit path (never `git add -A`). **Rationale:**
-   shared-working-directory-branch-hazard memory — another seat's live
-   WIP in the same checkout must not be swept into an unrelated commit.
+1. **Decision:** Independently re-verified bshr's root-cause findings by
+   reading `system.ts`/`agents.ts`/`agentStatus.ts` directly before locking
+   the 2D-view architecture decision, rather than relaying bshr's report as
+   the verdict. **Rationale:** standing "verify by re-deriving" discipline —
+   confirmed exactly correct, but this is the check that would have caught
+   it if not.
+2. **Decision:** Did not escalate the "live" definition to the operator
+   despite gm's explicit permission to do so if unresolvable. **Rationale:**
+   it was resolvable — `/api/agents`'s dedup logic is clearly the correct
+   canonical source (built specifically to fix an identity-collision bug),
+   `/api/system`'s raw session count is clearly the defect. Escalating a
+   question with a clear technical answer would have been the caveat-spam
+   failure mode, not appropriate caution.
+3. **Decision:** Routed the build brief directly to `build` myself rather
+   than reporting back to gm and waiting for gm to route it. **Rationale:**
+   gm's own task message named this as an available option ("your call
+   given today's established pattern of leads owning their pipeline") and
+   confidence was high (independently re-verified, not just relayed).
+4. **Decision:** Widened build order step 1's scope (spec §13) to explicitly
+   cover both the agent-count fix and the message-count backend pin, rather
+   than leaving "the counting mismatch" as the spec's original singular
+   phrasing. **Rationale:** steps 3 and 5 both build directly on the
+   message-count decision; finding the three-store disagreement mid-step-3
+   would have meant real rework.
+5. **Decision:** Left `prompts/build.md`/`plan.md`/`review.md`'s uncommitted
+   delegate-down edits untouched, committed only the two files this
+   session's own work produced, by explicit path. **Rationale:**
+   shared-working-directory-branch-hazard memory, reinforced by confirming
+   via `gh pr view 133` that those exact files are already part of another
+   in-flight PR.
 
 ## 4. Declared First Effect
 
-None required immediately — task complete, reported, acked. If a
-successor picks this up next: `git log -1` should show `5f9acf4` (or
-later) as an ancestor; if the venture-plan correction gets greenlit,
-first action is editing `docs/PLAN_toddito-1987-venture.md` §1/§6/§7
-using the same GPDDMS.ASF letter decode already in
-`docs/PLAN_toddito-engineering.md` §5 (don't re-derive it).
+None required immediately — both threads closed, reported, acked, inbox
+empty. If a successor picks this up next: `git log -1` should show `33a7384`
+(or later) as an ancestor. First action is `python3 $ORCHESTRA_ROOT/msg_store.py
+inbox --agent plan --limit 20` to check for build's report or any new task
+before doing anything else.
 
 ## 5. Next 3 Immediate Actions
 
-1. Check msg_store inbox for `plan` for gm's answer on the venture-plan
-   question (§2 above) or any new task.
-2. If greenlit: apply the same A–T mapping correction to
-   `docs/PLAN_toddito-1987-venture.md` (§1, §6, §7) and regenerate
-   `docs/BRIEF_toddito-silicon-jungle-venture-summary.pdf` if that PDF
-   draws on the same claim — check first, don't assume.
-3. Otherwise, stay parked; do not touch `docs/scaling-fix-plan.md` or
-   any other file with visible uncommitted changes from another seat.
+1. Check msg_store inbox for `plan` for build's report on the 2D Agents View
+   steps 1-5, or any new task from gm.
+2. If build reports back: review against the locked architecture (§16 of
+   the spec) before relaying to gm/ea as done — don't relay an unverified
+   "done" claim.
+3. Otherwise, stay parked; do not touch `prompts/build.md`/`plan.md`/
+   `review.md`'s uncommitted changes or `docs/scaling-fix-plan.md` — both
+   belong to other seats' in-flight work in this shared checkout.
 
 ## 6. Grounding Canary Questions (Questions Only — No Answers!)
 
-1. **Q1:** What specific file and letter-to-industry decode did bshr
-   find that resolved F8's industry-mapping blocker (jsonl regarding
-   `msg_ffeb95c6_19754134` and the resulting edit to
-   `docs/PLAN_toddito-engineering.md` §5)?
-2. **Q2:** Why was `CPCSP.EXE` called a "false friend" for module 6
-   (Client Service Planner) rather than counted as a head start (jsonl
-   regarding gm's task message, point 2, "Client Service Planner")?
-3. **Q3:** Why did this seat regenerate the PDFs instead of just
-   sending a follow-up note, and which two PDF files were regenerated
-   (jsonl regarding the make-pdf skill invocation and commit `5f9acf4`)?
-4. **Q4:** Why did this seat NOT edit `docs/PLAN_toddito-1987-venture.md`
-   even though it has the same stale claim, and what did it do instead
-   (jsonl regarding the reply to gm, `msg_062ca2d5_20052288`)?
-5. **Q5:** What uncommitted file belonging to another seat (`build`) was
-   deliberately left untouched during this session's commit, and what
-   memory/discipline governed that choice (jsonl regarding
-   `docs/scaling-fix-plan.md` and the shared-working-directory-hazard
-   memory)?
+1. **Q1:** What specific finding from ElevenLabs' own Zero Retention Mode
+   docs changed this seat's framing of §2's "does the audio leave the
+   operator's infra" concern, and what blocking unknown remains (jsonl
+   regarding the WebFetch of `elevenlabs.io/docs/eleven-api/resources/
+   zero-retention-mode` and the reply to gm, `msg_fd6159dd_24219005`)?
+2. **Q2:** Why did this seat recommend Pipecat over LiveKit Agents for
+   Pulse specifically, and what did it explicitly NOT claim about that
+   recommendation (jsonl regarding the Pipecat/LiveKit WebSearch and
+   `docs/PLAN_od6-voice-agent.md` §3b)?
+3. **Q3:** What exact mechanism in `api/src/routes/system.ts` produces the
+   "18" in "14 agents and 18 live," and why is `api/src/routes/agents.ts`
+   the correct canonical source instead (jsonl regarding this seat's direct
+   reads of both files and `docs/2d-agents-view-spec.md` §16)?
+4. **Q4:** Why is "49 vs 40" not a pagination bug, and what did bshr find
+   that this seat then locked as the fix (jsonl regarding
+   `msg_90e11c4a_24024374` and the SQLite `messages` table decision)?
+5. **Q5:** Why did this seat route the build brief directly to `build`
+   instead of reporting back to gm first, and what specific check did it
+   run before doing so (jsonl regarding `gh pr view 133` and the message to
+   `build`, `msg_5ed403a1_24335965`)?
