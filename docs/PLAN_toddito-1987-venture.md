@@ -49,14 +49,17 @@ execution):
   client organization... whether internal or external." This is not one
   of the 8 org-diagnostic variants — it's a **separate product surface**,
   evaluating consultant/client trust rather than organizational health.
-- **Not determined, and not guessed at:** which specific named industry
-  (manufacturing, nonprofit, government, retail, etc.) each letter or
-  family represents. One real industry-selection menu was found
-  ("Manufacturing & Service" / "Retail Only" / "Retail & Restaurant Only")
-  but it belongs to the *Client Relationship Module*, not confirmed to map
-  1:1 onto the A–T letters. **Todd is the real source for this mapping —
-  this document does not present a guessed mapping as fact anywhere
-  below, and recommends asking him directly (§6).**
+- **RESOLVED (bshr, 2026-09-29):** which named industry each letter
+  represents is answered directly in the binaries — `GPDDMS.ASF` maps
+  Manufacturing/Service/Retail/Large Manufacturing/Large Service/Large
+  Retail/Restaurant/Large Restaurant to GPM/GPS/GPR/GPA/GPB/GPC/GPT/GPD.
+  Decoded: **A = Large Manufacturing, B = Large Service, C = Large
+  Retail, D = Large Restaurant, M = Manufacturing, R = Retail,
+  S = Service, T = Restaurant.** The industry-selection menu cited in an
+  earlier draft of this section belonged to the *Client Relationship
+  Module* and was a red herring — superseded by this direct hit. Todd is
+  no longer the source needed for this specific mapping (§6's earlier
+  "ask him directly" recommendation is retracted for this item).
 
 ## 2. The gap analysis — what the 1987 system's full scope covered that
 today's Toddito (getyourpulse.io) doesn't yet
@@ -150,15 +153,20 @@ The companion engineering plan (`docs/PLAN_toddito-engineering.md`) owns
 *how* to build; this section is *what a venture pitch should say the
 product becomes*, informed by §2's gap analysis:
 
-1. **Near-term differentiator: honest, then real, industry-tuned scoring.**
-   Today's product can honestly say "org diagnostic, single scoring
-   model." The pitch-worthy next step, grounded in a real finding (not
-   invented ambition): the 1987 system proves industry-tuned diagnostic
-   scoring is a real, historically-validated capability of this
-   methodology — closing F8 with real per-variant weights turns "one
-   generic assessment" into "a methodology proven to adapt by industry
-   context," a stronger claim for the boutique-consultant and PE/M&A
-   markets alike.
+1. **Near-term differentiator: honest about what's proven vs. what's
+   still hypothesis.** Today's product can honestly say "org diagnostic,
+   single scoring model." What's **actually verified**: the 1987 system
+   really was industry-tuned into distinct variants (3 content-families,
+   real per-variant weight files), and — per bshr's 2026-09-29
+   correction — the letter↔industry mapping is now fully decoded (§1),
+   no longer a Todd-dependent unknown. What's **still a hypothesis, not
+   yet verified**: whether decoding those per-variant weights and
+   re-running them actually closes the two ground-truth divergences the
+   engineering plan's F8 documents (`thor-score.test.ts`) — that's the
+   engineering plan's §5 spike, not yet run. Don't promote "a methodology
+   proven to adapt by industry context" from hypothesis to differentiator
+   in an external pitch until that spike reports back (§7's own
+   eng-review caveat already said this; unchanged by this correction).
 2. **Mid-term: the Application Suite as the expansion roadmap.** Six
    unbuilt modules (§2 item 2) are not blue-sky invention — they are
    Todd's own documented IP, with one already partially evidenced in the
@@ -234,9 +242,12 @@ broad usage should wait for this to close, consistent with what the June
 review already decided.
 
 **Other real risks, not overstated:** (a) the industry-letter mapping
-(§1) is unresolved — the "proven industry-tuned scoring" claim in §4 item
-1 is currently a hypothesis grounded in real binary evidence, not yet a
-verified, shipped capability; (b) the Application Suite roadmap (§4 item
+(§1) is now resolved (bshr, 2026-09-29) — that specific unknown is gone —
+but the "proven industry-tuned scoring" claim in §4 item 1 is still a
+hypothesis grounded in real binary evidence, not yet a verified, shipped
+capability: knowing which letter maps to which industry does not yet
+prove that decoding those weights closes F8's ground-truth divergence;
+(b) the Application Suite roadmap (§4 item
 2) depends on Todd's own OD4 response — this document does not promise a
 build timeline Todd hasn't confirmed; (c) no real revenue, user-count, or
 retention data was available to this seat at the time of writing — every
@@ -280,9 +291,11 @@ external deck — those need to close first or be presented as roadmap, not
 current state.
 
 **UNRESOLVED DECISIONS:**
-- Does the operator want to ask Todd directly for the A–T industry
-  mapping now, given it blocks both this plan's "proven differentiator"
-  claim and the engineering plan's F8 verification?
+- ~~Does the operator want to ask Todd directly for the A–T industry
+  mapping~~ — **resolved** (§1, bshr 2026-09-29); no longer blocks
+  anything. What still blocks §4 item 1's "proven differentiator" claim
+  is the engineering plan's F8 verification spike, unrelated to Todd or
+  this mapping.
 - Sponsor Flywheel mechanism (§5): cash, technology-in-kind, or both —
   and at what milestone does it start? Operator's call, not decided here.
 - Should this document wait on OD6's resolution (§6) before becoming an
