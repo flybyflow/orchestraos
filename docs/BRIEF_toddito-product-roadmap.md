@@ -74,7 +74,7 @@ where "what would the experience be" isn't a question — it already exists.
 
 ---
 
-### 2. Executive Communicator — **NOT STARTED — but the most build-ready of the six**
+### 2. Executive Communicator — **NOT BUILT — narrow 1987 precedent exists, not a built equivalent**
 
 **What it is:** Aligns an executive team by surfacing where each
 executive's read of the company's strategy and operations actually
@@ -101,6 +101,14 @@ of team-level synthesis (the "team culture" feature mentioned above,
 before it was removed). That existing language is a real head start, not
 a from-scratch design problem.
 
+**Correction (bshr, verified against the full 73-file 1987 binary
+inventory, 2026-09-29):** there's also a genuine 1987-system precedent,
+narrower than it sounds — a real 1992 multi-rater divergence report
+(`MV6COMBO.ASC` + `SACALC`/`SDCALC`) that compares scores across multiple
+raters. It's a numeric divergence range, not narrative synthesis, and the
+raters aren't confirmed to be specifically executives. Real head-start
+material, not a shortcut past the actual build.
+
 ---
 
 ### 3. Consulting Communicator — **NOT STARTED — blocked on Todd**
@@ -125,9 +133,14 @@ building ahead of that would mean guessing at his own idea.
 **One real, unconfirmed lead worth following up:** the 1987 predecessor
 system had a separate feature specifically for assessing trust and
 credibility between a consultant and their client — a different, older
-version of a very similar idea. Worth asking Todd directly whether this
-is the same concept he has in mind, or something distinct — it could
-mean this module has more of a running start than "blocked" suggests.
+version of a very similar idea. **Sharper context (bshr, 2026-09-29):**
+trust/credibility is one of six diagnosed dimensions in that 1987 module
+(alongside Development Stage, Strategy, Structure, Culture, and Leadership
+Style), not the whole feature — narrows, doesn't confirm, the lead. Worth
+asking Todd directly whether this is the same concept he has in mind, or
+something distinct — it could mean this module has more of a running
+start than "blocked" suggests, just not as much as the trust angle alone
+implied.
 
 ---
 
@@ -154,7 +167,7 @@ separate product built from nothing.
 
 ---
 
-### 5. Investor Insight Application — **NOT STARTED — has a validated demand signal**
+### 5. Investor Insight Application — **NOT BUILT — has a validated demand signal, plus a narrow 1987 precedent**
 
 **What it is:** The same organizational-health lens as module 1, framed
 as a due-diligence tool: before an investor commits capital to a company,
@@ -174,12 +187,25 @@ a real go-to-market angle for Toddito ("if you're going to put money into
 a company, you wouldn't want to put everything in without ensuring its
 success"). The module and the market thesis point at each other.
 
+**Correction (bshr, verified against the full 73-file 1987 binary
+inventory, 2026-09-29):** a real "Saleability Index" section exists across
+all 8 of the 1987 system's industry variants — genuine precedent, not just
+thematic. But it's framed as an internal scoring dimension inside the org
+report, not a standalone due-diligence product — so "not started" still
+holds for the product itself, though the underlying scoring signal has a
+real legacy precedent to build from.
+
 ---
 
 ### 6. Client Service Planner — **NOT STARTED**
 
 **What it is:** Helps an organization become more market-driven and
 customer-focused in how it actually operates, based on Todd's framework.
+
+**Checked and ruled out (bshr, 2026-09-29):** `CPCSP.EXE` — "Touche Ross
+Client Service Planning System" — is a near-exact name match, but it's
+actually a consultant's account-planning/upsell tool, not this module.
+Flagging so it isn't mistaken for a head start later.
 
 **Status:** Real, but the least fleshed-out of the seven in the material
 gathered so far — this document doesn't have enough detail yet to

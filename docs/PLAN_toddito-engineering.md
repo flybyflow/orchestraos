@@ -149,13 +149,18 @@ mic-program-toddito`:
   likely differ *within* a family too, or the families themselves may be
   the real "industry" boundary. Not yet determined which; see the venture
   plan for the full evidentiary trail.
-- **Not yet determined:** which letter/family maps to which named
-  industry. The one real industry-selection menu found in the binaries
-  ("Manufacturing & Service" / "Retail Only" / "Retail & Restaurant Only")
-  belongs to a *different* module (`CPCSP.EXE`, "THE CLIENT RELATIONSHIP
-  MODULE") and is not confirmed to correspond 1:1 to the A–T letters.
-  Todd is the real source for this mapping — recommended to ask him
-  directly (per the research pass's own conclusion) rather than guess.
+- **RESOLVED (bshr, 2026-09-29):** the letter↔industry mapping is in the
+  binaries themselves, not a Todd-dependent unknown. `GPDDMS.ASF` maps
+  Manufacturing/Service/Retail/Large Manufacturing/Large Service/Large
+  Retail/Restaurant/Large Restaurant directly to GPM/GPS/GPR/GPA/GPB/GPC/
+  GPT/GPD — i.e. **A = Large Manufacturing, B = Large Service, C = Large
+  Retail, D = Large Restaurant, M = Manufacturing, R = Retail, S = Service,
+  T = Restaurant.** The earlier "Todd is the real source" framing (below,
+  pre-correction) was wrong; the CPCSP.EXE industry-selection menu it cited
+  is a red herring from an unrelated module, superseded by this direct
+  hit. Residual open item (not a Todd question): confirm Pulse's own org
+  intake captures an industry field that maps onto these 8 categories —
+  a data check, not a design blocker.
 
 **Real, scoped engineering task (recommended #1 priority, contingent on
 schedule — see §7 ranking):**
@@ -170,11 +175,11 @@ schedule — see §7 ranking):**
 4. If it does: this becomes a real per-industry (or per-family) weight
    selection in the scoring pipeline, not a single hardcoded matrix — a
    genuinely new capability, not just a bugfix.
-5. **Gate, not guessed around:** confirming which of Pulse's respondents/
-   organizations should map to which legacy variant needs the same
-   Todd-sourced industry mapping named above — this task can start on the
-   binary-format reverse-engineering in parallel, but cannot fully close
-   (verified fix, not just closer weights) without that mapping.
+5. **No longer Todd-gated:** the letter↔industry mapping is resolved
+   (above). What's left to confirm before this fully closes: whether
+   Pulse's respondent/org intake records an industry classification that
+   maps onto the 8 categories above — a Pulse-data check, not a
+   Todd-sourced unknown.
 
 ## 6. Security backlog — flagged prominently, not buried, because this is
 where real risk lives
@@ -212,8 +217,12 @@ connection, worth flagging not asserting:** the 1987 binaries' separate
 own marketing text — "a diagnosis of the extent to which you have managed
 to build trust and credibility with key decision makers in the client
 organization") sounds structurally adjacent to the Consulting Communicator
-concept. Not verified as the same thing — surfaced for Todd to confirm or
-rule out when the OD4 conversation happens, not treated as settled.
+concept. **Sharper context (bshr, 2026-09-29):** trust/credibility is one
+of six diagnosed dimensions in `CPCSP.EXE` (Development Stage, Strategy,
+Structure, Culture, Leadership Style, Consultant-Client Relationship), not
+the whole module — narrows, doesn't confirm, the adjacency. Not verified as
+the same thing — surfaced for Todd to confirm or rule out when the OD4
+conversation happens, not treated as settled.
 
 ## 8. Recommended scope — what to build first, ranked
 
@@ -226,9 +235,10 @@ rule out when the OD4 conversation happens, not treated as settled.
    connects today's Koherent-mining research to the 1987-system research —
    the rare case where "mining the old system" produces a specific,
    testable engineering deliverable rather than just inspiration. Start
-   the `.ASF` format reverse-engineering now (doesn't need Todd); the
-   industry-mapping question (needs Todd) can run in parallel, not
-   sequentially blocking.
+   the `.ASF` format reverse-engineering now; the industry-letter mapping
+   is resolved (§5), so nothing in this item is Todd-gated anymore — the
+   only residual check is whether Pulse's own org data records a matching
+   industry field.
 3. **Small, scoped Koherent V1 reuse: the multi-person @-mention context
    pattern (§1).** Worth a real look for Pulse's existing group/consultant
    multi-respondent reports — check whether `getMentionedUsersData`'s
@@ -292,8 +302,9 @@ Todd's OD4 response — not silently folded into "build first" scope.
   flagged as a hard gate 3+ months ago and remains open?
 - `.ASF` binary format: tractable or not — needs the timeboxed spike
   before §5's full sequence can be estimated honestly.
-- Which 1987 letter/family maps to which industry — needs Todd directly;
-  do not guess in the meantime (per the research pass's own conclusion).
+- ~~Which 1987 letter/family maps to which industry~~ — **resolved** (§5,
+  bshr 2026-09-29). Residual: confirm Pulse's org intake has a matching
+  industry field — a data check, not an open decision.
 - Does build agree with deferring What/So-What/Now-What to its own design
   review rather than building it now, given the operator's "start
   improving now" framing might read as wanting it included?
