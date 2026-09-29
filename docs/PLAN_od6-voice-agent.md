@@ -193,13 +193,152 @@ orchestration-layer decision (§3 item 3) first.
 4. **Multi-model congruence pass** (per gm's instruction) once a concrete proposal
    exists from steps 2-3 — not before, and not tonight.
 
+## 3a. Follow-up (gm decisions, `msg_ea200df2_23495323`, 2026-09-29 23:11 UTC): ElevenLabs Zero Retention Mode + DPA — checked tonight
+
+Per gm's go-ahead ("cheap, do it tonight if it's just reading docs/pricing" —
+did not contact ElevenLabs sales or commit to anything). Verified directly
+against ElevenLabs' own docs (`elevenlabs.io/docs/eleven-api/resources/
+zero-retention-mode`, `elevenlabs.io/dpa`, fetched tonight), not a summary page.
+
+**Zero Retention Mode (ZRM) — this is a real, additive option, not a dead
+end:**
+- **Covers exactly the product Pulse uses.** Eligible products explicitly
+  include "ElevenAgents: all input and output" — Pulse's Conversational AI
+  agent is in scope, not excluded like voice cloning/dubbing.
+- **Gating:** Enterprise-tier only, "select enterprise customers,"
+  "primarily intended for... healthcare and banking," access subject to
+  ElevenLabs' own risk assessment — not a self-serve toggle.
+- **Scope limits that matter for enforcement:** API-only (the ElevenLabs
+  web UI/playground isn't covered — irrelevant to Pulse, which only uses
+  the API); enabled **per-agent via the dashboard**, and for direct API
+  calls requires `enable_logging=false` on the request. A single
+  misconfigured call path would silently fall back to normal retention —
+  worth a code/config review, not just a dashboard toggle, if this path is
+  pursued.
+- **What ZRM does NOT do:** it governs data on ElevenLabs' side only. It has
+  no bearing on Pulse's own `transcripts.raw_transcript` verbatim storage in
+  Supabase — §0 items 1 (consent) and 3 (retention) remain Pulse's own
+  responsibility regardless of whether ZRM is enabled.
+
+**DPA — tiered, not universal:**
+- **Enterprise:** guaranteed 30-day deletion of Customer Content after
+  contract termination (extendable only with customer consent).
+- **Self-serve (Free/Creator/Pro/Scale):** no contractual deletion
+  guarantee — only a *discretionary* right to delete after 180 days of
+  inactivity. If Toddito/Pulse is on a self-serve plan today, ElevenLabs
+  has no obligation to delete anything.
+
+**What this changes about §2's framing:** ZRM narrows (doesn't eliminate) the
+"does the audio leave the operator's infra and sit on a third party's
+servers indefinitely" concern — *if* Pulse is moved to Enterprise and ZRM is
+correctly enabled per-agent. **Unresolved, needs the operator:** what
+ElevenLabs plan is Toddito/Pulse actually on today? If self-serve, ZRM isn't
+available without an upgrade, which has a real cost this document doesn't
+size. Either way, this is the cheap path gm asked about — real, but it does
+not remove the need for the consent + retention fix in §5, since that closes
+a gap ZRM structurally cannot (Pulse's own database).
+
+## 3b. Follow-up (gm decisions, item 3): Pipecat vs. LiveKit Agents — orchestration-layer research
+
+The single open question §3 item 3 flagged as unresolved. Researched tonight
+(WebSearch + direct doc read); this is desk research, not a working spike —
+treat as directional, not final, per §3's own "timeboxed spike... before
+committing to a full swap."
+
+| | **Pipecat** (Daily) | **LiveKit Agents** |
+|---|---|---|
+| License | BSD-2-Clause, including its own turn-detection model — no framework lock-in via the model | Apache-2.0 |
+| Transport | Transport-agnostic by design — "bring your own" (WebSocket, Daily, LiveKit, Twilio/SIP) | Built specifically on top of LiveKit's own WebRTC SFU; using another transport is possible but uncommon |
+| Self-hosting operational burden | You run your own processor pipeline on your own compute — no separate media-server component required for a plain WebSocket/browser-mic session | Realistic but heavier: self-hosting means also running TURN + the SFU + telephony peers, not just agent logic |
+| Fit for Pulse's product shape (single respondent, browser-mic, no phone number, no multi-party) | Good fit — Pulse doesn't need LiveKit's native SIP/telephony/multi-party/video, so that machinery would be unused weight | LiveKit's actual differentiators (native phone numbers, multi-party, video) are exactly what Pulse's product does *not* need |
+| Maturity (mid-2026) | ~13.4k GitHub stars (Jul 2026), actively developed | ~11.4k GitHub stars (Jul 2026), actively developed |
+
+**Directional recommendation:** Pipecat is the better-fit candidate for
+Pulse specifically — transport-agnostic (no obligation to also self-host a
+WebRTC SFU/TURN stack just to run a browser-mic session), permissive
+license with no model carve-out, and its telephony-optional design matches
+"we don't have phone numbers" better than LiveKit's SIP/multi-party-native
+architecture, which would be unused surface area for this product. This is
+**not** a final decision — §3's own next step (a timeboxed spike wiring one
+real Pulse session end-to-end) is what actually validates it; tonight's
+pass narrows the field from "unresolved" to "Pipecat first, LiveKit as
+fallback if the spike surfaces a Pipecat-specific blocker," not more than
+that.
+
+## 4a. Follow-up (gm decisions, item 1): Consent capture + retention policy — technical spec (DRAFT, NOT ADOPTED)
+
+Per gm's explicit instruction: this is a ready-to-approve draft for the
+operator's morning review, **not a live change** and **not built tonight**.
+Grounded directly in the real schema/routes (`gh api` against
+`brollistika/toddito`, read tonight, same discipline as §0/§2) rather than
+invented.
+
+**Consent capture — technical spec:**
+- `sessions` table (confirmed columns in use: `client_name`, `client_org`,
+  `respondent_role`, `tier`, `status`, `org_id`, etc., set in
+  `POST /api/sessions`) gains two new nullable columns: `consent_given_at
+  timestamptz` and `consent_version text` (a version string tying the
+  record to the exact policy language shown, so a later wording change
+  doesn't retroactively reinterpret old consents).
+- `POST /api/sessions` (the public, rate-limited session-creation endpoint —
+  SEC-06, 20/min/IP, already enforced) currently accepts no consent field
+  at all. Add a required `consent: true` boolean to the request body;
+  **reject with 400** if missing or false. This is the capture point,
+  before any respondent-facing UI even exists in this doc's scope — the
+  actual UI copy/checkbox is a product decision, not specified here.
+- **Enforcement, not just capture:** the response today always returns
+  `vapi_config` (the ElevenLabs agent config the client uses to start the
+  call) unconditionally. Gate that: only return `vapi_config` (i.e., only
+  let the call actually start) when `consent_given_at` is set on the
+  session row. A checkbox the client could theoretically skip past is not
+  consent enforcement; refusing to start the recorded call without a
+  server-side consent record is.
+- This is additive and low-risk to existing sessions — nullable columns,
+  new required field on a new-session endpoint only, no change to the
+  webhook or scoring path.
+
+**Retention — technical spec + proposed policy language:**
+- Enforcement pattern: this codebase already has a cron precedent
+  (`/api/cron/cleanup-stuck-sessions`) — a new scheduled job
+  (`cleanup-expired-transcripts` or similar) on the same pattern, not a new
+  mechanism, that finds `transcripts` rows older than the retention window
+  and nulls/deletes `raw_transcript` (the verbatim biometric-sensitive
+  field) while leaving `processed_text` and the scoring output intact —
+  those are the durable business value and are not raw voice data.
+- **Retention window — proposing 90 days as a default, this is the
+  operator's call, not derived from any requirement here:** long enough to
+  cover a normal engagement's review/dispute cycle, short enough to be a
+  real reduction from "forever" (today's actual state). Flag for the
+  operator to confirm or change.
+- **Proposed policy language (draft, for the operator to edit/approve, not
+  to ship as-is):** *"Your spoken responses are recorded and transcribed to
+  generate your organizational diagnostic. The raw recording and transcript
+  are retained for 90 days after your session and then permanently
+  deleted. Your anonymized diagnostic scores are retained as part of your
+  organization's report."*
+- This does not address **retroactive** consent/retention for existing
+  alpha respondents (§4's own flagged gap, unchanged) — a separate,
+  one-time decision about already-stored data, not solved by shipping the
+  above.
+
+**Explicitly not done tonight, per gm's instruction:** no code written, no
+migration run, no policy language published anywhere respondent-facing.
+This is the draft for the morning report only.
+
 ## 4. What this document does not decide
 
 - Whether the operator wants to pursue self-hosting at all vs. the cheaper
-  ElevenLabs-DPA check (§2) — genuinely the operator's call, not resolved here.
-- Which orchestration framework (Pipecat, LiveKit Agents, forked Patter) — needs its
-  own research pass.
+  ElevenLabs Zero Retention Mode path (§3a) — checked tonight, genuinely the
+  operator's call, not resolved here. Depends on an unknown this document
+  flags but cannot answer: what ElevenLabs plan Toddito/Pulse is on today.
+- Which orchestration framework — §3b's desk research narrows this to
+  "Pipecat first, LiveKit as fallback," but the timeboxed spike (§3 item 3)
+  that actually validates it has not run.
 - Any specific infrastructure spend (GPU box) — not sized, depends on the above.
+- Whether to adopt §4a's consent-capture and retention-policy draft as
+  written, including the proposed 90-day window and policy language —
+  drafted tonight per gm's instruction, explicitly **not adopted**, needs
+  the operator's sign-off before either ships.
 - AGPL legal risk on VoiceStudio specifically — flagged, not resolved; real legal
   review needed if VoiceStudio's engines are used beyond arm's-length, unmodified use.
 - **Retroactive consent for existing alpha respondents.** §0's consent-capture fix
@@ -222,32 +361,47 @@ this and make it compliant") assumed one of the two named repos was close to
 production-usable. Direct source inspection of both found neither is — this document
 says so plainly rather than force-fitting the recommendation to the premise.
 
-**Eng review — Scope Challenge:** the one thing this document deliberately does NOT
-resolve is the orchestration-layer choice (§3 item 3), because resolving it needs a
-research pass this task's time budget didn't cover (a third unplanned fork already
-ran tonight, evaluating a lead the research itself surfaced — a fourth, for
-Pipecat/LiveKit, would be starting a new investigation rather than finishing this
-one). Recommend that pass run next, explicitly, rather than silently guessing at
-Pipecat vs. LiveKit Agents here.
+**Eng review — Scope Challenge:** the original pass deliberately did NOT resolve
+the orchestration-layer choice (§3 item 3) or the ElevenLabs DPA/ZRM check (§2),
+flagging both as follow-ups rather than guessing. Both ran tonight as a second
+pass (§3a, §3b, §4a) per gm's explicit decisions (`msg_ea200df2_23495323`), each
+scoped exactly as instructed: ZRM/DPA as desk research only (no sales contact,
+no commitment), Pipecat/LiveKit as desk research only (not the timeboxed spike),
+consent/retention as a draft spec only (not built, not adopted). None of the
+three exceeded the scope gm authorized.
 
-**Test/verification review:** every architectural claim above is cited to a specific
-file, license text, or `gh repo view` output read directly by a forked subagent
-tonight — not inferred from the marketing pages. Two explicit unverifieds are
-flagged rather than guessed: (a) whether ElevenLabs itself offers a zero-retention/
-DPA tier (§2, not researched tonight), (b) VoiceStudio's own apparent contradiction
-between "no fully-local PSTN path" and its documented working Twilio call agent
-(flagged by the evaluating fork, not resolved).
+**Test/verification review:** every architectural claim above is cited to a
+specific file, license text, `gh repo view` output, or (for §3a/§3b, tonight's
+follow-up) a direct fetch of ElevenLabs' own docs/DPA pages and cross-checked
+search results — not inferred from a single summary. §4a's consent/retention
+spec is grounded in the real `sessions`/`transcripts` schema and `POST
+/api/sessions` route, read directly via `gh api` against `brollistika/toddito`
+tonight, not invented. Remaining explicit unverifieds: (a) what ElevenLabs plan
+tier Toddito/Pulse is actually on today (§3a — cannot be checked without the
+operator's account access), (b) VoiceStudio's own apparent contradiction between
+"no fully-local PSTN path" and its documented working Twilio call agent (§1,
+still unresolved from the original pass).
 
 **VERDICT: CLEARED as a research/spec document — not a build authorization.**
-Recommend gm relay §3's rough sequencing to the operator as a real recommendation
-with a named next step (the Pipecat/LiveKit research pass), not as a "ready to
-build" plan. Per gm's own instruction, any concrete build proposal that emerges from
-step 2 of §3 needs a multi-model congruence pass before anyone builds against it.
+All three of tonight's follow-ups (§3a ZRM/DPA, §3b Pipecat/LiveKit, §4a
+consent/retention draft) stayed within the scope gm authorized. Recommend gm
+relay this as: (1) a ready-to-approve consent+retention draft for the operator's
+morning sign-off, (2) a real ElevenLabs-plan question the operator needs to
+answer (self-serve vs. Enterprise) before ZRM can even be evaluated as an
+option, (3) Pipecat as the directional orchestration-layer pick pending the
+still-unrun timeboxed spike. Per gm's own instruction, any concrete build
+proposal needs a multi-model congruence pass before anyone builds against it —
+still true, still not run.
 
 **UNRESOLVED DECISIONS:**
-- Self-host at all, or check ElevenLabs' own DPA/retention terms first (§2)?
-- Which orchestration framework, once evaluated (§3 item 3)?
-- GPU infrastructure spend, once the orchestration layer is chosen?
+- Self-host at all, or pursue ElevenLabs Zero Retention Mode (§3a) — blocked on
+  an unknown this document can't resolve: current ElevenLabs plan tier.
+- Approve, edit, or reject §4a's consent-capture spec and retention policy
+  draft (including the proposed 90-day window and policy language) —
+  operator sign-off required before any of it ships.
+- Confirm Pipecat as the orchestration framework, or require the timeboxed
+  spike to run before treating §3b's desk-research pick as sufficient.
+- GPU infrastructure spend, once the orchestration layer is chosen.
 - Is VoiceStudio's AGPL license (§1) acceptable for even component-level,
   unmodified, arm's-length use, or does its legal risk rule it out entirely
   regardless of technical fit?
