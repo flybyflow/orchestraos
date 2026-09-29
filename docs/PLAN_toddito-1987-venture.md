@@ -94,7 +94,11 @@ with Todd), rather than starting from scratch:
    how the original system was already built. Worth flagging, not
    asserting as confirmed: the Client Relationship Module's trust/
    credibility framing sounds structurally adjacent to Consulting
-   Communicator — a real candidate hypothesis for Todd to confirm or rule
+   Communicator. **Sharper context (bshr, 2026-09-29):** trust/
+   credibility is one of six diagnosed dimensions in that module
+   (alongside Development Stage, Strategy, Structure, Culture, and
+   Leadership Style), not the whole module — narrows, doesn't confirm,
+   the adjacency. A real candidate hypothesis for Todd to confirm or rule
    out, not treated as settled here.
 3. **Multi-language.** Todd's own gap analysis names French as a real,
    stated requirement — not built.
