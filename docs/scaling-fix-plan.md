@@ -60,7 +60,15 @@ Prompt-only, no signal needed. Cuts the GM's fan-in and context-fill rate at the
 - **Metric [F5]:** before/after, instrument GM inbound msgs/hour and GM context-fill-rate
   (fraction/hour). Without it we can't tell the topology change worked.
 
-### Part B — Fix the context signal in the EXISTING chain (not a new capture path) [F1/M2/M5]
+### Part B — RESOLVED: the signal already works (verified live 2026-09-29)
+Investigation result: **no signal fix needed.** The `jsonl_tokens` path produces a correct
+tier for every live seat (gm 34%, ea 14%, build 12%, review 10%) with no pane bar (panes
+never render one — M6 confirmed). `cron_beat.log` shows the engine runs every tick
+(`total:14, actionable:2`) and even detected the pre-respawn build at 110% of ceiling. The
+ONLY empty field is the cosmetic `/api/agents` display path (watch_gateway), which does not
+feed `decide()`. Nothing to build here. The real lever is Part C (arming), below.
+
+#### (original Part B, now moot — kept for the record) Fix the context signal chain [F1/M2/M5]
 The rotation engine already exists and is armed for T2 soft handoffs; it noop'd because
 the shared agent-status parser returns `context_pct=''` for the `████ 86%` / skull bar
 formats. `collect.py` already ships the fix parser (`_parse`, `resolve_ctx_pct`).
@@ -74,7 +82,19 @@ formats. `collect.py` already ships the fix parser (`_parse`, `resolve_ctx_pct`)
   relying on the scrape; if it doesn't, the jsonl_tokens/ceiling fallback is the signal.
 - **Acceptance:** `decide()` classifies a busy seat as SOFT/HARD (not `unknown`) on live data.
 
-### Part C — Reassess the rotation engine (only after A + B; likely small or nothing)
+### Part C — DONE (Option A, 2026-09-29): arm T2 self-heal, keep leads+GM human-gated
+Implemented: created `~/runtime/self_retire_armed` with the 8 T2 worker lineage roots
+(builder-1/2, think, brain, bshr, test, ship, reflect). The engine was already
+`ARMED_TIERS={"T2"}, SOFT_ONLY=False`; the real gate was the **empty allowlist** (fail-closed
+→ nothing rotated). Now T2 workers past ceiling self-heal via the existing engine; leads
+(T1) + GM (T0) stay human-gated (`_GATED_TIERS`), surfacing a one-tap approval card. Full
+gate: kill-switch off + tier∈T2 + lineage armed + graduation-pass (non-graduated → approval
+card, not silent). Kill-switch: `touch ~/runtime/SELF_RETIRE_DISABLED`. Disarm: clear the
+allowlist. VERIFICATION CAVEAT: manual dry-run sees 0 seats (env quirk); the live */15
+cron_beat sees all 14 (per cron_beat.log) and will exercise this on the next tick a T2
+worker crosses ceiling. Watch cron_beat.log for the first armed rotation.
+
+#### (superseded) original Part C — Reassess the rotation engine
 With fan-in cutting fill rate (A) and the signal fixed (B), the existing engine revives.
 Then decide, per evidence, whether anything more is needed:
 - **Do NOT build a new beat.** Reuse `cron_beat`/`fleet`/`decide`.

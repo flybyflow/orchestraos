@@ -31,12 +31,22 @@ def measure(hours=6):
     fleet = {"plan","build","review","think","brain","bshr","builder-1","builder-2",
              "test","ship","reflect"}
     fleet_reports = sum(c for s, c in by_sender if s in fleet)
+    # Part A only targets routine task_complete fan-in — 'reply' traffic in an
+    # active gm-initiated thread was never in scope and confounds the raw total
+    # above, so break out by message type to get a clean before/after signal.
+    by_type = con.execute(
+        "SELECT type, COUNT(*) c FROM messages WHERE to_agent='gm' "
+        "AND from_agent IN ({}) AND datetime(created_at) > datetime('now', ?) "
+        "GROUP BY type ORDER BY c DESC".format(
+            ",".join("?" * len(fleet))),
+        (*fleet, win)).fetchall()
     con.close()
     return {
         "window_hours": hours,
         "gm_inbound_total": total,
         "gm_inbound_per_hour": per_hour,
         "fleet_raw_reports": fleet_reports,   # the number Part A should shrink
+        "fleet_reports_by_type": {t: c for t, c in by_type},  # task_complete is the real F5 signal
         "by_sender": {s: c for s, c in by_sender},
     }
 
