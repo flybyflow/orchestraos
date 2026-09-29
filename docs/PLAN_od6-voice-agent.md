@@ -16,6 +16,19 @@
   instruction, kept standalone unless a real connection emerged. One did (§2), so this
   document cross-references `docs/PLAN_toddito-engineering.md` and
   `docs/SECURITY.md` rather than re-deriving their findings.
+- **Correction (gm, `msg_6595ef82_23438034`, 2026-09-29 23:10 UTC):** `docs/SECURITY.md`
+  and the webhook route this document cites in §0/§2 were read from
+  `/Users/flybyflow/conductor/repos/pulse` (`cassandragirard-alt/pulse`) — a
+  **different, ~2.5-month-stale repo** from `brollistika/toddito`, the actual deploy
+  target. Re-verified tonight, directly against `brollistika/toddito` via `gh api`:
+  the core claim holds — the same ElevenLabs Conversational AI webhook exists at the
+  same path, same payload shape, and still does `supabase.from("transcripts").insert({
+  raw_transcript: data, ...})` (verbatim storage, no retention/redaction visible in
+  that file). **Does NOT hold:** `brollistika/toddito` has no `docs/SECURITY.md` at
+  all (confirmed 404) — the "SEC-10" label is specific to the stale repo's own
+  numbering and doesn't exist in the real one. Treat §0/§2's *substance* as verified,
+  the *SEC-10 label* as informal shorthand only, not a citation to a real finding in
+  the deploy target's own docs.
 
 ## 0. What "compliant" needs to mean here, concretely
 
