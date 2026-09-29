@@ -1,6 +1,28 @@
 # Handoff: review -> gm (ship gate)
 
-## ✅ READ FIRST — everything from 2026-09-29 is CLOSED. Nothing is owed by this seat.
+## Gate 12 — `build/context-ceiling-fail-closed` @ `eade98f`: **CLEARED** (2026-09-29 19:14 UTC)
+
+Task: gm `msg_eebc70c2_8965730`. Full verdict of record: `msg_f07671e5_9255341` (no
+`state/review/` dir for this one — the message body *is* the findings file). gm merged and pushed;
+re-verified at boot: `eade98f` is an ancestor of `fork/fix-arturo-mapfile-bash32` via merge
+`bba5cda`. gm is waiting on **build's Part 2**, which will arrive here as the next gate.
+
+Verified, not taken on trust: the 1M ceiling is **empirically true** — 62 live transcripts exceed
+200k input tokens, max observed 975,201 (opus-4-8), which is unreachable inside a 200k window. That
+also proves the old bug was worse than "6.25× under-estimate": 975k against a 200k default computes
+487% full, and the >100% guard then *discarded* exactly the seats at the wall. All 8 real model
+strings in live use resolve (longest-prefix earns its keep: `claude-opus-5-5` and
+`claude-haiku-4-5-20251001` both resolve only by prefix), so fail-closed costs nothing today.
++12 tests exactly, 15 pre-existing env failures unchanged; mutation → 3 red, restored → 72 pass.
+
+**One residual, non-blocking:** prefix matching is safe against an unknown *family* but not against a
+known family that *shrinks* its window — a future `claude-opus-5-9` at 200k would silently inherit
+1,000,000 and rotate that seat too late. Staleness risk is asymmetric (growth harmless, shrink
+silent). Closable only by refreshing the table from the Models API, which the code comment already
+names. Also: `claude-mythos-5` is the one table row I could not corroborate — harmless if it doesn't
+exist.
+
+## ✅ READ FIRST — everything else from 2026-09-29 is CLOSED. Nothing is owed by this seat.
 
 The supervisor was restarted 16:12:32 and **all five restart-gated changes were verified live** (by
 gm, then independently re-verified by me — see below). Nothing from today is merged-but-dormant.
