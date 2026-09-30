@@ -83,6 +83,12 @@ export interface PairCount {
    *  requests could. Always sums to `count`. A null `type` column groups under 'unknown'
    *  rather than being silently dropped. */
   by_type: Record<string, number>;
+  /** Directional split of `count`: a_to_b is messages sent FROM a TO b, b_to_a is the reverse
+   *  (a/b are the same min/max-sorted ids as the row itself). Always a_to_b + b_to_a === count.
+   *  Deliberately two raw numbers, not a precomputed "direction" — what counts as one-way vs.
+   *  genuinely even (e.g. 53 vs 53) is a display threshold, a client decision, not this API's. */
+  a_to_b: number;
+  b_to_a: number;
 }
 
 function openMessagesDb(dataDir: string): Database.Database | null {
@@ -117,10 +123,16 @@ function windowBounds(windowHours: number, asofMs?: number | null): { from: stri
 
 /** Message count per UNORDERED agent pair inside the window, newest activity first, each row
  *  carrying a per-type breakdown (spec: "17 replies" must read distinctly from "17 tasks" on
- *  every edge). The breakdown is folded onto the SAME row from a SECOND query against the
- *  SAME window bounds in the SAME handler invocation — not a second endpoint at a possibly
- *  later instant — so `by_type` can never drift from `count` the way two separate requests
- *  could ("49 vs 40" was exactly two things reading different instants).
+ *  every edge) AND a directional split (spec: arrows / majority-direction flow dashes —
+ *  min/max grouping throws direction away by construction, so it has to be recovered here,
+ *  not guessed client-side from an already-collapsed row).
+ *  Both the breakdown and the direction split are computed in the SAME window bounds, in the
+ *  SAME handler invocation — not a second endpoint at a possibly later instant — so neither
+ *  can drift from `count` the way two separate requests could ("49 vs 40" was exactly two
+ *  things reading different instants). a_to_b/b_to_a come straight off this one query as two
+ *  more conditional aggregates (from_agent compared against that row's own min/max(from_agent,
+ *  to_agent), which is invariant within the group); by_type still needs its own query since a
+ *  third grouping column (type) would split rows back apart.
  *  Both directions of an exchange collapse into one row, because a connection line is
  *  one line. Self-sends (from === to) are excluded: they are real rows, but a line needs
  *  two ends. Missing db/table => []. */
@@ -131,7 +143,9 @@ export function pairCounts(dataDir: string, windowHours = 24, asofMs?: number | 
   try {
     const rows = db.prepare(
       `select min(from_agent, to_agent) as a, max(from_agent, to_agent) as b,
-              count(*) as count, max(created_at) as last_at
+              count(*) as count, max(created_at) as last_at,
+              sum(case when from_agent = min(from_agent, to_agent) then 1 else 0 end) as a_to_b,
+              sum(case when from_agent = max(from_agent, to_agent) then 1 else 0 end) as b_to_a
          from messages
         where archived_at is null
           and from_agent <> to_agent
@@ -174,7 +188,8 @@ export function pairCounts(dataDir: string, windowHours = 24, asofMs?: number | 
  *  last_at would be null for every dead pair by definition and carry no signal at all.
  *  No `by_type` here: a dead pair has no in-window traffic to break down, so every bucket
  *  would just be zero — not worth the row weight for a row whose only job is "count: 0,
- *  last_at: when it stopped." Missing db/table => []. */
+ *  last_at: when it stopped." Same reasoning for a_to_b/b_to_a: both are 0, no division, no
+ *  direction to report for a pair with no in-window traffic. Missing db/table => []. */
 export function deadPairs(dataDir: string, windowHours = 24, asofMs?: number | null): PairCount[] {
   const db = openMessagesDb(dataDir);
   if (!db) return [];
@@ -189,8 +204,8 @@ export function deadPairs(dataDir: string, windowHours = 24, asofMs?: number | n
         group by a, b
        having sum(case when julianday(created_at) >= julianday(?)
                          and julianday(created_at) <= julianday(?) then 1 else 0 end) = 0
-        order by last_at desc`).all(from, to) as Omit<PairCount, 'by_type'>[];
-    return rows.map((r) => ({ ...r, by_type: {} }));
+        order by last_at desc`).all(from, to) as Omit<PairCount, 'by_type' | 'a_to_b' | 'b_to_a'>[];
+    return rows.map((r) => ({ ...r, by_type: {}, a_to_b: 0, b_to_a: 0 }));
   } catch { return []; } finally { db.close(); }
 }
 

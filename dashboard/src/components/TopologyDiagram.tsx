@@ -7,7 +7,7 @@ import { lineWidthPx, pairKey, shortAgo, partitionTopology } from '../lib/topolo
 import { dotColor, type TrafficMessage } from '../lib/fleetTraffic';
 import { TopologyOverlay, RimNode, useNodePositions, type OverlayEdge } from './TopologyOverlay';
 import { externalEndpoints } from '../lib/rimNodes';
-import { selectCrossEdges, busiestDrawn, edgeLiveness } from '../lib/overlayGeometry';
+import { selectCrossEdges, busiestDrawn, edgeLiveness, edgeDirection } from '../lib/overlayGeometry';
 
 interface Agent {
   id: string;
@@ -377,8 +377,9 @@ export function TopologyDiagram({
       const byType = p.by_type ?? {};
       const top = Object.entries(byType).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
       const lastAt = p.last_at ? Date.parse(p.last_at) : null;
+      const dir = edgeDirection(p.a_to_b ?? 0, p.b_to_a ?? 0);
       return {
-        a: p.a, b: p.b, count: p.count, type: top, byType,
+        a: p.a, b: p.b, count: p.count, type: top, byType, direction: dir,
         liveness: edgeLiveness(p.count, Number.isNaN(lastAt as number) ? null : lastAt, now, windowHours * 3600_000),
         widthPx: lineWidthPx(p.count, denom),
         // Same rule hierarchy lines use: an edge stays bright only if the selected

@@ -57,6 +57,12 @@ export interface PairCountRow {
    *  Not computable on the client: pairMessages carries type but is paginated at 40,
    *  and a busy pair runs to several hundred in-window. Absent on an older API. */
   by_type?: Record<string, number>;
+  /** Directional split within the pair: a_to_b counts messages sent BY `a`. Two raw
+   *  numbers, not a precomputed direction — how lopsided a conversation must be before
+   *  it reads as one-way is a display judgement (see edgeDirection), and keeping it
+   *  client-side means changing the threshold needs no backend deploy. */
+  a_to_b?: number;
+  b_to_a?: number;
 }
 export const fetchPairCounts = (hours = 24, asof?: string | null) => {
   const q = new URLSearchParams({ hours: String(hours) });

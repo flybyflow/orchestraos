@@ -28,7 +28,10 @@ function hoursAgo(h: number): string {
  *  one archived row, one row written in the column's DEFAULT format (no 'T', no offset),
  *  and gm<->ship with ONLY a 40-day-old row (a real pair, zero traffic in a 24h window —
  *  the dead-link case). gm<->build's in-window rows are deliberately mixed type (task,
- *  reply, task) so the same fixture also exercises the by_type breakdown without a second db. */
+ *  reply, task) so the same fixture also exercises the by_type breakdown without a second db.
+ *  Direction fixtures: plan<->test is majority one-way (4 plan->test, 1 test->plan);
+ *  brain<->think is exactly even (2 each way — a real "must not get a direction" case);
+ *  bshr<->ship is a single message (one side 1, the other 0). */
 function makeDb(): string {
   const data = mkdtempSync(join(tmpdir(), 'orch-pairs-'));
   mkdirSync(join(data, 'state'));
@@ -52,6 +55,17 @@ function makeDb(): string {
     new Date(Date.now() - 2 * 3600_000).toISOString().replace('T', ' ').replace(/\..*$/, ''), null);
   ins.run('m9', 'gm', 'ship', 'task', 'long-dead', 'b9', hoursAgo(24 * 40), null); // dead: real pair, zero in-window traffic
   ins.run('m10', 'gm', 'test', 'task', 'archived-only', 'b10', hoursAgo(24 * 40), hoursAgo(24 * 39)); // archived AND outside the window — not a real pair at all
+  // Direction fixtures.
+  ins.run('m11', 'plan', 'test', 'task', 'd1', 'x', hoursAgo(4), null);
+  ins.run('m12', 'plan', 'test', 'task', 'd2', 'x', hoursAgo(3.5), null);
+  ins.run('m13', 'plan', 'test', 'task', 'd3', 'x', hoursAgo(3), null);
+  ins.run('m14', 'plan', 'test', 'task', 'd4', 'x', hoursAgo(2.5), null);
+  ins.run('m15', 'test', 'plan', 'reply', 'd5', 'x', hoursAgo(2), null); // 4 plan->test, 1 test->plan
+  ins.run('m16', 'brain', 'think', 'task', 'e1', 'x', hoursAgo(4), null);
+  ins.run('m17', 'brain', 'think', 'task', 'e2', 'x', hoursAgo(3), null);
+  ins.run('m18', 'think', 'brain', 'reply', 'e3', 'x', hoursAgo(2), null);
+  ins.run('m19', 'think', 'brain', 'reply', 'e4', 'x', hoursAgo(1), null); // exactly even: 2 and 2
+  ins.run('m20', 'bshr', 'ship', 'task', 'single', 'x', hoursAgo(1), null); // single message: one side 1, other 0
   db.close();
   return data;
 }
@@ -103,6 +117,58 @@ test('by_type breaks down per pair and always sums to the existing total', () =>
   for (const r of rows) {
     const sum = Object.values(r.by_type).reduce((a, b) => a + b, 0);
     assert.equal(sum, r.count, `by_type for ${r.a}|${r.b} sums to ${sum}, not count ${r.count}`);
+  }
+});
+
+test('a_to_b + b_to_a always sums to count, for every row', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  assert.ok(rows.length > 0, 'fixture must return rows, or this proves nothing');
+  for (const r of rows) {
+    assert.equal(r.a_to_b + r.b_to_a, r.count,
+      `${r.a}|${r.b}: a_to_b ${r.a_to_b} + b_to_a ${r.b_to_a} != count ${r.count}`);
+  }
+});
+
+test('a one-way pair reports the traffic on the CORRECT side, not just that they differ', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const planTest = new Map(rows.map((r) => [`${r.a}|${r.b}`, r])).get('plan|test');
+  assert.ok(planTest, 'plan|test must be present');
+  // a='plan', b='test'. 4 rows plan->test (a_to_b), 1 row test->plan (b_to_a). Asserting the
+  // SPECIFIC side, not just inequality — a/b inversion is the obvious bug here and a
+  // differ-only assertion ("a_to_b !== b_to_a") cannot see the ends swapped.
+  assert.equal(planTest.a_to_b, 4, 'a_to_b must be the plan->test count, not test->plan');
+  assert.equal(planTest.b_to_a, 1, 'b_to_a must be the test->plan count, not plan->test');
+});
+
+test('an exactly even pair returns equal a_to_b/b_to_a — must not get a direction', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const brainThink = new Map(rows.map((r) => [`${r.a}|${r.b}`, r])).get('brain|think');
+  assert.ok(brainThink, 'brain|think must be present');
+  assert.equal(brainThink.a_to_b, 2);
+  assert.equal(brainThink.b_to_a, 2);
+  assert.equal(brainThink.a_to_b, brainThink.b_to_a, 'a genuinely even split must report as equal, not a coin flip');
+});
+
+test('a single-message pair: one side is 1, the other is 0', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const bshrShip = new Map(rows.map((r) => [`${r.a}|${r.b}`, r])).get('bshr|ship');
+  assert.ok(bshrShip, 'bshr|ship must be present');
+  // a='bshr', b='ship'; the single row is bshr->ship, i.e. a_to_b.
+  assert.equal(bshrShip.a_to_b, 1);
+  assert.equal(bshrShip.b_to_a, 0);
+});
+
+test('deadPairs rows: a_to_b and b_to_a are both 0, no divide-by-anything, no crash', () => {
+  const data = makeDb();
+  const dead = deadPairs(data, 24);
+  assert.ok(dead.length > 0, 'fixture must return dead pairs, or this proves nothing');
+  for (const r of dead) {
+    assert.equal(r.a_to_b, 0, `${r.a}|${r.b}: a dead pair must report a_to_b 0`);
+    assert.equal(r.b_to_a, 0, `${r.a}|${r.b}: a dead pair must report b_to_a 0`);
   }
 });
 

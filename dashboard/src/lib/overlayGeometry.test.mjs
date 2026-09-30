@@ -4,7 +4,7 @@
  */
 import assert from 'node:assert';
 import {
-  toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions,
+  toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions, edgeDirection,
 } from './overlayGeometry.ts';
 
 // ── samePositions: the guard that stops an infinite render loop ─────────────
@@ -144,6 +144,30 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   assert.strictEqual(edgeLiveness(0, now - 48 * hour, now, 48 * hour), 'quiet', 'exactly at the edge is quiet');
   assert.strictEqual(edgeLiveness(0, now - 48 * hour - 1, now, 48 * hour), 'dead', 'one ms past is dead');
   console.log('PASS: edgeLiveness — dead and quiet are distinct, boundary pinned on both sides');
+}
+
+// ── edgeDirection: null is an answer, not a failure to decide ──────────────
+{
+  // Real, measured pairs from the live store — not invented ratios.
+  assert.strictEqual(edgeDirection(61, 98), 'ba', 'gm<->telegram leans telegram->gm');
+  assert.strictEqual(edgeDirection(54, 94), 'ba', 'build<->gm leans gm->build');
+  assert.strictEqual(edgeDirection(60, 30), 'ab', 'gm<->plan is 2:1 the other way');
+
+  // THE ONE THAT MATTERS: ea<->gm is exactly 53/53 today. Drawing an arrow on it
+  // would invent a direction the data does not have.
+  assert.strictEqual(edgeDirection(53, 53), null, 'an even pair gets NO arrow, not a coin flip');
+
+  // A one-message lead is noise, not a direction.
+  assert.strictEqual(edgeDirection(10, 9), null, 'a 1-message lead is not a direction');
+  assert.strictEqual(edgeDirection(1, 0), null, 'nor is a single message with nothing back');
+
+  // Close-but-not-equal must also stay null: 63/45 is a lead, but only 58% of the
+  // traffic — below the share threshold, so it reads as two-way.
+  assert.strictEqual(edgeDirection(63, 45), null, '58% is a lean, not a direction');
+  assert.strictEqual(edgeDirection(90, 10), 'ab', '90% clearly is');
+
+  assert.strictEqual(edgeDirection(0, 0), null, 'a dead pair has no direction and must not divide by zero');
+  console.log('PASS: edgeDirection — null on even/noisy pairs, arrows only when earned');
 }
 
 console.log('\nAll overlayGeometry tests passed.');

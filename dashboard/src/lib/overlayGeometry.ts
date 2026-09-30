@@ -159,6 +159,30 @@ export function busiestDrawn(drawn: PairLike[], hierarchyMax = 0): number {
  */
 export type EdgeLiveness = 'live' | 'quiet' | 'dead';
 
+/**
+ * Which way does this edge mostly flow?
+ *
+ * `null` is a real answer, not a failure to decide. `ea<->gm` is 53/53 today and
+ * drawing an arrow on it would invent a direction the data does not have — a
+ * coin-flip rendered as a fact. A one-message lead is not a direction either,
+ * so the majority has to clear a margin before it earns an arrowhead.
+ *
+ * The threshold lives here rather than in the API deliberately: how lopsided a
+ * conversation must be before it reads as one-way is a display judgement, and
+ * the endpoint should keep returning the two raw counts so this can change
+ * without a backend deploy.
+ */
+export function edgeDirection(
+  aToB: number, bToA: number, minShare = 0.6, minDelta = 2,
+): 'ab' | 'ba' | null {
+  const total = aToB + bToA;
+  if (total === 0) return null;
+  if (Math.abs(aToB - bToA) < minDelta) return null;
+  const share = Math.max(aToB, bToA) / total;
+  if (share < minShare) return null;
+  return aToB > bToA ? 'ab' : 'ba';
+}
+
 export function edgeLiveness(
   count: number,
   lastAtMs: number | null,

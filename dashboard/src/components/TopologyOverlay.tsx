@@ -147,10 +147,13 @@ function tooltip(e: OverlayEdge, windowHours: number): string {
   const head = `${e.a} ⇄ ${e.b} · ${e.count} in ${windowHours}h`;
   if (e.liveness === 'dead') return `${e.a} ⇄ ${e.b} · no traffic in ${windowHours}h`;
   if (e.liveness === 'quiet') return `${e.a} ⇄ ${e.b} · quiet — last traffic just outside the window`;
+  const dir = e.direction === 'ab' ? ` · mostly ${e.a} → ${e.b}`
+    : e.direction === 'ba' ? ` · mostly ${e.b} → ${e.a}`
+    : ' · both ways';
   const parts = Object.entries(e.byType ?? {})
     .sort((x, y) => y[1] - x[1])
     .map(([t, n]) => `${n} ${t.replace(/_/g, ' ')}`);
-  return parts.length ? `${head}\n${parts.join(', ')}` : head;
+  return parts.length ? `${head}${dir}\n${parts.join(', ')}` : `${head}${dir}`;
 }
 
 export interface TopologyOverlayProps {
@@ -180,6 +183,15 @@ export function TopologyOverlay({
       height={height}
       aria-hidden
     >
+      {/* One marker per stroke colour is not worth it — the arrowhead inherits the
+          path's stroke via context-stroke, so a single def serves every edge and the
+          head always matches the line it terminates. */}
+      <defs>
+        <marker id="xedge-arrow" viewBox="0 0 8 8" refX="7" refY="4"
+                markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+          <path d="M0,0 L8,4 L0,8 z" fill="context-stroke" />
+        </marker>
+      </defs>
       {edges.map((e) => {
         const from = positions.get(e.a);
         const to = positions.get(e.b);
@@ -206,6 +218,14 @@ export function TopologyOverlay({
               strokeDasharray={dead ? '1 6' : quiet ? '5 4' : undefined}
               strokeOpacity={dead ? 0.55 : quiet ? 0.75 : 0.85}
               strokeLinecap="round"
+              // The arrowhead goes on the END for a->b and the START for b->a, rather
+              // than reversing the path: reversing would also flip where the curve
+              // bulges, so the same pair would sit in a different place depending on
+              // which way it happens to lean. A null direction gets NO head at all —
+              // an evenly-split pair (ea<->gm is 53/53 today) has no direction to show,
+              // and an arrow there would be a coin flip rendered as a fact.
+              markerEnd={!dead && e.direction === 'ab' ? 'url(#xedge-arrow)' : undefined}
+              markerStart={!dead && e.direction === 'ba' ? 'url(#xedge-arrow)' : undefined}
             />
             {onSelectConnection && (
               // A 1-2px line is not a clickable target. A wide transparent path
