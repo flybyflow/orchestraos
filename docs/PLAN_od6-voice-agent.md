@@ -578,13 +578,38 @@ engineering half, now with a concrete candidate attached to the "public"
 branch of that fork.
 
 **What this section does not resolve:** whether Dograh is the right
-integration target (needs the operator's confirmation first); the real
-Toddito alpha conversation-minutes/month (needs the operator, decides the
-economics case entirely); the true scope of dependency drift on substrate's
-Coolify path (needs the bounded spike to actually run); and — unchanged
-from §5 — which path (build-on-existing, custom, or the hybrid) the
-operator wants to pursue at all. This is still research/estimation, not a
-build authorization.
+integration target (needs the operator's confirmation first); the true
+scope of dependency drift on substrate's Coolify path (needs the bounded
+spike to actually run); and — unchanged from §5 — which path
+(build-on-existing, custom, or the hybrid) the operator wants to pursue at
+all. This is still research/estimation, not a build authorization.
+
+**Real measured economics (gm, via ElevenLabs MCP connector, 2026-09-30
+09:16 UTC) — supersedes the "biggest unknown" above with real numbers
+instead of a gathered-later placeholder.** Rather than wait on the
+operator's own dashboard check, gm pulled real conversation history
+directly. Result: **Koherent shows 0 calls in the last 7 days — the
+"Koherent owns the shared workspace's default webhook" lead from earlier
+in this section pointed at the wrong candidate.** Kokoro-Astrologer
+(`agent_9401kgj4fwgsevet9hnnmxbv87bb`) is the real highest-volume agent —
+50 calls in the last 7 days. Two real periods measured directly from
+conversation history: **March 2026** (the spring peak the operator
+mentioned, corroborated by actual "exceeds your quota limit" failures in
+the data) — 619 min over 23.5 days = ~791 min/month. **September 2026**
+(now) — 172.5 min over 19 days = ~272 min/month. Against the ~3,600
+min/month breakeven above: spring peak was 22% of breakeven, current is
+7.6%. Blending both rates over the ~7 months since February gives a rough
+total-spend estimate of ~$400 — this resolves this section's earlier
+monthly-vs-total-spend ambiguity: "hundreds of dollars" reads as a
+**total**, not a monthly run-rate.
+
+**Net, stated plainly because it reverses this section's own economics
+framing: at real measured volume, self-hosting would cost MORE per minute
+than ElevenLabs today, not less.** The cost-savings argument does not
+hold at current traffic. OD6 compliance remains a real, separate reason to
+pursue self-hosting — but it should not be sold on economics alone right
+now. This does not change the Dograh lead, the deploy-feasibility read, or
+the branch-archaeology findings above — only the economics conclusion.
 
 ## 4. What this document does not decide
 
@@ -612,11 +637,14 @@ build authorization.
   a SWOT, not a decision. Genuinely the operator's call; this seat's own
   read is that a hybrid (§5's closing paragraph) is the strongest option on
   the facts, but that is a recommendation, not what got decided here.
-- **Whether to pursue self-hosting AT ALL, economically (§6)** — genuinely
-  depends on one number only the operator has: real/expected Toddito alpha
-  conversation-minutes/month. Below ~3,600 min/month a dedicated GPU box
-  costs more than ElevenLabs; above it, savings scale fast. Not resolved
-  here, not resolvable here.
+- **Whether to pursue self-hosting AT ALL, economically (§6)** — **now
+  measured, not just modeled.** Real conversation history (gm, ElevenLabs
+  MCP connector) puts the highest-volume agent at ~272-791 min/month
+  (7.6%-22% of the ~3,600 min/month breakeven) — at current real traffic,
+  self-hosting costs MORE per minute than ElevenLabs, not less. OD6
+  compliance remains a real reason to pursue this; economics alone does not
+  justify it today. This could change if traffic grows — not a permanent
+  verdict, but not an open unknown anymore either.
 - **Whether Dograh (§6) is the lead the operator meant** — not independently
   confirmable from repo research; needs a direct one-line check with the
   operator before anyone integrates against it.
