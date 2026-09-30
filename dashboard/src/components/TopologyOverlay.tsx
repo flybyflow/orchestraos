@@ -228,7 +228,7 @@ export function TopologyOverlay({
     const startedAt = Date.now();
     const next: ReplayPulse[] = fired
       .filter((e) => e.kind !== 'spawn' && e.from && e.to)
-      .map((e) => ({ id: pulseId(e), a: e.from as string, b: e.to as string, type: e.type ?? null, startedAt }));
+      .map((e, i) => ({ id: pulseId(e, i), a: e.from as string, b: e.to as string, type: e.type ?? null, startedAt }));
     if (next.length === 0) return;
     pulsesRef.current = [...pulsesRef.current, ...next];
     setPulses(pulsesRef.current);

@@ -27,11 +27,28 @@ export interface ReplayPulse {
   startedAt: number;
 }
 
-/** Deterministic per-event id: `${from}>${to}@${t}` is unique as long as one edge does not
- *  fire two events at the exact same millisecond timestamp — true for real message data,
- *  where two rows always differ by id even at equal t, so the id is threaded in too. */
-export function pulseId(event: { from?: string; to?: string; id?: string; t: number }): string {
-  return `${event.from ?? '?'}>${event.to ?? '?'}@${event.t}:${event.id ?? ''}`;
+/**
+ * Deterministic per-event id, collision-proof even when `event.id` is absent.
+ *
+ * WAS wrong: the original form (`${from}>${to}@${t}:${id ?? ''}`) assumed two rows on the same
+ * pair always differ by id even at equal t. GET /api/messages/history does not return an id at
+ * all ({t, from, to, type, subject} only, confirmed live) — the id half degenerates to a
+ * trailing empty string, and telegram<->gm (the busiest pair) produced two events in the same
+ * millisecond with the SAME resulting key. React's response to a duplicate key is to drop or
+ * duplicate a child silently, no error — the pulse just does not appear, which on a replay
+ * reads as "that message had no traffic" (build, live QA, 2026-09-30 — traced, not guessed;
+ * the exact failure shape as PR 137's FIX 3).
+ *
+ * `index` is the position the event arrived at WITHIN ITS OWN FIRED BATCH (the caller's
+ * `.map((e, i) => pulseId(e, i))`) — a plain array index, always present and always distinct
+ * for two entries in the same batch, so uniqueness no longer depends on the API ever returning
+ * an id. Do not rely on the id alone even once the API adds one (asked of builder-2
+ * separately): an id present today and silently dropped by some future refactor must not
+ * reopen this bug with no error on the frames where two events happen not to share a
+ * millisecond — the index makes that scenario structurally impossible, not just unlikely.
+ */
+export function pulseId(event: { from?: string; to?: string; id?: string; t: number }, index: number): string {
+  return `${event.from ?? '?'}>${event.to ?? '?'}@${event.t}:${event.id ?? ''}#${index}`;
 }
 
 /** 0 at creation, 1 at end-of-life, clamped — never negative (a `now` before `startedAt`,

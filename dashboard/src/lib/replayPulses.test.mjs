@@ -5,12 +5,35 @@
 import assert from 'node:assert';
 import { pulseId, pulseProgress, isPulseAlive, pruneDeadPulses, PULSE_LIFETIME_MS } from './replayPulses.ts';
 
-// ── pulseId: deterministic, distinguishes concurrent pulses on the same pair ──────────────
+// ── pulseId: deterministic, collision-proof even when `id` is ABSENT ─────────────────────
+// THE REAL BUG (build, live QA 2026-09-30, traced via curl not guessed): GET
+// /api/messages/history returns {t, from, to, type, subject} — no `id` field at all. The
+// original pulseId (`${from}>${to}@${t}:${id ?? ''}`) degenerates to a bare `from>to@t` with a
+// trailing empty string, and telegram<->gm (the busiest real pair) produced two events in the
+// same millisecond that collided on that exact key. React drops/duplicates a child on a
+// duplicate key with NO error — the pulse silently does not appear, reading as "no traffic"
+// (the same failure shape as PR 137's FIX 3).
 {
-  const e1 = { from: 'build', to: 'review', t: 1000, id: 'msg_1' };
-  const e2 = { from: 'build', to: 'review', t: 1000, id: 'msg_2' };
-  assert.notEqual(pulseId(e1), pulseId(e2), 'two events on the SAME pair at the SAME instant still get distinct ids (real ids differ)');
-  assert.equal(pulseId(e1), pulseId({ ...e1 }), 'the same event always produces the same id — deterministic, not random');
+  // The exact real shape: no `id` field at all, not even `id: undefined` — matches what
+  // JSON.parse of the real endpoint's response actually produces.
+  const e1 = { from: 'telegram', to: 'gm', t: 1790707087581, type: 'reply' };
+  const e2 = { from: 'telegram', to: 'gm', t: 1790707087581, type: 'task' };
+
+  // THIS is the bug, demonstrated directly rather than asserted away: calling pulseId with
+  // ids that happen to coincide (both absent) must NOT collide once given distinct batch
+  // indices — the index is what makes this safe, not hoping the API adds an id back.
+  assert.notEqual(pulseId(e1, 0), pulseId(e2, 1),
+    'two same-pair, same-millisecond, NO-id events get distinct keys via their batch index');
+
+  // Determinism: the SAME event at the SAME index always produces the SAME key (not random,
+  // not time-of-render-dependent) — needed so React does not remount a still-alive pulse.
+  assert.equal(pulseId(e1, 0), pulseId({ ...e1 }, 0), 'same event, same index -> same id, every time');
+
+  // An id, when present, still flows through (defense in depth — see the function's own
+  // comment on why the index is the load-bearing part, not this).
+  const withId1 = { ...e1, id: 'msg_1' };
+  const withId2 = { ...e2, id: 'msg_2' };
+  assert.notEqual(pulseId(withId1, 0), pulseId(withId2, 0), 'distinct real ids also produce distinct keys, even at the same index');
 }
 
 // ── pulseProgress: 0 at start, 1 at end, clamped both directions ──────────────────────────
