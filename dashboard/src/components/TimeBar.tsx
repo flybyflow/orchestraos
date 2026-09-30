@@ -46,13 +46,19 @@ export interface ReplayControlsProps {
    *  the live-moment readout above without this component knowing about toLocaleString. */
   readoutLabel: string;
   windowHours: number;
+  /** Replay speed multiplier — engine-owned (replayEngine's ReplayState.speed), just handed
+   *  through like fraction above: never re-derive it here. */
+  speed: 1 | 4 | 16;
   onPlayPause: () => void;
   onGrow: () => void;
   onLive: () => void;
   onWindowChange: (hours: number) => void;
   /** Fraction 0..1 — the caller's hook.seek expects this shape, not a raw slider int. */
   onSeek: (fraction: number) => void;
+  onSpeedChange: (speed: 1 | 4 | 16) => void;
 }
+
+const SPEEDS: Array<1 | 4 | 16> = [1, 4, 16];
 
 /**
  * The PLAY / GROW / LIVE control cluster, ported from /field's scr-* buttons (source of truth:
@@ -61,8 +67,8 @@ export interface ReplayControlsProps {
  * (GROW's tooltip is the operator's own words for it).
  */
 export function ReplayControls({
-  playing, live, growing, hasEvents, error, fraction, readoutLabel, windowHours,
-  onPlayPause, onGrow, onLive, onWindowChange, onSeek,
+  playing, live, growing, hasEvents, error, fraction, readoutLabel, windowHours, speed,
+  onPlayPause, onGrow, onLive, onWindowChange, onSeek, onSpeedChange,
 }: ReplayControlsProps) {
   const playDisabled = !hasEvents || Boolean(error);
   const playTitle = error
@@ -107,6 +113,31 @@ export function ReplayControls({
       >
         GROW
       </button>
+
+      <div
+        role="group"
+        aria-label="replay speed"
+        className="flex rounded border border-neutral-700 overflow-hidden shrink-0"
+      >
+        {SPEEDS.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onSpeedChange(s)}
+            disabled={!hasEvents}
+            aria-pressed={speed === s}
+            title={`${s}x replay speed`}
+            className={clsx(
+              'px-1.5 py-1 tracking-wider transition-colors disabled:opacity-40 disabled:cursor-not-allowed',
+              speed === s
+                ? 'bg-amber-500 text-neutral-950'
+                : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800',
+            )}
+          >
+            {s}x
+          </button>
+        ))}
+      </div>
 
       <button
         type="button"

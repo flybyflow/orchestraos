@@ -738,6 +738,7 @@ export default function Agents() {
                       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                     }),
                   windowHours: replay.windowHours,
+                  speed: replay.state.speed,
                   onPlayPause: () => (replay.state.playing ? replay.pause() : replay.play()),
                   // /field's GROW is one button doing four things; the hook keeps them
                   // composable, so the composition lives here. Order matters: growth on,
@@ -752,6 +753,7 @@ export default function Agents() {
                   onLive: replay.setLive,
                   onWindowChange: replay.setWindow,
                   onSeek: replay.seek,
+                  onSpeedChange: replay.setSpeed,
                 }}
               />
               {asof ? (
