@@ -183,13 +183,32 @@ export function edgeDirection(
   return aToB > bToA ? 'ab' : 'ba';
 }
 
+/**
+ * `nowMs` is the moment being VIEWED, not the wall clock. When the time bar is
+ * scrubbed back, that is `asof`.
+ *
+ * Getting this wrong produced a claim the data cannot support. Scrubbed to
+ * ~Sep 25, the header correctly read 2 messages / 1 connection while twelve
+ * lines drew and nine tooltips said "quiet — last traffic just outside the
+ * window" about pairs whose last traffic was days AFTER the moment on screen.
+ * The all-time last_at was being compared against real now, so a conversation
+ * that had not happened yet was described as having just tailed off.
+ *
+ * A pair whose only traffic is in the viewed moment's FUTURE is not quiet and
+ * not dead — it does not exist yet. `absent` says so, and the caller draws
+ * nothing rather than inventing a state for it.
+ */
+export type EdgeLivenessFull = EdgeLiveness | 'absent';
+
 export function edgeLiveness(
   count: number,
   lastAtMs: number | null,
   nowMs: number,
   quietWindowMs: number,
-): EdgeLiveness {
+): EdgeLivenessFull {
   if (count > 0) return 'live';
   if (lastAtMs == null) return 'dead';
+  // Strictly after the viewed moment: this connection has no history at asof.
+  if (lastAtMs > nowMs) return 'absent';
   return nowMs - lastAtMs <= quietWindowMs ? 'quiet' : 'dead';
 }

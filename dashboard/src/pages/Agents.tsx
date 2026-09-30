@@ -679,6 +679,10 @@ export default function Agents() {
               deadPairs={pairData?.dead_pairs ?? []}
               layers={layers}
               crossTopN={layers.showAllCross ? null : 12}
+              // The scrubbed moment, so the graph judges an edge against what was true
+              // THEN. Without it a pair whose traffic is later than the viewed instant
+              // was being described as "quiet".
+              asof={asof}
             />
             {/* Bottom live ticker (spec §3). The time scrubber that shares this row is
                 step 9 and is not built. */}

@@ -28,6 +28,8 @@ export interface OverlayEdge {
   liveness?: 'live' | 'quiet' | 'dead';
   /** Majority direction, for the arrow. null when evenly split. */
   direction?: 'ab' | 'ba' | null;
+  /** Escalations carried on this pair in the window. Non-zero recolours the edge. */
+  escalate?: number;
   widthPx: number;
   dimmed?: boolean;
 }
@@ -50,6 +52,14 @@ export interface OverlayEdge {
 export function useNodePositions(containerRef: React.RefObject<HTMLElement | null>) {
   const nodeRefs = useRef(new Map<string, HTMLElement>());
   const [positions, setPositions] = useState<Map<string, Box>>(new Map());
+  // The overlay's own size, measured from the container's CLIENT box.
+  //
+  // It used to come from scrollWidth, which INCLUDES the overlay itself — so the svg
+  // could only ever grow. Opening the conversation panel dropped clientWidth to 674
+  // while scrollWidth and the svg stayed 1070, producing a phantom horizontal
+  // scrollbar; shrinking the window ratcheted the same way. A measurement that feeds
+  // the thing it measures is not a measurement.
+  const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const frame = useRef<number | null>(null);
 
   const measure = useCallback(() => {
@@ -70,6 +80,13 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
     // re-renders", and the page goes blank. That is not hypothetical — it is
     // what this component shipped as, and what review's control caught.
     setPositions((prev) => (samePositions(prev, next) ? prev : next));
+    // clientWidth/Height: the content box the container actually offers, excluding
+    // anything absolutely positioned inside it. Rounded and compared before committing,
+    // for the same reason positions are — an unconditional set here would restart the
+    // render loop through a second door.
+    const w = Math.round(container.clientWidth);
+    const h = Math.round(container.clientHeight);
+    setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
   }, [containerRef]);
 
   const schedule = useCallback(() => {
@@ -122,7 +139,7 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
     };
   }, [containerRef, schedule]);
 
-  return { positions, register, remeasure: schedule };
+  return { positions, register, size, remeasure: schedule };
 }
 
 /** Stroke colour per message type — mirrors fleetTraffic's DOT_COLOR vocabulary. */
@@ -150,10 +167,11 @@ function tooltip(e: OverlayEdge, windowHours: number): string {
   const dir = e.direction === 'ab' ? ` · mostly ${e.a} → ${e.b}`
     : e.direction === 'ba' ? ` · mostly ${e.b} → ${e.a}`
     : ' · both ways';
+  const esc = (e.escalate ?? 0) > 0 ? `\n${e.escalate} escalation${e.escalate === 1 ? '' : 's'}` : '';
   const parts = Object.entries(e.byType ?? {})
     .sort((x, y) => y[1] - x[1])
     .map(([t, n]) => `${n} ${t.replace(/_/g, ' ')}`);
-  return parts.length ? `${head}${dir}\n${parts.join(', ')}` : `${head}${dir}`;
+  return parts.length ? `${head}${dir}${esc}\n${parts.join(', ')}` : `${head}${dir}${esc}`;
 }
 
 export interface TopologyOverlayProps {
@@ -210,8 +228,11 @@ export function TopologyOverlay({
             <path
               d={route.d}
               fill="none"
-              stroke={dead ? '#3f3f46' : stroke}
-              strokeWidth={dead || quiet ? 1 : e.widthPx}
+              // Escalation outranks the per-type colour: type is what the traffic
+              // WAS, an escalation is something waiting on a person. A dead edge stays
+              // grey regardless — an escalation from outside the window is history.
+              stroke={dead ? '#3f3f46' : (e.escalate ?? 0) > 0 ? '#ef4444' : stroke}
+              strokeWidth={dead || quiet ? 1 : (e.escalate ?? 0) > 0 ? Math.max(2, e.widthPx) : e.widthPx}
               // dead = sparse dots (a connection that WAS real), quiet = dashes
               // (alive, just below the window). One grey line for both would say
               // "nothing here" about a link that is merely idle.

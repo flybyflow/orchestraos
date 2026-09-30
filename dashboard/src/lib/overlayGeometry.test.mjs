@@ -143,6 +143,18 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   // every edge sitting exactly on the threshold.
   assert.strictEqual(edgeLiveness(0, now - 48 * hour, now, 48 * hour), 'quiet', 'exactly at the edge is quiet');
   assert.strictEqual(edgeLiveness(0, now - 48 * hour - 1, now, 48 * hour), 'dead', 'one ms past is dead');
+
+  // THE SCRUB CASE. `now` is the VIEWED moment. A pair whose last traffic is after it
+  // has not happened yet — it is not quiet, and saying "last traffic just outside the
+  // window" about a conversation that had not started is a claim the data cannot
+  // support. Found by the operator scrubbing to ~Sep 25 and seeing nine such tooltips.
+  const asof = Date.parse('2026-09-25T00:00:00Z');
+  assert.strictEqual(edgeLiveness(0, now, asof, 48 * hour), 'absent',
+    'traffic in the viewed moment FUTURE means the edge does not exist yet');
+  assert.strictEqual(edgeLiveness(0, asof - hour, asof, 48 * hour), 'quiet',
+    'traffic just before the viewed moment is genuinely quiet');
+  assert.strictEqual(edgeLiveness(0, asof + 1, asof, 48 * hour), 'absent',
+    'one ms after the viewed moment is already absent, not quiet');
   console.log('PASS: edgeLiveness — dead and quiet are distinct, boundary pinned on both sides');
 }
 

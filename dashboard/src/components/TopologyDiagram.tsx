@@ -62,6 +62,15 @@ interface TopologyDiagramProps {
   layers?: { cross?: boolean; external?: boolean; counts?: boolean };
   /** Cap on cross edges drawn, highest count first. null = show all. */
   crossTopN?: number | null;
+  /** Per-node escalation / held-message counts, windowed. From lib/nodeAlerts. */
+  nodeAlerts?: Record<string, { escalate: number; held: number }>;
+  /** Per-edge escalation counts, keyed by pairKey. An escalation is a fact about the
+   *  CONVERSATION as well as the recipient, so the edge carries it too. */
+  edgeAlerts?: Record<string, { escalate: number }>;
+  /** The moment being viewed, when the time bar is scrubbed. Threaded in rather than
+   *  read from a clock, so edge liveness is judged against what was true THEN — an
+   *  edge whose only traffic is after this instant did not exist yet. */
+  asof?: string | null;
 }
 
 /** A box or a line is a real control when it has a handler and plain markup when it does not.
@@ -69,17 +78,22 @@ interface TopologyDiagramProps {
  *  would drift. `button` over `div onClick` so the graph is usable from a keyboard (spec §2
  *  says everything is clickable — that has to include people not using a mouse). */
 function Clickable({
-  onClick, title, className, children, elRef,
+  onClick, title, className, children, elRef, dataAgentId,
 }: {
   onClick?: () => void; title?: string; className: string; children: React.ReactNode;
   /** Both shells forward the ref: the overlay has to measure a node whether or not
    *  it happens to be interactive, or an unclickable box would have no position and
    *  every edge touching it would silently vanish. */
   elRef?: (el: HTMLElement | null) => void;
+  /** Scroll/focus target, forwarded on BOTH shells for the same reason as the ref:
+   *  "take me to this agent" must work whether or not the box happens to be clickable. */
+  dataAgentId?: string;
 }) {
-  if (!onClick) return <div ref={elRef} title={title} className={className}>{children}</div>;
+  if (!onClick) {
+    return <div ref={elRef} data-agent-id={dataAgentId} title={title} className={className}>{children}</div>;
+  }
   return (
-    <button type="button" ref={elRef} onClick={onClick} title={title}
+    <button type="button" ref={elRef} data-agent-id={dataAgentId} onClick={onClick} title={title}
       className={clsx(className, 'text-left focus:outline-none focus:ring-2 focus:ring-sky-500')}>
       {children}
     </button>
@@ -179,11 +193,13 @@ function isWorking(agent: Agent): boolean {
 }
 
 function AgentNode({
-  agent, onSelect, selected, dimmed, nodeRef,
+  agent, onSelect, selected, dimmed, nodeRef, alerts,
 }: {
   agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean;
   /** Registers this box with the overlay's position tracker. */
   nodeRef?: (el: HTMLElement | null) => void;
+  /** Escalations and held messages landing ON this agent, already windowed. */
+  alerts?: { escalate: number; held: number };
 }) {
   const working = isWorking(agent);
   // Agent-level only. The operator explicitly did NOT want skill/prompt execution detail,
@@ -192,10 +208,25 @@ function AgentNode({
   return (
     <Clickable
       elRef={nodeRef}
+      // Same attribute the agent cards already carry, so "scroll to this agent" is one
+      // selector that works in either view rather than two that drift.
+      dataAgentId={agent.id}
       onClick={onSelect ? () => onSelect(agent.id) : undefined}
       className={clsx(
         'relative flex flex-col items-center gap-1 rounded-lg border-2 bg-neutral-900 px-3 py-2.5 min-w-[110px] transition hover:bg-neutral-800',
-        working ? 'border-sky-400 shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]' : getNodeBorder(agent),
+        // Status GLOW, not just a dot (spec step 3). The dot stays — it is the thing
+        // that survives prefers-reduced-motion and a colourblind read — and the glow is
+        // an additional, redundant cue on the same fact. A down seat gets a red glow at
+        // lower intensity than a working seat's blue: down is a state to notice, working
+        // is a state that is changing, and the brighter one should be the live one.
+        working ? 'border-sky-400 shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]'
+          : (!agent.alive && !agent.tmux_alive)
+            ? clsx(getNodeBorder(agent), 'shadow-[0_0_10px_-3px_rgba(248,113,113,0.65)]')
+            : getNodeBorder(agent),
+        // An escalation landing here outranks both: it is the one state that is asking
+        // a human for something. Ring rather than border swap, so the status colour
+        // underneath is never destroyed (spec section 2).
+        (alerts?.escalate ?? 0) > 0 && 'ring-2 ring-red-500/70',
         // Selection reads as a ring, not a border swap: overwriting the border would throw
         // away the status colour, which is the one thing that must never be hidden (spec §2).
         selected && 'ring-2 ring-sky-300 ring-offset-2 ring-offset-neutral-900',
@@ -206,6 +237,18 @@ function AgentNode({
       )}
       title={working ? (agent.activity || 'working') : (agent.status || (agent.alive ? 'idle' : 'stopped'))}
     >
+      {/* Held-message badge. Top-LEFT, because the working pulse owns top-right and two
+          indicators on the same corner read as one smudge. Not aria-hidden: unlike the
+          pulse (which duplicates the border colour) this is the only place the count
+          appears, so hiding it from a screen reader would lose the fact entirely. */}
+      {(alerts?.held ?? 0) > 0 && (
+        <span
+          title={`${alerts!.held} held message${alerts!.held === 1 ? '' : 's'} waiting for ${agent.id}`}
+          className="absolute -top-1.5 -left-1.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-neutral-950 text-[10px] font-bold flex items-center justify-center"
+        >
+          {alerts!.held}
+        </span>
+      )}
       {working && (
         <span
           aria-hidden
@@ -310,10 +353,10 @@ function Connection({
 export function TopologyDiagram({
   agents, pairs, windowHours = 24, onSelectConnection, onSelectAgent, selectedAgentId,
   onClearSelection, dots, brightIds,
-  allAgentIds, deadPairs, layers, crossTopN = 12,
+  allAgentIds, deadPairs, layers, crossTopN = 12, nodeAlerts, edgeAlerts, asof = null,
 }: TopologyDiagramProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { positions, register } = useNodePositions(containerRef);
+  const { positions, register, size: overlaySize } = useNodePositions(containerRef);
   const showCross = layers?.cross ?? true;
   const showExternal = layers?.external ?? true;
   // Partition first: the set of lines the tree will draw is what the thickness denominator has
@@ -371,23 +414,43 @@ export function TopologyDiagram({
 
   const overlayEdges: OverlayEdge[] = useMemo(() => {
     if (!crossSelection) return [];
-    const now = Date.now();
+    // The VIEWED moment. While the time bar is scrubbed this is asof, not the wall
+    // clock — otherwise an edge whose only traffic is after the scrubbed moment gets
+    // described as "quiet", which is a claim about a conversation that had not
+    // happened yet.
+    const viewedNow = asof ? Date.parse(asof) : Date.now();
+    const now = Number.isFinite(viewedNow) ? viewedNow : Date.now();
     const denom = busiestDrawn(crossSelection.drawn, lookup.busiest);
-    return crossSelection.drawn.map((p) => {
+    // flatMap rather than map().filter(): dropping the absent case here narrows
+    // `liveness` for the compiler as a side effect of the early return, instead of
+    // needing a type predicate to re-assert something the filter already guaranteed.
+    return crossSelection.drawn.flatMap((p): OverlayEdge[] => {
       const byType = p.by_type ?? {};
       const top = Object.entries(byType).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
       const lastAt = p.last_at ? Date.parse(p.last_at) : null;
-      const dir = edgeDirection(p.a_to_b ?? 0, p.b_to_a ?? 0);
-      return {
-        a: p.a, b: p.b, count: p.count, type: top, byType, direction: dir,
-        liveness: edgeLiveness(p.count, Number.isNaN(lastAt as number) ? null : lastAt, now, windowHours * 3600_000),
+      const liveness = edgeLiveness(
+        p.count, Number.isNaN(lastAt as number) ? null : lastAt, now, windowHours * 3600_000,
+      );
+      // An edge that did not exist at the viewed moment is not drawn AT ALL. Drawing
+      // it dashed-and-grey would still assert a relationship that had not formed yet,
+      // which is what the scrubbed view was doing: nine tooltips claiming "quiet" about
+      // pairs whose only traffic was days after the moment on screen.
+      if (liveness === 'absent') return [];
+      return [{
+        a: p.a, b: p.b, count: p.count, type: top, byType,
+        direction: edgeDirection(p.a_to_b ?? 0, p.b_to_a ?? 0),
+        liveness,
         widthPx: lineWidthPx(p.count, denom),
         // Same rule hierarchy lines use: an edge stays bright only if the selected
         // agent is one of its two ends.
         dimmed: bright !== null && p.a !== selectedAgentId && p.b !== selectedAgentId,
-      };
+        // An escalation on this pair overrides the type colour. Type tells you WHAT
+        // the traffic was; an escalation tells you something needs a human, and that
+        // is the more urgent fact for a glance across the whole graph.
+        escalate: edgeAlerts?.[pairKey(p.a, p.b)]?.escalate ?? 0,
+      }];
     });
-  }, [crossSelection, lookup.busiest, windowHours, bright, selectedAgentId]);
+  }, [crossSelection, lookup.busiest, windowHours, bright, selectedAgentId, asof]);
 
   const isDim = (id: string) => bright !== null && !bright.has(id);
   // A line stays bright only if the selected agent is one of its two ends.
@@ -411,8 +474,8 @@ export function TopologyDiagram({
           No double-render of nodes, one fewer thing to keep in sync. */}
       {overlayEdges.length > 0 && (
         <TopologyOverlay
-          width={containerRef.current?.scrollWidth ?? 0}
-          height={containerRef.current?.scrollHeight ?? 0}
+          width={overlaySize.w}
+          height={overlaySize.h}
           edges={overlayEdges}
           positions={positions}
           windowHours={windowHours}
@@ -422,7 +485,7 @@ export function TopologyDiagram({
       {/* T0: GM */}
       {gm && (
         <>
-          <AgentNode nodeRef={register(gm.id)} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} />
+          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} />
           {/* Trunk down to the PM bar. Deliberately unlabelled: this is a bus, not a pair,
               and the "hub-spoke" string it replaces described the shape rather than the
               traffic. The real gm<->pm counts sit on each PM's own segment below. */}
@@ -460,7 +523,7 @@ export function TopologyDiagram({
                       dots={dotsByPair.get(pairKey(gm.id, pm.id))}
                     />
                   )}
-                  <AgentNode nodeRef={register(pm.id)} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} />
+                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} />
 
                   {/* Workers under this PM. Each worker gets its OWN line to the PM rather
                       than sharing one "mesh" label for the group — a per-pair count is the
@@ -475,7 +538,7 @@ export function TopologyDiagram({
                             dimmed={lineDim(pm.id, w.id)}
                             dots={dotsByPair.get(pairKey(pm.id, w.id))}
                           />
-                          <AgentNode nodeRef={register(w.id)} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
                         </div>
                       ))}
                     </div>
@@ -493,7 +556,7 @@ export function TopologyDiagram({
           <p className="text-xs text-neutral-600 text-center mb-3">Not in the tree ({orphanAgents.length})</p>
           <div className="flex items-start gap-3 flex-wrap justify-center">
             {orphanAgents.map((w) => (
-              <AgentNode key={w.id} nodeRef={register(w.id)} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
             ))}
           </div>
         </div>
