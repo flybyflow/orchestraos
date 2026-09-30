@@ -430,6 +430,9 @@ export function RimNode({
         // `invisible`, not removed: a rim node that leaves the flow during GROW reflows the
         // rim row and moves every other endpoint, which moves every edge landing on one.
         unborn && 'invisible',
+        // Same one-shot reveal ring AgentNode gets (index.css .grow-reveal) — an external
+        // endpoint appearing mid-GROW is exactly as much a "first appearance" as an agent box.
+        unborn === false && 'grow-reveal',
       )}
     >
       <span className="text-[11px] text-neutral-300">{id}</span>
