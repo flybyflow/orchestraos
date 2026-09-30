@@ -127,8 +127,11 @@ API returned **149 rows, 149 distinct, 0 duplicates**, exactly `total_all_time`.
 `147 = 89 + 58` re-derives to `149 = 90 + 59` today — the table grew by 2 rows between our
 runs; the identity holds.
 
-Re-derived rather than accepted: `api` tsc exit 0; `dashboard` `build:check` exit 0 (I used
-`build:check`, never `build` — `vite build` overwrites the live `dashboard/dist`); 2 api and
+Re-derived rather than accepted: `api` tsc exit 0; `dashboard` `build:check` exit 0 (at the
+time, plain `build` deployed to the live `dashboard/dist`, so `build:check` was the only safe
+form. **No longer true as of `e5d0576`** — plain `build` is now the safe non-deploying path
+and **`build:live`** is the one that writes `dist`. Do not inherit the old warning: the
+dangerous name changed); 2 api and
 5 dashboard tests green; eslint **0 new findings** at the reviewed commit. My own 5 mutations:
 **4 bite, 1 survives** (F1). No SQL injection — everything parameterised, db opened readonly;
 no XSS vectors in the new components.
