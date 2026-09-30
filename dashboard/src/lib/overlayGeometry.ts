@@ -44,6 +44,38 @@ export function toLocalBox(
   };
 }
 
+/**
+ * Are two position maps equivalent?
+ *
+ * This is not an optimisation — it is what stops an infinite render loop, and
+ * it exists because I shipped that loop. The overlay measures in a
+ * useLayoutEffect that must run after EVERY render (a node's box can move
+ * without any prop changing), and measuring builds a fresh Map. A fresh Map is
+ * never reference-equal to the previous one, so an unconditional setState after
+ * every render re-renders forever: React bails out with "too many re-renders",
+ * unmounts the tree, and the whole page goes blank. Caught by review's
+ * before/after control — root.childElementCount 1 on the previous commit, 0 on
+ * mine, same browser, same minute.
+ *
+ * So the measure pass must be idempotent: compute, compare, and only commit
+ * when something actually moved.
+ */
+export function samePositions(a: Map<string, Box>, b: Map<string, Box>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [id, x] of a) {
+    const y = b.get(id);
+    // Sub-pixel jitter from fractional layout would otherwise re-render forever
+    // at a lower frequency — round-trip through a whole pixel before comparing.
+    if (!y
+      || Math.round(x.cx) !== Math.round(y.cx)
+      || Math.round(x.cy) !== Math.round(y.cy)
+      || Math.round(x.width) !== Math.round(y.width)
+      || Math.round(x.height) !== Math.round(y.height)) return false;
+  }
+  return true;
+}
+
 export interface PairLike { a: string; b: string; count: number }
 
 export interface CrossEdgeSelection<T extends PairLike> {

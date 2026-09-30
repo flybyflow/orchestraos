@@ -4,8 +4,47 @@
  */
 import assert from 'node:assert';
 import {
-  toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness,
+  toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions,
 } from './overlayGeometry.ts';
+
+// ── samePositions: the guard that stops an infinite render loop ─────────────
+// THE BUG THIS EXISTS FOR. The overlay measures in a useLayoutEffect with no
+// dependency array — it must, because a node's box can move without any prop
+// changing. Measuring builds a fresh Map, and committing a fresh Map
+// unconditionally re-renders forever: React bails with "too many re-renders",
+// unmounts the tree, and the WHOLE PAGE goes blank. Shipped exactly that;
+// review caught it with a before/after control (root.childElementCount 1 on
+// the previous commit, 0 on mine, same browser, same minute).
+//
+// The invariant is: measuring an unchanged layout must be a no-op.
+{
+  const box = (id, cx, cy) => ({ id, cx, cy, width: 100, height: 40 });
+  const a = new Map([['gm', box('gm', 10, 20)], ['build', box('build', 30, 60)]]);
+  const b = new Map([['gm', box('gm', 10, 20)], ['build', box('build', 30, 60)]]);
+
+  assert.strictEqual(samePositions(a, b), true,
+    'two freshly-built maps of the SAME layout must compare equal — this is the whole fix');
+  assert.strictEqual(a === b, false, 'and they are deliberately not the same object');
+  assert.strictEqual(samePositions(a, a), true, 'identity short-circuit');
+
+  // Real movement must still commit, or edges freeze at stale coordinates —
+  // which is the failure the loop was accidentally protecting against.
+  assert.strictEqual(samePositions(a, new Map([['gm', box('gm', 11, 20)], ['build', box('build', 30, 60)]])), false,
+    'a moved node must NOT be treated as unchanged');
+  assert.strictEqual(samePositions(a, new Map([['gm', box('gm', 10, 20)]])), false, 'a removed node counts');
+  assert.strictEqual(
+    samePositions(a, new Map([['gm', box('gm', 10, 20)], ['other', box('other', 30, 60)]])), false,
+    'same size, different ids — must not be fooled by count alone');
+  assert.strictEqual(samePositions(new Map(), new Map()), true, 'empty equals empty, so first paint settles');
+
+  // Sub-pixel jitter from fractional layout must not re-render forever at a
+  // lower frequency — a slow loop is still a loop.
+  assert.strictEqual(samePositions(a, new Map([['gm', box('gm', 10.3, 20.2)], ['build', box('build', 30, 60)]])), true,
+    'sub-pixel jitter is not movement');
+  assert.strictEqual(samePositions(a, new Map([['gm', box('gm', 10.9, 20)], ['build', box('build', 30, 60)]])), false,
+    'but a whole pixel is');
+  console.log('PASS: samePositions — unchanged layout is a no-op, real movement is not');
+}
 
 const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
 

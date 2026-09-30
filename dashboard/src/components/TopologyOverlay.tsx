@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { routeEdge, type Box } from '../lib/edgeRouting';
-import { toLocalBox, type RectLike } from '../lib/overlayGeometry';
+import { toLocalBox, samePositions, type RectLike } from '../lib/overlayGeometry';
 
 export interface OverlayEdge {
   a: string;
@@ -64,7 +64,12 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
       if (!el.isConnected) continue;
       next.set(id, toLocalBox(id, el.getBoundingClientRect(), cRect, container.scrollLeft, container.scrollTop));
     }
-    setPositions(next);
+    // Commit ONLY when something moved. The layout effect below deliberately has
+    // no dependency array, so this runs after every render; setting a freshly
+    // built Map unconditionally re-renders forever, React bails with "too many
+    // re-renders", and the page goes blank. That is not hypothetical — it is
+    // what this component shipped as, and what review's control caught.
+    setPositions((prev) => (samePositions(prev, next) ? prev : next));
   }, [containerRef]);
 
   const schedule = useCallback(() => {
@@ -75,11 +80,26 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
     });
   }, [measure]);
 
-  /** Registers a node. Passed straight to a `ref` prop. */
-  const register = useCallback((id: string) => (el: HTMLElement | null) => {
-    if (el) nodeRefs.current.set(id, el);
-    else nodeRefs.current.delete(id);
-    schedule();
+  /**
+   * Registers a node. Passed straight to a `ref` prop.
+   *
+   * The per-id callback is CACHED. React compares ref callbacks by identity and
+   * detaches/reattaches on every change — a fresh closure per render would
+   * unregister and re-register every node on every render, scheduling another
+   * measure each time. Same loop as above, reached by a different door.
+   */
+  const refCache = useRef(new Map<string, (el: HTMLElement | null) => void>());
+  const register = useCallback((id: string) => {
+    let cb = refCache.current.get(id);
+    if (!cb) {
+      cb = (el: HTMLElement | null) => {
+        if (el) nodeRefs.current.set(id, el);
+        else nodeRefs.current.delete(id);
+        schedule();
+      };
+      refCache.current.set(id, cb);
+    }
+    return cb;
   }, [schedule]);
 
   // Layout effect, not effect: measuring after paint shows one frame of edges
@@ -100,7 +120,7 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
       window.removeEventListener('resize', schedule);
       if (frame.current != null) cancelAnimationFrame(frame.current);
     };
-  }, [containerRef, schedule, positions.size]);
+  }, [containerRef, schedule]);
 
   return { positions, register, remeasure: schedule };
 }
