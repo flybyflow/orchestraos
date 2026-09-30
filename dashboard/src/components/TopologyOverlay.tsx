@@ -283,6 +283,11 @@ export function RimNode({
     <button
       type="button"
       ref={nodeRef}
+      // Same scroll/measure hook the agent boxes carry. Without it a rim node is
+      // invisible to "take me to this thing" AND to any measurement that enumerates
+      // node boxes by this attribute — which is how a gm<->telegram edge could look
+      // like it had only ONE endpoint.
+      data-agent-id={id}
       onClick={onSelect ? () => onSelect(id) : undefined}
       title={`${id} — ${count} messages, external endpoint (not an agent)`}
       className={clsx(
