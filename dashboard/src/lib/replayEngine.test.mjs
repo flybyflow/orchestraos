@@ -91,6 +91,13 @@ test('seek at a cursor before the first event returns an empty trail, not a cras
   assert.deepStrictEqual(trail, []);
 });
 
+test('advance with dt=0 fires nothing and returns the SAME state object (reference equality, for re-render guards)', () => {
+  const state = startPlay(initReplay([ev(1000), ev(2000)]), 0);
+  const r = advance(state, 0);
+  assert.strictEqual(r.state, state, 'dt=0 must not allocate a new state object');
+  assert.deepStrictEqual(r.fired, []);
+});
+
 test('span()===1 guard: a single-event window does not divide by zero or NaN the cursor', () => {
   const state = initReplay([ev(5000)]);
   assert.strictEqual(span(state), 1);

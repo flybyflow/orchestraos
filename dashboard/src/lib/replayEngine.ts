@@ -78,6 +78,11 @@ export function startPlay(s: ReplayState, fromFraction: number): ReplayState {
  *  cannot fire again on a later call. `ended` is a report, not an action: the caller (the hook)
  *  decides whether to call setLive() when it sees ended=true. */
 export function advance(s: ReplayState, dtMs: number): { state: ReplayState; fired: ReplayEvent[]; ended: boolean } {
+  // dt=0 is a real call shape (a caller's first rAF frame after computing its own `last`
+  // timestamp, or an explicit no-op tick) and must not allocate a new state object — a
+  // reference-equality re-render guard depends on this returning the SAME object, not a
+  // structurally-identical copy.
+  if (dtMs === 0) return { state: s, fired: [], ended: s.idx >= s.events.length };
   const cursor = s.cursor + (dtMs / REPLAY_MS) * span(s) * s.speed;
   const fired: ReplayEvent[] = [];
   let idx = s.idx;
