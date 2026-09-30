@@ -7,7 +7,7 @@ import { lineWidthPx, pairKey, shortAgo, partitionTopology } from '../lib/topolo
 import { dotColor, type TrafficMessage } from '../lib/fleetTraffic';
 import { TopologyOverlay, RimNode, useNodePositions, type OverlayEdge, type ReplayFiredEvent } from './TopologyOverlay';
 import { externalEndpoints } from '../lib/rimNodes';
-import { selectCrossEdges, busiestDrawn, edgeLiveness, edgeDirection } from '../lib/overlayGeometry';
+import { selectCrossEdges, busiestDrawn, edgeLiveness, edgeDirection, filterExistedByAsof } from '../lib/overlayGeometry';
 
 interface Agent {
   id: string;
@@ -450,24 +450,40 @@ export function TopologyDiagram({
     return externalEndpoints(pairs ?? [], allAgentIds ?? visible, visible);
   }, [pairs, agents, allAgentIds, showExternal]);
 
+  // The VIEWED moment. While the time bar is scrubbed this is asof, not the wall clock —
+  // otherwise an edge whose only traffic is after the scrubbed moment gets described as
+  // "quiet", which is a claim about a conversation that had not happened yet. Computed
+  // once, ahead of crossSelection, because the existed-by-asof filter below needs it too.
+  const viewedNow = useMemo(() => {
+    const parsed = asof ? Date.parse(asof) : Date.now();
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }, [asof]);
+
   // Cross edges: every pair with traffic that the hierarchy tree does not already draw.
   // Dead pairs ride the same path so they are routed and hit-tested identically —
   // the only difference is how they are stroked.
+  //
+  // Existed-by-asof filtering happens HERE, before the top-N cap, not after (operator live
+  // QA, 2026-09-30). It used to run after: selectCrossEdges capped the busiest N pairs by
+  // their CURRENT/all-time count, with no notion of the scrubbed moment, and only then did
+  // the caller drop the ones that turned out not to have existed yet. A pair with heavy
+  // traffic TODAY but none yet at a scrubbed Sep 25 could easily be in the top 12 by count
+  // and then get discarded as absent — spending a cap slot on a pair that was never a real
+  // candidate, and bumping out a pair that genuinely existed at that moment. Scrubbed to
+  // Sep 25: top-12 drew 2 edges, uncapped drew 6, at least 15 real existed-by-asof pairs
+  // were dropped. Filtering first means the cap only ever competes among pairs that could
+  // actually be drawn.
   const crossSelection = useMemo(() => {
     if (!showCross) return null;
-    const rows = [...(pairs ?? []), ...(deadPairs ?? [])];
+    const rows = filterExistedByAsof(
+      [...(pairs ?? []), ...(deadPairs ?? [])], viewedNow, windowHours * 3600_000,
+    );
     const positioned = new Set(positions.keys());
     return selectCrossEdges(rows, positioned, drawnKeys, pairKey, crossTopN);
-  }, [pairs, deadPairs, positions, drawnKeys, crossTopN, showCross]);
+  }, [pairs, deadPairs, positions, drawnKeys, crossTopN, showCross, viewedNow, windowHours]);
 
   const overlayEdges: OverlayEdge[] = useMemo(() => {
     if (!crossSelection) return [];
-    // The VIEWED moment. While the time bar is scrubbed this is asof, not the wall
-    // clock — otherwise an edge whose only traffic is after the scrubbed moment gets
-    // described as "quiet", which is a claim about a conversation that had not
-    // happened yet.
-    const viewedNow = asof ? Date.parse(asof) : Date.now();
-    const now = Number.isFinite(viewedNow) ? viewedNow : Date.now();
     const denom = busiestDrawn(crossSelection.drawn, lookup.busiest);
     // flatMap rather than map().filter(): dropping the absent case here narrows
     // `liveness` for the compiler as a side effect of the early return, instead of
@@ -477,12 +493,13 @@ export function TopologyDiagram({
       const top = Object.entries(byType).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
       const lastAt = p.last_at ? Date.parse(p.last_at) : null;
       const liveness = edgeLiveness(
-        p.count, Number.isNaN(lastAt as number) ? null : lastAt, now, windowHours * 3600_000,
+        p.count, Number.isNaN(lastAt as number) ? null : lastAt, viewedNow, windowHours * 3600_000,
       );
-      // An edge that did not exist at the viewed moment is not drawn AT ALL. Drawing
-      // it dashed-and-grey would still assert a relationship that had not formed yet,
-      // which is what the scrubbed view was doing: nine tooltips claiming "quiet" about
-      // pairs whose only traffic was days after the moment on screen.
+      // Belt and braces: crossSelection's rows are already filtered to existed-by-asof
+      // pairs above, so this should never fire now — kept as the second check rather than
+      // trusted away, the same reason the missing-position guard a few lines down in
+      // TopologyOverlay is kept even though selectCrossEdges already filters unpositioned
+      // pairs out.
       if (liveness === 'absent') return [];
       return [{
         a: p.a, b: p.b, count: p.count, type: top, byType,
@@ -498,7 +515,7 @@ export function TopologyDiagram({
         escalate: edgeAlerts?.[pairKey(p.a, p.b)]?.escalate ?? 0,
       }];
     });
-  }, [crossSelection, lookup.busiest, windowHours, bright, selectedAgentId, asof]);
+  }, [crossSelection, lookup.busiest, windowHours, bright, selectedAgentId, viewedNow]);
 
   // GROW: a cross edge is drawn only once a replayed event has touched it. Filtered AFTER
   // the memo, not inside it, so widthPx keeps the live `denom` — a growing chart whose

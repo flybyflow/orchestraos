@@ -5,7 +5,7 @@
 import assert from 'node:assert';
 import {
   toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions, edgeDirection,
-  bornUpTo, overlayContentSize,
+  bornUpTo, overlayContentSize, filterExistedByAsof,
 } from './overlayGeometry.ts';
 
 // ── samePositions: the guard that stops an infinite render loop ─────────────
@@ -260,6 +260,54 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   // function takes positions and a plain clientWidth number; it has no way to read scrollWidth
   // at all, which is the guarantee, not just an assertion about this call's arguments.
   console.log('PASS: overlayContentSize — widens to real tree content, never shrinks below the viewport, no scrollWidth feedback loop possible');
+}
+
+// ── filterExistedByAsof + selectCrossEdges: filter BEFORE the cap, not after ────────────────
+// THE BUG (operator live QA, 2026-09-30): scrubbed to Sep 25, a top-12 cap applied to the
+// full, un-asof-filtered pair list drew only 2 edges; even "show all" (uncapped) drew only 6,
+// with at least 15 real existed-by-asof pairs dropped. Root cause: the cap sorts by count
+// desc with a stable alphabetical tiebreak among ties, and every pair that has not happened
+// yet at the viewed moment has count 0 in that window -- tied with every pair that genuinely
+// went quiet or dead by then. Capping BEFORE dropping the not-yet-existed ones lets them eat
+// cap slots a real pair should have gotten; only the filter order decides which zero-count
+// pairs the cap sees at all.
+{
+  const viewedNowMs = 2000;
+  const windowMs = 1000;
+  const row = (a, b, count, lastAt) => ({ a, b, count, last_at: lastAt });
+
+  // 1 pair with real traffic by the viewed moment -- always survives on count alone.
+  const live = [row('hub', 'live0', 5, '1970-01-01T00:00:01.500Z')];
+  // 3 pairs that genuinely existed by the viewed moment (count 0 in-window, but last activity
+  // at or before it) -- named 'real_*' so it sorts AFTER 'absent_*' below, the exact ordering
+  // that lets the cap-first bug bite.
+  const real = [0, 1, 2].map((i) => row('hub', `real_${i}`, 0, new Date(500).toISOString()));
+  // 5 pairs whose ONLY activity is strictly after the viewed moment -- they have not happened
+  // yet at asof. Named 'absent_*' so they sort FIRST among the count-0 ties.
+  const absent = [0, 1, 2, 3, 4].map((i) => row('hub', `absent_${i}`, 0, new Date(3000).toISOString()));
+
+  const rows = [...live, ...real, ...absent];
+  const positioned = new Set(['hub', 'live0', 'real_0', 'real_1', 'real_2', 'absent_0', 'absent_1', 'absent_2', 'absent_3', 'absent_4']);
+  const topN = 4;
+
+  // THE OLD (buggy) ORDER: cap first, drop absent ones after. Reproduced directly, not
+  // assumed -- this is exactly what TopologyDiagram.tsx used to do before this fix.
+  const oldCapped = selectCrossEdges(rows, positioned, new Set(), key, topN).drawn;
+  const oldSurvivors = oldCapped.filter((p) => {
+    const lastAt = p.last_at ? Date.parse(p.last_at) : null;
+    return edgeLiveness(p.count, lastAt, viewedNowMs, windowMs) !== 'absent';
+  });
+  assert.deepStrictEqual(oldSurvivors.map((p) => p.b).sort(), ['live0'],
+    'cap-then-filter: the cap fills with absent pairs before the real ones ever get a chance, leaving just the one live pair');
+
+  // THE FIX: filter first, then cap. All 3 real pairs (plus live0) are among the candidates
+  // the cap chooses from, so all 4 of the real ones survive within topN=4.
+  const preFiltered = filterExistedByAsof(rows, viewedNowMs, windowMs);
+  const newDrawn = selectCrossEdges(preFiltered, positioned, new Set(), key, topN).drawn;
+  assert.deepStrictEqual(newDrawn.map((p) => p.b).sort(), ['live0', 'real_0', 'real_1', 'real_2'],
+    'filter-then-cap: the cap only ever competes among pairs that actually existed by the viewed moment');
+
+  console.log('PASS: filterExistedByAsof — asof-filtering before the cap keeps real pairs the old cap-then-filter order dropped');
 }
 
 console.log('\nAll overlayGeometry tests passed.');

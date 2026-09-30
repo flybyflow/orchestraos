@@ -245,6 +245,28 @@ export function edgeLiveness(
   return nowMs - lastAtMs <= quietWindowMs ? 'quiet' : 'dead';
 }
 
+/**
+ * Drop pairs that did not exist yet at the viewed moment — BEFORE any top-N cap runs, not
+ * after (operator live QA, 2026-09-30). Scrubbed to Sep 25, a top-12 cap applied to the full,
+ * un-asof-filtered pair list drew only 2 edges, and even uncapped ("show all") drew only 6,
+ * with at least 15 real existed-by-asof pairs dropped. The cap was capping the wrong set: a
+ * pair with heavy traffic TODAY but none yet at Sep 25 could easily be in the count-sorted top
+ * 12, get discarded as `absent` downstream, and take a cap slot that belonged to a pair that
+ * genuinely existed at that moment with it. Filtering first means the cap only ever competes
+ * among pairs that could actually be drawn — selectCrossEdges never even sees the absent ones.
+ */
+export function filterExistedByAsof<T extends PairLike & { last_at: string | null }>(
+  rows: T[],
+  viewedNowMs: number,
+  quietWindowMs: number,
+): T[] {
+  return rows.filter((p) => {
+    const lastAt = p.last_at ? Date.parse(p.last_at) : null;
+    const liveness = edgeLiveness(p.count, Number.isNaN(lastAt as number) ? null : lastAt, viewedNowMs, quietWindowMs);
+    return liveness !== 'absent';
+  });
+}
+
 /** Minimal shape the GROW fold needs off a replayed event. Deliberately not ReplayEvent:
  *  this file must not import the replay engine, or the pure geometry layer starts
  *  depending on the playback layer for what is two set insertions. */
