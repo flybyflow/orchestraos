@@ -40,28 +40,24 @@ test('speed 4 fires strictly more events than speed 1 for the same dt, same fixt
     `speed 4 fired ${fast.fired.length}, speed 1 fired ${slow.fired.length} -- expected strictly more`);
 });
 
-test('startPlay restart (f>=0.999 -> 0): cursor resets to t0, and idx resets to the start of the window rather than staying wherever it was', () => {
-  // REAL FINDING, not asserted blindly: per the given formula (idx = first event with t >
-  // cursor, applied identically in startPlay/seek), a from-scratch restart's cursor lands
-  // EXACTLY on the first event's own timestamp (cursor === t0 === events[0].t by construction),
-  // and "t > cursor" therefore excludes that first event from ever firing again -- it is
-  // permanently treated as already-passed the instant the cursor sits on top of it. Verified
-  // against /field's literal source (same `findIndex(e => t > cursor)` rule, read directly,
-  // not assumed) -- this is inherited behaviour, not a bug introduced here. So the event that
-  // actually fires first after a restart is events[1], not events[0]. This test still pins the
-  // thing build's brief cared about: that idx is actually RESET on restart rather than left
-  // wherever late/mid-playback parked it (the brief's own parenthetical: "asserting cursor
-  // alone passes even if idx is wrong").
+test('startPlay restart (f>=0.999 -> 0): cursor resets to t0, idx resets to the start (not wherever it was), and the FIRST event actually fires', () => {
+  // Real bug, found live on the rendered page (operator QA): a from-scratch replay's very
+  // first event never fired. Root cause: startPlay's idx used to share seek's `t > cursor`
+  // boundary, and cursor === t0 === events[0].t exactly on a from-scratch restart, so "t >
+  // cursor" excluded index 0 permanently (idx only moves forward). Fixed with a separate
+  // `firstIndexAtOrAfter` (t >= cursor) for startPlay specifically -- see the two helper
+  // functions' comments at the top of this file for why they must stay different. This test
+  // pins both things that matter: idx actually resets on restart (build's brief: "asserting
+  // cursor alone passes even if idx is wrong"), AND the earliest event is reachable.
   const events = [ev(1000), ev(2000), ev(3000)];
   const midPlayback = { events, playing: true, idx: 2, live: false, cursor: 2900, t0: 1000, t1: 3000, speed: 1, growth: false };
 
   const restarted = startPlay(midPlayback, 0.9995);
   assert.strictEqual(restarted.cursor, restarted.t0, 'cursor must reset to t0');
-  assert.strictEqual(restarted.idx, 1, 'idx must reset to the start of the window (index 1 = first event after t0), not stay at 2');
+  assert.strictEqual(restarted.idx, 0, 'idx must reset to the START of the window (index 0, the earliest event), not stay at 2');
 
-  const dt = (1000 * REPLAY_MS) / 2000; // enough to move cursor from t0=1000 to >=2000 (span=2000)
-  const { fired } = advance(restarted, dt);
-  assert.strictEqual(fired[0]?.t, 2000, 'the first event to actually fire after a restart is the one after t0, not events[0] itself');
+  const { fired } = advance(restarted, 1); // any dt>0; cursor already sits ON t0=events[0].t
+  assert.strictEqual(fired[0]?.t, 1000, 'the very first event in the window must fire on a from-scratch restart');
 });
 
 test('seek trail: exactly min(SNAP_N, available) entries, strictly descending weights, newest 1.0, oldest at the real formula value', () => {

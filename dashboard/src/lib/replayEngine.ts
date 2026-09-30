@@ -32,8 +32,27 @@ function clamp01(f: number): number {
   return Math.min(1, Math.max(0, f));
 }
 
-// Index of the first event with t STRICTLY AFTER `cursor` (events.length if none) — the one
-// shared definition startPlay/seek/setLive all use for "where does replay resume from".
+// Index of the first event with t >= cursor (events.length if none) — startPlay's resume
+// point. An event sitting EXACTLY on the cursor has not fired yet and must still be reachable
+// going forward; the strict `>` this used to share with seek() permanently excluded whatever
+// event happens to equal t0 on a from-scratch restart (cursor === t0 by construction), since
+// idx only ever moves forward and nothing before it is ever re-examined. Real bug, found live:
+// a from-scratch replay's first event never fired (QA, operator-reported, firstFiredId one off
+// from the API's actual first row).
+function firstIndexAtOrAfter(events: ReplayEvent[], cursor: number): number {
+  for (let i = 0; i < events.length; i++) {
+    if (events[i].t >= cursor) return i;
+  }
+  return events.length;
+}
+
+// Index of the first event STRICTLY AFTER `cursor` (events.length if none) — seek()'s trail
+// boundary. Deliberately the OPPOSITE inclusivity from firstIndexAtOrAfter above: seek treats
+// an event exactly AT the cursor as already-happened (belongs IN the trail, via hi = idx - 1),
+// where startPlay treats the same case as not-yet-fired. Same underlying question ("where is
+// the cursor relative to the events"), two different correct answers depending on whether the
+// caller is about to move FORWARD from here (startPlay/advance) or looking BACKWARD from here
+// (seek) — collapsing them into one shared helper is exactly what caused the bug above.
 function firstIndexAfter(events: ReplayEvent[], cursor: number): number {
   for (let i = 0; i < events.length; i++) {
     if (events[i].t > cursor) return i;
@@ -68,7 +87,7 @@ export function fraction(s: ReplayState): number {
 export function startPlay(s: ReplayState, fromFraction: number): ReplayState {
   const f = fromFraction >= 0.999 ? 0 : fromFraction;
   const cursor = s.t0 + span(s) * f;
-  const idx = firstIndexAfter(s.events, cursor);
+  const idx = firstIndexAtOrAfter(s.events, cursor);
   return { ...s, cursor, idx, playing: true, live: false };
 }
 
