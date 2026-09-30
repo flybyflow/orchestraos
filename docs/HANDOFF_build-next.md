@@ -3,18 +3,22 @@
 - **Timestamp:** 2026-09-30T00:05:00Z
 - **Working Directory:** /Users/flybyflow/orchestraos (**shared with plan/review/ship — commit only through `scripts/git-lock.sh` with explicit pathspecs**)
 - **Second working tree:** `/tmp/sec01-toddito` (clone of `brollistika/toddito`, branch `main`) — the Pulse/Toddito security work. In `/tmp`, so treat it as disposable and push after every commit.
-- **Last Commit SHA (orchestraos):** `d71e6ef` on `fix-arturo-mapfile-bash32` (feature commits `47a3314`, `1cfdf9e`)
+- **Last Commit SHA (orchestraos):** `a41d08c` on `fix-arturo-mapfile-bash32` (feature commits `47a3314`, `1cfdf9e`, `2240141`, `b300e73`, `6ab2d1d`, `b9ebbe0`, `a41d08c`)
 - **Last Commit SHA (toddito):** `4f83b9f` on `main`, pushed and remote-verified
 
 ## 1. Current Goal & Phase State
 Two workstreams, both at a clean stopping point. Nothing half-applied in either tree.
-- **2D Agents View** (`docs/2d-agents-view-spec.md`, task from plan `msg_5ed403a1_24335965`): build-order steps **1-5 COMPLETE**. Steps 6-11 not started and explicitly not claimed.
+- **2D Agents View** (`docs/2d-agents-view-spec.md`): steps **1-9 COMPLETE** (gm cleared 6-11 via plan `msg_a2a5b9db_25894792`). Step **10 is with builder-2**, signature approved, in flight. Step **11 CANNOT be done** — see Decisions 8.
+  - Reviewed and CLEARED for 1-5 by review; F1/F2/F3/F4 all actioned (Decisions 9).
+  - Live and verified: API pid 12994, dashboard bundle stamped `a41d08c`.
 - **Toddito security backlog** (gm): SEC-01/02/04/05/06 closed earlier; **SEC-03 closed tonight** (`4f83b9f`), **SEC-08 partial landed** (`f7c3111`).
 
 ## 2. Open Loops
 - [x] ~~**API server has not been restarted.**~~ **DONE** — plan authorized it (`msg_fa262296_25738934`), restarted and verified live. Kept for the trap it exposed: the live API runs `api/dist/server.js`, i.e. COMPILED output, and `dist/routes/messages.js` was 8 hours stale. Restarting first would have respawned the old code and come up green. So `cd api && npm run build` **then** restart, and grep `dist/` for the change, not `src/`. Restart method: `kill` the one recorded child pid from `./bin/orchestra status` and let the supervisor respawn it (api is now pid 60913, `restarts=1`); never `pkill -f` in this install. Verified end to end: `total_in_window` for build⇄gm (130) is identical to that pair's line label, the `hours=1` window really narrows it, `/api/agents` still 14/13, and the served bundle at `:8891` is the one `vite build` produced.
 - [ ] **Nobody has looked at the rendered page.** There is no browser in this seat, so every DATA path is verified and zero PIXELS are. The sticky bar under scroll, the panel at narrow widths, and whether line counts read clearly at real density are unconfirmed by eye — a design-review job, and the honest gap between "live and correct" and "looks right".
-- [ ] **One design decision awaiting plan's confirmation.** The pair endpoint returns `total_in_window` AND `total_all_time` because §6 wants a header total and unbounded "load older", and one number cannot be both. If plan wants a single number, either the line and the header disagree again or pagination has to stop at the window edge. Asked in `msg_8aba98d1_25657252`.
+- [x] ~~**Two-count design decision.**~~ **SETTLED** — plan confirmed keep-as-built, review confirmed the code was already right and needed no ruling. Both numbers now render, labelled, windowed first.
+- [ ] **builder-2 is mid-build on step 10 (search).** Signature approved in `msg_7c46fcbc_27066695`. Its investigation found: no endpoint lists prompts (derive them by grouping agents on `system_prompt`), `/api/projects` carries `repo` + `.agents` but is EMPTY on this install, and FILES is not reachable from any endpoint so it is scoped out with an always-empty array. Verify its work independently before committing — the last two worker deliveries each had a real gap that only a mutation run or a grep surfaced.
+- [ ] **`api/tests/telemetry.test.ts` fails on this install.** Pre-existing, not from this work. It is why the new `api` test script globs `src/**` only and not `tests/**` — a suite that is red on arrival gets skipped by everyone. Flagged to review; nobody owns it yet.
 - [ ] **gm is holding a correction, not a deliverable.** `msg_b076d726_25616041`: the SEC-03/SEC-08 "real fix" I recommended and gm authorized **does not exist** for this app. Nothing was built. gm had planned a morning go/no-go for the operator built on my wrong premise; the correction reached gm before that. Do not resurrect the ElevenLabs initiation-webhook plan without re-reading it.
 - [ ] **My two 2D commits land inside PR #133**, whose head branch is the checked-out `fix-arturo-mapfile-bash32`. That PR is now 85 files spanning a router P0 fix, API identity-spoofing fixes, org hardening and this feature. A review problem, not a build problem, but nobody should be surprised by it.
 
@@ -26,13 +30,17 @@ Two workstreams, both at a clean stopping point. Nothing half-applied in either 
 5. **Shipped the agents-only half of §8 search rather than an inert input.** A control that does nothing is worse than one that does less than the spec. The rest is step 10 and is labelled as such in the code.
 6. **SEC-03: stripped one field, not six.** All six PII fields are load-bearing — they travel page.tsx -> useElevenLabsSession -> the agent's system prompt, and ElevenLabs takes dynamic variables only from the client. Per gm's instruction, err toward keeping and flag. Only the `client_org` echo on the 503 branch was confirmed unused.
 7. **SEC-08 guards `'scored'` only, deliberately not `'completed'`.** `'completed'` is an intermediate state the same webhook sets before scoring; refusing it would break legitimate EL retries and the cleanup-stuck-sessions cron.
+8. **Step 11 is not deliverable here and step 9's "shared with 3D" half is not verifiable.** There is NO 3D view in this codebase: zero react-three-fiber under `dashboard/src`, nothing named field/3d, `three` absent from `dashboard/package.json`. Matches §16's own unresolved note and gm's screenshot finding (the 3D surface is very likely a separate service). What exists is the 2D half plus `useOrchestraStore` as the seam. Claiming step 11 would be a claim about software nobody here can see.
+9. **Three bugs tonight were all the same shape: the design's field name vs the live payload.** `mac` vs `local` on machine, `prompt_file` vs `system_prompt`, and `+` decoding to a space in `asof`. None were visible by reading; all three needed curling the real thing. The asof one is the worst of the class — it returned LIVE counts for a request asking for a past moment and rendered a healthy-looking graph, so it now 400s rather than falling back to now.
+10. **A green test is not a test.** Review proved my julianday assertion was vacuous (a 24h window's cutoff is on the previous calendar day, so the day digit settles a string compare first) and the mutation survived. I then found the same defect in builder-1's `isNearBottom` suite — six assertions, none at the boundary, off-by-one survived. Run the mutation; do not trust the green.
+11. **Travelling dots are emitted per new message id, never looped, and the first poll emits none.** Spec §2: if a dot moves, a message is actually moving. Firing 40 dots for a backlog on page load is motion that means nothing.
 
 ## 4. Declared First Effect
 `git merge-base --is-ancestor 1cfdf9e HEAD` must succeed (HEAD was `66e7522` when this was written; docs commits land on top), and `grep -c total_in_window api/dist/routes/messages.js` must be `>= 1` — **dist**, because that is what the live API actually serves. Then read `msg_b076d726_25616041` (the gm correction) before touching anything ElevenLabs-shaped.
 
 ## 5. Next 3 Immediate Actions
-1. Read plan's answer on the two-count decision (open loop 2) before anyone builds step 9's window picker on top of it.
-2. If 2D work continues: step 6 (selection highlight and fade) is the natural next one — `selectedAgentId` already reaches `TopologyDiagram` and drives a ring, so the fade-others half is what remains.
+1. Collect builder-2's step 10 report, verify it independently (do not accept its checks), integrate `SearchResults` into `Agents.tsx` — the search box and `search` state already live in `useOrchestraStore`, so the seam is ready — and commit.
+2. Rebuild + restamp after that commit: `cd dashboard && npm run build`, then confirm `curl -s localhost:8891/BUILD_SHA` has no `-dirty` suffix. Same for `api/` if any route changed (`npm run build`, then restart the recorded child pid from `./bin/orchestra status`).
 3. If anything here needs re-deploying: `npm run build` in `api/` (and `npx vite build` in `dashboard/`) BEFORE restarting, then grep `dist/`. Both `dist/` trees are currently ahead of what is committed — they are untracked build artefacts, not lost work.
 
 ## 6. Grounding Canary Questions (Questions Only — No Answers!)
