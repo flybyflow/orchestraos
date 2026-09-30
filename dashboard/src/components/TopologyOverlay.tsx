@@ -13,8 +13,10 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
-import { routeEdge, type Box } from '../lib/edgeRouting';
+import { routeEdge, pointAtFraction, type Box } from '../lib/edgeRouting';
 import { toLocalBox, samePositions, type RectLike } from '../lib/overlayGeometry';
+import { pairKey } from '../lib/topologyLines';
+import { pulseId, pulseProgress, pruneDeadPulses, type ReplayPulse } from '../lib/replayPulses';
 
 export interface OverlayEdge {
   a: string;
@@ -174,6 +176,18 @@ function tooltip(e: OverlayEdge, windowHours: number): string {
   return parts.length ? `${head}${dir}${esc}\n${parts.join(', ')}` : `${head}${dir}${esc}`;
 }
 
+/** A replayed message event, the shape useReplay's `fired`/`trail` carry. Only the fields a
+ *  pulse actually needs — this file does not import builder-2's engine, it only consumes
+ *  plain data shaped like this (same "props in, markup out" boundary as ReplayControls). */
+export interface ReplayFiredEvent {
+  from?: string;
+  to?: string;
+  type?: string | null;
+  id?: string;
+  t: number;
+  kind?: 'message' | 'spawn';
+}
+
 export interface TopologyOverlayProps {
   width: number;
   height: number;
@@ -181,13 +195,68 @@ export interface TopologyOverlayProps {
   positions: Map<string, Box>;
   windowHours: number;
   onSelectConnection?: (a: string, b: string) => void;
+  /** PLAY/GROW replay pulses (operator's port from /field, 2026-09-30). Events that fired on
+   *  the LAST hook tick — each becomes one travelling pulse riding the SAME routed path the
+   *  static edge above uses, never a straight line the router just spent its budget avoiding. */
+  fired?: ReplayFiredEvent[];
+  /** Seek trail (dragging the replay slider): the most-recent messages before the cursor,
+   *  newest weight ~1.0 down to ~0.18, lighting their edges instead of a travelling shape —
+   *  ported from /field's applySnapshotAt. */
+  trail?: { event: { from?: string; to?: string }; weight: number }[];
 }
 
 export function TopologyOverlay({
-  width, height, edges, positions, windowHours, onSelectConnection,
+  width, height, edges, positions, windowHours, onSelectConnection, fired, trail,
 }: TopologyOverlayProps) {
+  // Active pulses: `fired` is a NEW batch each hook tick (not a running list), so each tick
+  // adds fresh pulses without disturbing ones already in flight. A ref holds the true current
+  // list; `pulses` state exists only to trigger a re-render, always set to a plain value (the
+  // ref's contents), never a functional updater — a functional setState called directly in an
+  // effect body is what React's purity linter flags here (Agents.tsx's near-identical
+  // newlyArrived-dots effect avoids the same warning the same way: a direct value, not `prev
+  // => ...`). The ref is the single source of truth so the add-effect and the prune-interval
+  // below can never drift out of sync with each other.
+  const pulsesRef = useRef<ReplayPulse[]>([]);
+  const [pulses, setPulses] = useState<ReplayPulse[]>([]);
+  // `now` is STATE updated on an interval, not a Date.now() read during render — same reason
+  // TimeBar does this: a render-time clock read is impure (React flags it) and would only
+  // update when something else happens to re-render anyway. One interval both advances
+  // pulse positions (pulseProgress is a function of `now`) and prunes dead ones.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!fired || fired.length === 0) return;
+    const startedAt = Date.now();
+    const next: ReplayPulse[] = fired
+      .filter((e) => e.kind !== 'spawn' && e.from && e.to)
+      .map((e) => ({ id: pulseId(e), a: e.from as string, b: e.to as string, type: e.type ?? null, startedAt }));
+    if (next.length === 0) return;
+    pulsesRef.current = [...pulsesRef.current, ...next];
+    setPulses(pulsesRef.current);
+  }, [fired]);
+  const pulseCount = pulses.length;
+  useEffect(() => {
+    if (pulseCount === 0) return;
+    const id = setInterval(() => {
+      const t = Date.now();
+      pulsesRef.current = pruneDeadPulses(pulsesRef.current, t);
+      setNow(t);
+      setPulses(pulsesRef.current);
+    }, 50);
+    return () => clearInterval(id);
+  }, [pulseCount]);
+
   if (width <= 0 || height <= 0) return null;
   const obstacles = [...positions.values()];
+
+  // Trail weight per pair, for the seek-drag highlight — a Map so a repeated pair (should not
+  // happen, but a malformed trail must not crash) keeps its LAST/strongest weight rather than
+  // silently picking whichever entry happened to iterate last by accident.
+  const trailWeight = new Map<string, number>();
+  for (const t of trail ?? []) {
+    if (!t.event.from || !t.event.to) continue;
+    const key = pairKey(t.event.from, t.event.to);
+    trailWeight.set(key, Math.max(trailWeight.get(key) ?? 0, t.weight));
+  }
 
   return (
     // pointer-events:none on the <svg> so the layer never steals a click meant
@@ -222,6 +291,10 @@ export function TopologyOverlay({
         const stroke = edgeStroke(e.type);
         const dead = e.liveness === 'dead';
         const quiet = e.liveness === 'quiet';
+        // Seek-drag trail (build's ask, ported from /field's applySnapshotAt): lit by
+        // opacity/thickness scaled by recency weight, no travelling shape — dragging always
+        // shows the recent activity trail even mid-gap in bursty traffic.
+        const trailW = trailWeight.get(pairKey(e.a, e.b)) ?? 0;
 
         return (
           <g key={`${e.a}|${e.b}`} className={clsx(e.dimmed && 'opacity-20')}>
@@ -232,12 +305,16 @@ export function TopologyOverlay({
               // WAS, an escalation is something waiting on a person. A dead edge stays
               // grey regardless — an escalation from outside the window is history.
               stroke={dead ? '#3f3f46' : (e.escalate ?? 0) > 0 ? '#ef4444' : stroke}
-              strokeWidth={dead || quiet ? 1 : (e.escalate ?? 0) > 0 ? Math.max(2, e.widthPx) : e.widthPx}
+              strokeWidth={
+                trailW > 0
+                  ? Math.max(e.widthPx, 1) + trailW * 3
+                  : dead || quiet ? 1 : (e.escalate ?? 0) > 0 ? Math.max(2, e.widthPx) : e.widthPx
+              }
               // dead = sparse dots (a connection that WAS real), quiet = dashes
               // (alive, just below the window). One grey line for both would say
               // "nothing here" about a link that is merely idle.
               strokeDasharray={dead ? '1 6' : quiet ? '5 4' : undefined}
-              strokeOpacity={dead ? 0.55 : quiet ? 0.75 : 0.85}
+              strokeOpacity={trailW > 0 ? Math.min(1, 0.5 + trailW * 0.5) : dead ? 0.55 : quiet ? 0.75 : 0.85}
               strokeLinecap="round"
               // The arrowhead goes on the END for a->b and the START for b->a, rather
               // than reversing the path: reversing would also flip where the curve
@@ -265,6 +342,48 @@ export function TopologyOverlay({
           </g>
         );
       })}
+      {/* Replay pulses (PLAY/GROW port). Own <g>, own pointer-events:none — never steals a
+          click, never gets clicked itself (build's spec: "pointer-events none on the whole
+          pulse layer"). Rendered on TOP of the static edges/labels so a pulse is never
+          visually occluded by the line it rides. */}
+      <g className="pointer-events-none">
+        {pulses.map((p) => {
+          const from = positions.get(p.a);
+          const to = positions.get(p.b);
+          // The pair may have scrolled out of `positions` (node unmounted/filtered) between
+          // the event firing and this render — drop it rather than draw from stale boxes.
+          if (!from || !to) return null;
+          const route = routeEdge(from, to, obstacles);
+          const t = pulseProgress(p, now);
+          const pos = pointAtFraction(route, t);
+          const color = edgeStroke(p.type);
+          // Fade in over the first 10% and out over the last 20% of the lifetime, rather than
+          // popping in/out at full opacity — the same reason CSS transitions exist.
+          const opacity = t < 0.1 ? t / 0.1 : t > 0.8 ? (1 - t) / 0.2 : 1;
+          return (
+            <g key={p.id} opacity={opacity}>
+              <circle cx={pos.x} cy={pos.y} r={5} fill={color} />
+              <circle cx={pos.x} cy={pos.y} r={9} fill={color} opacity={0.35} />
+              {p.type && (
+                <text
+                  x={pos.x}
+                  y={pos.y - 12}
+                  textAnchor="middle"
+                  fontSize={9}
+                  fontWeight={600}
+                  letterSpacing="0.05em"
+                  fill={color}
+                  stroke="#0a0a0a"
+                  strokeWidth={3}
+                  paintOrder="stroke"
+                >
+                  {p.type.toUpperCase()}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </g>
     </svg>
   );
 }
