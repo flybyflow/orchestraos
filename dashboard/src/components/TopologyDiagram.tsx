@@ -673,9 +673,17 @@ export function TopologyDiagram({
 
                   {/* Workers under this PM. Each worker gets its OWN line to the PM rather
                       than sharing one "mesh" label for the group — a per-pair count is the
-                      whole point, and one label for six workers can't carry six numbers. */}
+                      whole point, and one label for six workers can't carry six numbers.
+                      NO flex-wrap here either, same reason as the lead row above: a wrapped
+                      worker (operator-reported — `think` wrapped under `brain`/`bshr`) keeps
+                      its Connection stub pointing straight up at wherever the PM WOULD be if
+                      this were still a single row, which after a wrap is empty space, not the
+                      PM. The old max-w-xs (320px) is exactly what forced the wrap for any PM
+                      with more than ~3 workers. min-w-max plus the page's own overflow-x-auto
+                      (line ~575) makes a wide worker row scroll instead of wrapping, the same
+                      trade the lead row already made. */}
                   {pmWorkers.length > 0 && (
-                    <div className="flex items-start gap-3 flex-wrap justify-center max-w-xs">
+                    <div className="flex items-start gap-3 justify-center min-w-max">
                       {pmWorkers.map((w) => (
                         <div key={w.id} className="flex flex-col items-center gap-0">
                           <Connection
