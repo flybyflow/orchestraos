@@ -486,6 +486,106 @@ Whisper + a local TTS engine + an orchestration layer), except `substrate`
 now supplies real, working code for the orchestration piece that was
 previously unresolved.
 
+## 6. Converged BSHR/ENG pow-wow (2026-09-30 08:35 UTC): deploy feasibility, economics, branch precedent, and a new orchestration candidate
+
+Operator asked for a "BSHR / ENG pow wow" on the self-host-all-the-things
+approach (verbatim, `conv_a4f0c4c733e4`): "so lets do more research around
+that again lets do a BSHR / ENG pow ow with the context of our silicon
+jungle thesis and give me a SWOT of the self-host all the things approach
+... And have it setup for toddito/pulse/etc etc." Two halves, converged here
+— engineering feasibility (this seat, sent `msg_4d23893c_56806242`) and
+research (bshr: economics, branch archaeology, a new lead).
+
+**Engineering feasibility — the deploy blocker is substantially de-risked,
+not still unknown.** Read `substrate`'s infra directly: `DEPLOY.md` is a
+complete Coolify runbook (VPS prereqs, secrets, GitHub OAuth, Coolify stack
+config, first-run init scripts, health-check verify, auto-redeploy on git
+push), and `infra/docker-compose.coolify.yml` is a real production
+Traefik/SSL overlay for substrate + LiveKit + Pipecat — not a stub. This org
+already runs Coolify successfully in production today, for Pulse's own
+deploy (confirmed working tonight). Caveat, not glossed over: this config is
+~4 months stale (built 2026-05-24, untouched since 2026-06-07, while
+substrate had substantial unrelated feature work since) — real,
+unquantified dependency-drift risk. Also found a second, separate,
+abandoned attempt: raw GCP VMs (`provision.sh`/`deprovision.sh`, VPC
+`voice-agent-vpc`), torn down. Local STT/TTS remains zero-code everywhere,
+but wiring it in is a known pattern given substrate's existing
+`Pipeline`/`FrameProcessor` architecture — lower risk than building
+orchestration from scratch. No fabricated day-count given; recommended next
+step is a bounded spike (stand up the existing Coolify config on a real VPS
+and see what breaks) to resolve the biggest unknown before committing to a
+timeline.
+
+**Branch archaeology (bshr) — independently confirms the operator's account
+from a second angle.** A dated, matched pair of self-hosted Pipecat/LiveKit
+prototype commits (2026-05-20) exists on `kokoro-svc` and `kokoro-frontend`'s
+`feature/11labs-migration` branches — real `Pipeline([...])` construction,
+`LiveKitTransport` pointed at a self-hosted LiveKit (`ws://localhost:7880`,
+dev-default creds), Silero VAD, custom `FrameProcessor`s. This predates and
+is very likely the direct ancestor of what's now properly built out in
+`substrate`. Matches the operator's account exactly: hardcoded LAN dev
+backend URL, no docker-compose for actually deploying the LiveKit server
+itself — ran locally, never deployed. Confirmed via `git grep` across every
+branch of both repos for `faster-whisper`/`whisper.cpp`/`kokoro-tts`/
+`coqui`/`piper`/`xtts`/`bark`: **zero hits anywhere, on any branch** — this
+prototype proves the self-hosted-transport half was tried once; it never
+touched local inference.
+
+**Real economics (bshr, corrected figures verified on pull-back by this
+seat independently — see [[msg-store-body-file-for-backticks]] memory for
+why that check mattered).** Self-hosting can land anywhere from 60% MORE
+expensive to 98% CHEAPER than ElevenLabs' $0.10/min — almost entirely a
+function of one variable, monthly conversation-minutes, not the technology
+choice. Modeled on an RTX 4090-class box (~$0.50/hr, ~$360/month) running
+faster-whisper large-v3 + Kokoro-TTS: breakeven is ~3,600
+conversation-minutes/month (~120 min/day — a low bar, e.g. 40 three-minute
+sessions). Check: $360/month ÷ $0.10/min = 3,600 min/month. Below that
+line, a dedicated always-on box costs MORE per minute than ElevenLabs
+(paying for idle GPU); above it, savings scale fast — 82% cheaper at 20,000
+min/month, 96% cheaper at 100,000 min/month. "Serverless"/scale-to-zero GPU
+pricing looks great on paper ($0.0015–0.003/min) but real-time
+conversational latency needs a pre-warmed worker — economically the same as
+the dedicated-box math, just billed per-second; not a free lunch. **Biggest
+open unknown, extrapolated not benchmarked:** ~15–20 concurrent full-duplex
+sessions per 4090-class GPU running STT+TTS together — the number that
+would most change the picture if wrong. **The single number that decides
+whether this saves money or loses it: real current/expected Toddito alpha
+conversation-minutes/month, not yet gathered from the operator.**
+
+**New orchestration lead (bshr): Dograh** (`github.com/dograh-hq/dograh`) —
+BSD-2-Clause, self-hostable voice platform built on a fork of Pipecat,
+one-command Docker Compose, bring-your-own-provider including fully
+local/self-hosted STT/TTS, bundled telephony. Real traction: 5.8k stars, #1
+Product of the Day on Product Hunt, actively maintained through September
+2026 (merged a Pipecat-upstream bump Sept 12). A live, unresolved Pipecat
+GitHub issue confirms raw Pipecat itself still lacks an out-of-the-box
+self-hosted deployment story — a real, current gap Dograh (and weaker
+candidates: AreevAI/flowcat, a Rust reimplementation vendoring no Pipecat
+code; an official Pipecat+Nemotron demo repo) are addressing. **Not
+independently confirmed as what the operator meant** — couldn't be traced
+back to their own source. Ask the operator directly before integrating
+against it: flowcat and Dograh would send an integration down very
+different paths (Rust vs. Python-fork-of-Pipecat).
+
+**Strategic connection, tying back to §5:** `kokoro-frontend`/`kokoro-svc`
+are themselves a named Silicon Jungle hackathon-portfolio venture (per
+`docs/BRIEF_cross-venture-synthesis.md`), so building on `substrate` doubles
+as a sponsor-story demo, not just code reuse. Dograh specifically, being a
+genuinely turnkey self-host story, would demo well at a Buildathon if the
+operator wants a sponsorable capability rather than only an internal cost
+fix — this is the same internal-vs-public-demo distinction from the
+engineering half, now with a concrete candidate attached to the "public"
+branch of that fork.
+
+**What this section does not resolve:** whether Dograh is the right
+integration target (needs the operator's confirmation first); the real
+Toddito alpha conversation-minutes/month (needs the operator, decides the
+economics case entirely); the true scope of dependency drift on substrate's
+Coolify path (needs the bounded spike to actually run); and — unchanged
+from §5 — which path (build-on-existing, custom, or the hybrid) the
+operator wants to pursue at all. This is still research/estimation, not a
+build authorization.
+
 ## 4. What this document does not decide
 
 - Whether the operator wants to pursue self-hosting at all vs. the cheaper
@@ -512,6 +612,16 @@ previously unresolved.
   a SWOT, not a decision. Genuinely the operator's call; this seat's own
   read is that a hybrid (§5's closing paragraph) is the strongest option on
   the facts, but that is a recommendation, not what got decided here.
+- **Whether to pursue self-hosting AT ALL, economically (§6)** — genuinely
+  depends on one number only the operator has: real/expected Toddito alpha
+  conversation-minutes/month. Below ~3,600 min/month a dedicated GPU box
+  costs more than ElevenLabs; above it, savings scale fast. Not resolved
+  here, not resolvable here.
+- **Whether Dograh (§6) is the lead the operator meant** — not independently
+  confirmable from repo research; needs a direct one-line check with the
+  operator before anyone integrates against it.
+- **The true scope of dependency drift on `substrate`'s Coolify deploy path
+  (§6)** — unquantified until the recommended bounded spike actually runs.
 
 ## GSTACK REVIEW REPORT
 
