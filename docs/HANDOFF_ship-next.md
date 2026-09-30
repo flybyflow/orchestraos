@@ -112,19 +112,40 @@ Corrected on the PR (comment) and in reply to build: the honest claim is **`src/
 pass rather than a diff read, and the travelling dot's animated direction + live-feed
 auto-scroll are named as still-unverified rather than implied clean by the green checks above.
 
-## 5. Open Loops — none from this task as of this correction
+## 4e. Fourth amendment (2026-09-30T01:37:00Z) — `f2eb883` adapted in (not a clean cherry-pick)
 
-Whatever lands on `fix-arturo-mapfile-bash32` after `f5e169f` (the shared checkout is still
+The predicted fourth landed (`msg_e0680233_32059685`, build): `f2eb883`, fixing the exact
+BUILD_SHA dirty-check `996752f` shipped — `git status --porcelain` **failing** (index lock,
+permissions, corrupt index) was read as "clean" rather than as unknown/dirty, stamping a
+possibly-dirty tree as traceable. Found by build applying review's own guard
+("never `2>/dev/null` a command whose silence you're about to read as data") to their own code.
+
+**Not a clean cherry-pick.** `f2eb883` is written on top of `e5d0576` (the later `build`/
+`build:live` script split) — not in this PR, out of scope, a separate deploy-tooling convention
+change dated after this feature's gates. Resolved by hand: kept this branch's single `build`
+script (from `996752f`/`a41d08c`) and replaced only its buggy dirty-check fragment with the
+corrected expression build derived (`if ! OUT=$(git status --porcelain -- . 2>&1) || [ -n
+"$OUT" ]; then S="${S}-dirty"; fi`). Verified the shell fragment directly, standalone, across
+all three branches (clean / dirty / non-repo) before trusting it in the full gate — matches
+build's own three-way result exactly. Then re-ran api 236/236, `tsc -b --force` clean, dashboard
+tests pass, `build:check` clean. Pushed (`f5e169f..16431e8`), commented on the PR, replied to
+build, ack'd `msg_e0680233_32059685`.
+
+## 5. Open Loops — none from this task as of this fourth amendment
+
+Whatever lands on `fix-arturo-mapfile-bash32` after `16431e8` (the shared checkout is still
 live) is new work, not a continuation of anything named in this handoff — PR #137 is a
 point-in-time snapshot, not a tracking branch. Check `git log --oneline main..fix-arturo-mapfile-bash32`
-for anything newer before assuming #137 is still current. This task has amended #137 three
-times as new fixes landed on the shared branch faster than the PR could be closed out — if a
-fourth arrives, that pattern (not this handoff) is the thing to notice.
+for anything newer before assuming #137 is still current. This task has amended #137 four times
+as new fixes landed on the shared branch faster than the PR could be closed out — the pattern
+itself (not any single fix) is the thing worth someone eventually addressing: either freeze the
+shared branch before opening a superseding PR next time, or accept that a PR opened mid-sprint
+needs one more content-diff reconciliation pass right before merge, not just at open time.
 
 ## 6. Declared First Effect (for whoever reads this next)
 
 If the operator has already merged #137: `git log --oneline -1 origin/main` should show a
-squash/merge commit whose message references #137, and `git merge-base --is-ancestor f5e169f
+squash/merge commit whose message references #137, and `git merge-base --is-ancestor 16431e8
 origin/main` should be true post-merge.
 
 ## 7. Grounding Canary Questions (Questions Only — No Answers!)
