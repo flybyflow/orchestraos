@@ -67,7 +67,15 @@ export default function Agents() {
   // between renders — React error #310, "rendered more hooks than during the previous
   // render", which unmounts the tree and renders the entire page BLANK. That is exactly
   // what shipped: first paint fine, queries fire, data arrives, page goes white.
-  const [layers, setLayers] = useState({ cross: true, external: true, showAllCross: false });
+  // /field-named render layers (operator QA item 3, ported from /Users/flybyflow/second-brain-3d/
+  // public/index.html's LAYERS object and its checkbox panel — read-only reference, not shared
+  // code). /field also has `lobes` (3D brain-region boundaries) and `fx` (retro post-processing);
+  // neither has an equivalent in this 2D view, so they are not ported. `orbs` (agent nodes) is
+  // in /field's list but deliberately NOT here — see the Layers row below for why.
+  const [layers, setLayers] = useState({
+    cross: true, external: true, showAllCross: false,
+    edges: true, edgeGlows: true, arrowSprites: true, messageLabels: true, statusGlow: true,
+  });
   const [clientFilter, setClientFilter] = useState<string>('All');
   const [machineFilter, setMachineFilter] = useState<string>('All');
   const [recentAgents, setRecentAgents] = useState<RecentAgent[]>(getRecentAgents());
@@ -641,12 +649,24 @@ export default function Agents() {
           <div className="flex-1 min-w-0 rounded-xl border border-neutral-800 bg-neutral-900 p-4 overflow-x-auto">
             {/* Layer toggles. Hierarchy is deliberately absent: it is the skeleton every
                 other layer is positioned against, and hiding it would leave cross edges
-                floating with nothing to read them against. */}
+                floating with nothing to read them against.
+                'edges' through 'statusGlow' are /field's own checkbox names (see the
+                `layers` useState comment) — each hides/shows its layer independently of
+                the others, same as /field's applyLayer(). 'orbs' (agent nodes) is in
+                /field's panel but skipped here on purpose: an agent box is the only
+                click target for selecting that agent and the thing every edge terminates
+                at, so hiding it would orphan every remaining visible line at one end —
+                the exact reason hierarchy itself is already excluded above. */}
             <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
               <span className="text-neutral-600">Layers</span>
               {([
                 ['cross', 'cross edges'],
                 ['external', 'external'],
+                ['edges', 'edges'],
+                ['edgeGlows', 'edge glows'],
+                ['arrowSprites', 'arrow sprites'],
+                ['messageLabels', 'message labels'],
+                ['statusGlow', 'status glow'],
               ] as const).map(([k, label]) => (
                 <button
                   key={k}

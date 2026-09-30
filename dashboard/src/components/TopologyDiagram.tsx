@@ -59,7 +59,13 @@ interface TopologyDiagramProps {
   deadPairs?: PairCountRow[];
   /** Layer visibility. Cross edges and the rim are independently toggleable from the
    *  hierarchy, which always renders (spec: hierarchy is the skeleton). */
-  layers?: { cross?: boolean; external?: boolean; counts?: boolean };
+  layers?: {
+    cross?: boolean; external?: boolean; counts?: boolean;
+    /** /field-named render layers (operator QA item 3) — see TopologyOverlay's props for
+     *  what each one gates. Absent 'orbs': see the Layers row comment in Agents.tsx. */
+    edges?: boolean; edgeGlows?: boolean; arrowSprites?: boolean; messageLabels?: boolean;
+    statusGlow?: boolean;
+  };
   /** Cap on cross edges drawn, highest count first. null = show all. */
   crossTopN?: number | null;
   /** Per-node escalation / held-message counts, windowed. From lib/nodeAlerts. */
@@ -205,7 +211,7 @@ function isWorking(agent: Agent): boolean {
 }
 
 function AgentNode({
-  agent, onSelect, selected, dimmed, nodeRef, alerts, unborn,
+  agent, onSelect, selected, dimmed, nodeRef, alerts, unborn, showStatusGlow = true,
 }: {
   agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean;
   /** Registers this box with the overlay's position tracker. */
@@ -215,6 +221,10 @@ function AgentNode({
   /** GROW mode. `undefined` outside growth; `true` = not yet revealed; `false` = revealed
    *  during this growth run, which is what triggers the one-shot reveal flash. */
   unborn?: boolean;
+  /** /field-named 'status' layer (operator QA item 3): the working/down glow, independent
+   *  of the status DOT and border colour below, which are information and stay regardless —
+   *  only the glow is decoration this layer hides. */
+  showStatusGlow?: boolean;
 }) {
   const working = isWorking(agent);
   // Agent-level only. The operator explicitly did NOT want skill/prompt execution detail,
@@ -234,10 +244,12 @@ function AgentNode({
         // an additional, redundant cue on the same fact. A down seat gets a red glow at
         // lower intensity than a working seat's blue: down is a state to notice, working
         // is a state that is changing, and the brighter one should be the live one.
-        working ? 'border-sky-400 shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]'
-          : (!agent.alive && !agent.tmux_alive)
-            ? clsx(getNodeBorder(agent), 'shadow-[0_0_10px_-3px_rgba(248,113,113,0.65)]')
-            : getNodeBorder(agent),
+        // The BORDER colour is information (spec §2, must never be hidden) and always
+        // applies; only the shadow glow is the /field 'status' layer showStatusGlow gates.
+        working ? 'border-sky-400' : getNodeBorder(agent),
+        showStatusGlow && working && 'shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]',
+        showStatusGlow && !working && !agent.alive && !agent.tmux_alive
+          && 'shadow-[0_0_10px_-3px_rgba(248,113,113,0.65)]',
         // An escalation landing here outranks both: it is the one state that is asking
         // a human for something. Ring rather than border swap, so the status colour
         // underneath is never destroyed (spec section 2).
@@ -407,6 +419,11 @@ export function TopologyDiagram({
   const { positions, register, size: overlaySize } = useNodePositions(containerRef);
   const showCross = layers?.cross ?? true;
   const showExternal = layers?.external ?? true;
+  const showEdges = layers?.edges ?? true;
+  const showEdgeGlows = layers?.edgeGlows ?? true;
+  const showArrowSprites = layers?.arrowSprites ?? true;
+  const showMessageLabels = layers?.messageLabels ?? true;
+  const showStatusGlow = layers?.statusGlow ?? true;
   // Partition first: the set of lines the tree will draw is what the thickness denominator has
   // to be computed from, so it cannot wait until render. partitionTopology computes `rest` by
   // SUBTRACTION — whatever the tree does not claim is still rendered — because the previous
@@ -569,11 +586,15 @@ export function TopologyDiagram({
         windowHours={windowHours}
         onSelectConnection={onSelectConnection}
         hierarchyPairs={hierarchyPairsForOverlay}
+        showEdges={showEdges}
+        showEdgeGlows={showEdgeGlows}
+        showArrowSprites={showArrowSprites}
+        showMessageLabels={showMessageLabels}
       />
       {/* T0: GM */}
       {gm && (
         <>
-          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} unborn={unbornNode(gm.id)} />
+          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} unborn={unbornNode(gm.id)} showStatusGlow={showStatusGlow} />
           {/* Trunk down to the PM bar. Deliberately unlabelled: this is a bus, not a pair,
               and the "hub-spoke" string it replaces described the shape rather than the
               traffic. The real gm<->pm counts sit on each PM's own segment below. */}
@@ -640,7 +661,7 @@ export function TopologyDiagram({
                       unborn={unbornEdge(gm.id, pm.id)}
                     />
                   )}
-                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} unborn={unbornNode(pm.id)} />
+                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} unborn={unbornNode(pm.id)} showStatusGlow={showStatusGlow} />
 
                   {/* Workers under this PM. Each worker gets its OWN line to the PM rather
                       than sharing one "mesh" label for the group — a per-pair count is the
@@ -657,7 +678,7 @@ export function TopologyDiagram({
                             dots={dotsByPair.get(pairKey(pm.id, w.id))}
                             unborn={unbornEdge(pm.id, w.id)}
                           />
-                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} />
+                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} />
                         </div>
                       ))}
                     </div>
@@ -675,7 +696,7 @@ export function TopologyDiagram({
           <p className="text-xs text-neutral-600 text-center mb-3">Not in the tree ({orphanAgents.length})</p>
           <div className="flex items-start gap-3 flex-wrap justify-center">
             {orphanAgents.map((w) => (
-              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} />
+              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} />
             ))}
           </div>
         </div>

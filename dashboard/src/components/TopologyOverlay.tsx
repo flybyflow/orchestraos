@@ -221,10 +221,32 @@ export interface TopologyOverlayProps {
    *  already draws — so the pulse rides visually the same line, just computed independently
    *  rather than by reading the connector's own DOM rect. */
   hierarchyPairs?: Set<string>;
+  /** /field-named 'edges' layer (operator QA item 3): the cross-edge LINE's stroke only.
+   *  Deliberately separate from the `cross` layer in Agents.tsx — that one removes cross
+   *  pairs from the data entirely (no routing, no pulses, no tooltip, no hit target); this
+   *  one only hides the visible stroke, exactly like /field's `linkColorFn` returning a
+   *  transparent colour while the link (and anything riding it) stays otherwise real. Off:
+   *  hit-path and pulses keep working, the static line just does not render. */
+  showEdges?: boolean;
+  /** /field-named 'glows' layer: the extra emphasis a cross edge gets on top of its base
+   *  stroke from an active signal — escalation (colour + width bump) and the seek-drag
+   *  trail (opacity + width bump). Off: an edge always renders at its plain per-type colour
+   *  and count-derived width, the same as /field's glows-off falling back to resting style
+   *  and ignoring `__act` heat. */
+  showEdgeGlows?: boolean;
+  /** /field-named 'pulses' layer, labelled "Arrow sprites" in the operator's ask: the whole
+   *  travelling-pulse layer, on top of every edge. Off: no pulses render at all, matching
+   *  /field's `pulseGroup.visible = on`. */
+  showArrowSprites?: boolean;
+  /** /field-named 'labels' layer: the message-type text above each pulse (builder-2's
+   *  layoutPulseLabels already decides WHICH pulses get one at any given frame; this layer
+   *  is the on/off switch above that decision, matching /field's `labelsEl.style.display`). */
+  showMessageLabels?: boolean;
 }
 
 export function TopologyOverlay({
   width, height, edges, positions, windowHours, onSelectConnection, fired, trail, hierarchyPairs,
+  showEdges = true, showEdgeGlows = true, showArrowSprites = true, showMessageLabels = true,
 }: TopologyOverlayProps) {
   // Active pulses: `fired` is a NEW batch each hook tick (not a running list), so each tick
   // adds fresh pulses without disturbing ones already in flight. A ref holds the true current
@@ -353,7 +375,11 @@ export function TopologyOverlay({
         // Seek-drag trail (build's ask, ported from /field's applySnapshotAt): lit by
         // opacity/thickness scaled by recency weight, no travelling shape — dragging always
         // shows the recent activity trail even mid-gap in bursty traffic.
-        const trailW = trailWeight.get(pairKey(e.a, e.b)) ?? 0;
+        // /field-named 'glows' layer: off means ignore the trail-drag and escalation
+        // emphasis and fall back to the plain per-type colour / count-derived width, the
+        // same as /field's glows-off ignoring __act heat (see showEdgeGlows prop doc).
+        const trailW = showEdgeGlows ? (trailWeight.get(pairKey(e.a, e.b)) ?? 0) : 0;
+        const escalated = showEdgeGlows && (e.escalate ?? 0) > 0;
 
         return (
           <g key={`${e.a}|${e.b}`} className={clsx(e.dimmed && 'opacity-20')}>
@@ -363,11 +389,15 @@ export function TopologyOverlay({
               // Escalation outranks the per-type colour: type is what the traffic
               // WAS, an escalation is something waiting on a person. A dead edge stays
               // grey regardless — an escalation from outside the window is history.
-              stroke={dead ? '#3f3f46' : (e.escalate ?? 0) > 0 ? '#ef4444' : stroke}
+              // /field-named 'edges' layer: off means transparent, matching linkColorFn's
+              // own hide-the-line branch — the marker's fill="context-stroke" (defs above)
+              // resolves to this same colour, so a transparent line silences its arrowhead
+              // too with no separate check needed.
+              stroke={!showEdges ? 'transparent' : dead ? '#3f3f46' : escalated ? '#ef4444' : stroke}
               strokeWidth={
                 trailW > 0
                   ? Math.max(e.widthPx, 1) + trailW * 3
-                  : dead || quiet ? 1 : (e.escalate ?? 0) > 0 ? Math.max(2, e.widthPx) : e.widthPx
+                  : dead || quiet ? 1 : escalated ? Math.max(2, e.widthPx) : e.widthPx
               }
               // dead = sparse dots (a connection that WAS real), quiet = dashes
               // (alive, just below the window). One grey line for both would say
@@ -406,7 +436,7 @@ export function TopologyOverlay({
           pulse layer"). Rendered on TOP of the static edges/labels so a pulse is never
           visually occluded by the line it rides. */}
       <g className="pointer-events-none">
-        {(() => {
+        {showArrowSprites && (() => {
           // Position every visible pulse FIRST, in one pass, before any label decision —
           // layoutPulseLabels (operator QA item 3: 59 concurrent labels on 24h, 16 mutually
           // overlapping) needs the WHOLE batch at once to cap-and-declutter correctly; deciding
@@ -442,7 +472,7 @@ export function TopologyOverlay({
               <g key={p.id} opacity={opacity}>
                 <circle cx={pos.x} cy={pos.y} r={5} fill={color} />
                 <circle cx={pos.x} cy={pos.y} r={9} fill={color} opacity={0.35} />
-                {p.type && placement?.showLabel && (
+                {showMessageLabels && p.type && placement?.showLabel && (
                 <text
                   x={pos.x}
                   y={pos.y - 12 + placement.dy}
