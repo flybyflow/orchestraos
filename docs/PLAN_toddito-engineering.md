@@ -278,6 +278,133 @@ the whole module — narrows, doesn't confirm, the adjacency. Not verified as
 the same thing — surfaced for Todd to confirm or rule out when the OD4
 conversation happens, not treated as settled.
 
+## 7a. Operator priority (2026-09-30 13:33 UTC, `msg_2daab315_75183586`):
+the boutique-consultant self-feedback facet — draft plan, grounded in
+real decoded 1987 content
+
+### 7a.1 The other five unbuilt Application Suite modules, one line each
+
+Per gm's explicit instruction to look over the other tracks before
+confirming the priority:
+
+- **Executive Communicator** — aligns exec teams on strategy by surfacing
+  intellectual capital/operating gaps. No decoded 1987 source material
+  found for it specifically; verbal description only.
+- **Merger & Acquisition Manager** — surfaces cultural/structural fit
+  pre-deal. Real, named market angle already noted (§3 of
+  `docs/PLAN_toddito-1987-venture.md`) but zero build work, zero decoded
+  source found.
+- **Investor Insight Application** — org-health lens for diligence. Same
+  status as M&A: real named angle, nothing built or decoded.
+- **Client Service Planner** — makes orgs market/customer-driven. No
+  decoded source found; name alone.
+- **Contingency Planner** — "tell me what you think should be happening"
+  vs. reactive reporting. No decoded source found; name alone.
+
+**None of the other five have any matching decoded 1987 content found in
+this repo's research so far — Consulting Communicator is the only one
+with a real, concrete candidate source (CPCSP.EXE), which is exactly why
+it matches the ICP (boutique consultants, §3 of the venture plan) AND is
+the only one actually buildable from real material right now, not just
+by name-recognition.** Confirms the priority read — not assumed, checked
+against what's actually decoded.
+
+### 7a.2 CPCSP.EXE's real content, read directly — refines the hypothesis, doesn't just confirm it
+
+Read the actual files (`/Users/flybyflow/conductor/repos/
+mic-program-toddito`), not just the marketing blurb already cited in §7.
+Real, load-bearing correction: **"Client Relationship" is not unique to
+CPCSP.EXE — it's a standard 6th section of the MAIN org-diagnostic
+questionnaire itself, present in every lettered variant's shared library
+file** (`GPALIB.ASF`, `GPMLIB.ASF`, `GPSLIB.ASF` all carry identical text:
+*". CLIENT RELATIONSHIP / Trust / Credibility/Respect"*). CPCSP.EXE is a
+standalone program that runs the same ~100-item, 6-dimension
+questionnaire (Development Stage, Strategy, Structure, Culture,
+Leadership Style, Client Relationship) but **framed for a consultant to
+fill out about a client** (`CSPHELP.ASF`, verbatim: *"DIAGNOSING YOUR
+CLIENT ORGANIZATION... approximately one hundred items which describe an
+organization from the point of view of DEVELOPMENT STAGE, STRATEGY,
+STRUCTURE or DESIGN, CULTURE, LEADERSHIP STYLE, and the
+CONSULTANT-CLIENT RELATIONSHIP"*) — branded "Touche Ross Client Service
+Planning System" in its own splash screen, a real historical co-branding
+with a named Big Eight consulting firm.
+
+**So five of CPCSP's six dimensions are "consultant diagnoses the CLIENT
+organization," not "consultant reflects on their own style"** — that part
+does NOT match the operator's literal ask ("consultant themselves gets
+feedback on their own coaching/consulting style"). **The sixth dimension,
+Client Relationship, is the real match** — found its actual scored item
+text (`GPASCORE.ASF` and siblings): *"The %1 is more comfortable
+influencing others on the basis of trust and expertise than on the basis
+of the formal clout inherent in his position."* The same underlying
+trust/expertise-vs.-formal-authority influence scale is reused for the
+Leadership Style section (rating the CEO, `%1` = the leader) — real
+evidence Client Relationship applies the identical, already-validated
+influence-style framework to a different subject: **the consultant's own
+way of building trust and credibility with the client**, not the client's
+internal dynamics.
+
+**Net read, confirming and sharpening gm's hypothesis rather than
+overturning it:** CPCSP.EXE as a whole is NOT the same thing as Todd's
+"Consulting Communicator" (16-question pure self-diagnostic) — it's
+mostly a consultant-administered client-diagnostic tool. But its Client
+Relationship dimension specifically — a real, scored, six-item-family
+influence-style assessment, already proven at the CEO level and reused
+for the consultant — is genuine, decoded, reusable 1987 business logic
+for exactly the facet the operator wants. **Consulting Communicator is
+likely this dimension, expanded and renamed as its own standalone
+16-question module** (6 real scored items known → 16 questions is a real,
+plausible expansion, not a wild leap), rather than an unrelated,
+never-decoded concept. Still worth Todd confirming directly (OD4,
+unchanged) — this is the strongest evidence found so far, not a closed
+question.
+
+### 7a.3 Facet plan — how this sits next to what exists today
+
+**Today:** the admin panel lets a consultant send diagnostic engagements
+OUT to their clients (confirmed exists, `src/app/admin/*`). **What
+doesn't exist:** anything where the consultant is the RESPONDENT, being
+scored on their own relationship-building style.
+
+**Proposed shape**, reusing Pulse's existing session/scoring architecture
+rather than inventing a parallel system:
+1. A new session `tier` or `account_type` value (the schema already has
+   both, per `src/app/api/sessions/route.ts`, read earlier tonight) for a
+   consultant self-assessment session — same voice-session mechanism,
+   different question set and different `respondent_role`.
+2. Question set: derived from CPCSP's Client Relationship dimension real
+   item family (trust/expertise vs. formal-authority influence style,
+   confirmed above) — NOT the other five client-diagnostic dimensions,
+   which don't fit a self-assessment frame. Expand toward Todd's stated
+   "16 questions" by generating parallel items across the same
+   influence-style construct, the way the main product already varies
+   item phrasing per industry letter — a real, precedented technique in
+   this same codebase, not a new one.
+3. Scoring/report: reuses the existing Claude-scoring pipeline and report
+   component architecture (`src/components/report/*`), with a new
+   dimension set instead of Leadership/Strategy — same rendering system,
+   different content, consistent with how Pulse already varies report
+   content by tier.
+4. Directly benefits from the report-tone work already in flight (§9) —
+   a consultant reading feedback about their OWN style needs the warm,
+   non-clinical framing even more than an org-level report does; sequence
+   this facet's copy AFTER §9's tone fix lands, not before, so it doesn't
+   inherit the "TONE: Clinical" problem on day one.
+
+### 7a.4 What this section does not resolve
+
+Todd has not confirmed the Consulting Communicator ↔ CPCSP Client
+Relationship connection (OD4, still open) — §7a.2's read is the strongest
+evidence assembled so far, not a settled fact. Exact expansion from 6
+known scored items to Todd's stated "16 questions" is not derived here —
+needs either Todd's own application doc (OD4) or a design pass deciding
+how to responsibly extend a real but partial item family. **Per the
+operator's explicit process instruction, this plan is not build-ready
+until it runs through `/plan-ceo-review` and `/plan-design-review` and
+folds real findings back in — not done as of this section.** Engineering
+translation (turning this plan into an actual build spec) routes to
+`build` once those reviews clear, not before.
+
 ## 8. Recommended scope — what to build first, ranked
 
 1. **Resolve OD6 (privacy/terms for biometric data) + close the 6 S1
