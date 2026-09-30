@@ -323,26 +323,58 @@ Per gm's explicit instruction to look over the other tracks before
 confirming the priority:
 
 - **Executive Communicator** — aligns exec teams on strategy by surfacing
-  intellectual capital/operating gaps. No decoded 1987 source material
-  found for it specifically; verbal description only.
+  intellectual capital/operating gaps. **Corrected (bshr,
+  `msg_ed102e6b_19649666`; flagged stale by gm, `msg_d945a3aa_78741818`):
+  real but narrow, component-level decoded content exists** —
+  `MV6COMBO.ASC`, a real 1992 multi-rater report showing min-max
+  divergence range per dimension across 8 named raters, plus
+  `SACALC`/`SDCALC` "Significant Agreement/Disagreement" APL functions.
+  Caveat: a numeric divergence range, not narrative synthesis, and the 8
+  raters aren't confirmed to specifically be executives — real, but
+  narrower than "aligns exec teams" implies.
 - **Merger & Acquisition Manager** — surfaces cultural/structural fit
   pre-deal. Real, named market angle already noted (§3 of
-  `docs/PLAN_toddito-1987-venture.md`) but zero build work, zero decoded
-  source found.
-- **Investor Insight Application** — org-health lens for diligence. Same
-  status as M&A: real named angle, nothing built or decoded.
-- **Client Service Planner** — makes orgs market/customer-driven. No
-  decoded source found; name alone.
+  `docs/PLAN_toddito-1987-venture.md`) but zero build work, and **no
+  decoded source confirmed** (bshr searched specifically, empty —
+  "merger/acquisition" only appears as a single-org risk-category
+  heading).
+- **Investor Insight Application** — org-health lens for diligence.
+  **Corrected: real decoded content exists** — a "Saleability Index"
+  report section confirmed across all 8 industry variants — but framed
+  as an internal scoring dimension, not a due-diligence product as
+  named. Same "real but narrower than the framing implies" shape as
+  Executive Communicator above.
+- **Client Service Planner** — makes orgs market/customer-driven. **A
+  real naming false-friend, not a match:** `CPCSP.EXE` is branded "Touche
+  Ross — Client Service Planning System" (near-exact name match), but its
+  own text describes a consultant's account-planning/upsell tool, not a
+  tool for making an org internally more market-driven. Worth remembering
+  so this doesn't get miscounted as a decoded win later.
 - **Contingency Planner** — "tell me what you think should be happening"
-  vs. reactive reporting. No decoded source found; name alone.
+  vs. reactive reporting. No decoded source confirmed — bshr searched
+  specifically, zero hits for "contingency"/"scenario" anywhere in the
+  distribution.
 
-**None of the other five have any matching decoded 1987 content found in
-this repo's research so far — Consulting Communicator is the only one
-with a real, concrete candidate source (CPCSP.EXE), which is exactly why
-it matches the ICP (boutique consultants, §3 of the venture plan) AND is
-the only one actually buildable from real material right now, not just
-by name-recognition.** Confirms the priority read — not assumed, checked
-against what's actually decoded.
+**Net, corrected:** 2 of the other 5 modules (Executive Communicator,
+Investor Insight) have real but narrow, component-level decoded evidence
+— not finished-product equivalents — 1 (Client Service Planner) is a
+false friend, and 2 (M&A, Contingency Planner) have confirmed zero
+overlap. Same shape as the earlier correction to V1's "lots of usable
+code" claim: real, but narrower than the framing implies. **Doesn't
+change §7a's own priority conclusion** — Consulting Communicator remains
+the only one with content matching the operator's specific ask (a
+consultant self-feedback facet), not just adjacent decoded material.
+
+**Corrected: two of the other five (Executive Communicator, Investor
+Insight) do have real, narrow, component-level decoded content — but
+Consulting Communicator remains the only one with a source matching the
+operator's SPECIFIC ask (a consultant self-feedback facet, boutique-
+consultant ICP per §3 of the venture plan), not just adjacent decoded
+material for a differently-shaped product.** Confirms the priority read
+— not because the others have nothing, but because CPCSP's Client
+Relationship dimension is the only decoded content that's actually the
+right SHAPE for what was asked, checked against what's really decoded,
+not assumed.
 
 ### 7a.2 CPCSP.EXE's real content, read directly — refines the hypothesis, doesn't just confirm it
 
