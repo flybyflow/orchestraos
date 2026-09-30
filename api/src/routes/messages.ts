@@ -76,7 +76,14 @@ export function recentMessages(dataDir: string, limit = 50): RecentMessage[] {
 const PAIR_COLUMNS = `id, conversation_id, from_agent, to_agent, type, subject, body, priority,
                       status, created_at, delivered_at, acknowledged_at`;
 
-export interface PairCount { a: string; b: string; count: number; last_at: string | null; }
+export interface PairCount {
+  a: string; b: string; count: number; last_at: string | null;
+  /** Message count per type for this pair, IN THE SAME WINDOW as `count` — same query, same
+   *  instant, so the breakdown can never disagree with the total the way two separate
+   *  requests could. Always sums to `count`. A null `type` column groups under 'unknown'
+   *  rather than being silently dropped. */
+  by_type: Record<string, number>;
+}
 
 function openMessagesDb(dataDir: string): Database.Database | null {
   const dbPath = join(dataDir, 'state', 'tasks.db');
@@ -108,7 +115,12 @@ function windowBounds(windowHours: number, asofMs?: number | null): { from: stri
   return { from: new Date(to - windowHours * 3600_000).toISOString(), to: new Date(to).toISOString() };
 }
 
-/** Message count per UNORDERED agent pair inside the window, newest activity first.
+/** Message count per UNORDERED agent pair inside the window, newest activity first, each row
+ *  carrying a per-type breakdown (spec: "17 replies" must read distinctly from "17 tasks" on
+ *  every edge). The breakdown is folded onto the SAME row from a SECOND query against the
+ *  SAME window bounds in the SAME handler invocation — not a second endpoint at a possibly
+ *  later instant — so `by_type` can never drift from `count` the way two separate requests
+ *  could ("49 vs 40" was exactly two things reading different instants).
  *  Both directions of an exchange collapse into one row, because a connection line is
  *  one line. Self-sends (from === to) are excluded: they are real rows, but a line needs
  *  two ends. Missing db/table => []. */
@@ -117,7 +129,7 @@ export function pairCounts(dataDir: string, windowHours = 24, asofMs?: number | 
   if (!db) return [];
   const { from, to } = windowBounds(windowHours, asofMs);
   try {
-    return db.prepare(
+    const rows = db.prepare(
       `select min(from_agent, to_agent) as a, max(from_agent, to_agent) as b,
               count(*) as count, max(created_at) as last_at
          from messages
@@ -126,7 +138,59 @@ export function pairCounts(dataDir: string, windowHours = 24, asofMs?: number | 
           and julianday(created_at) >= julianday(?)
           and julianday(created_at) <= julianday(?)
         group by a, b
-        order by count desc`).all(from, to) as PairCount[];
+        order by count desc`).all(from, to) as Omit<PairCount, 'by_type'>[];
+
+    const typeRows = db.prepare(
+      `select min(from_agent, to_agent) as a, max(from_agent, to_agent) as b,
+              type, count(*) as n
+         from messages
+        where archived_at is null
+          and from_agent <> to_agent
+          and julianday(created_at) >= julianday(?)
+          and julianday(created_at) <= julianday(?)
+        group by a, b, type`).all(from, to) as { a: string; b: string; type: string | null; n: number }[];
+
+    const byPairType = new Map<string, Record<string, number>>();
+    for (const r of typeRows) {
+      const key = `${r.a}|${r.b}`;
+      const bucket = byPairType.get(key) ?? {};
+      bucket[r.type ?? 'unknown'] = (bucket[r.type ?? 'unknown'] ?? 0) + r.n;
+      byPairType.set(key, bucket);
+    }
+
+    return rows.map((r) => ({ ...r, by_type: byPairType.get(`${r.a}|${r.b}`) ?? {} }));
+  } catch { return []; } finally { db.close(); }
+}
+
+/** All-time-real pairs with ZERO traffic in the given window — dead links, returnable so the
+ *  client can style them distinctly from "quiet" instead of them not existing at all (a pair
+ *  with no traffic in the window simply never appeared in pairCounts() before this). A
+ *  SEPARATE array from pairCounts() on purpose: pairCounts()'s rows and pairs.length are an
+ *  existing on-screen contract (activeConnections, the busiest-edge calc) and must keep
+ *  meaning exactly what they meant before — a 0-count row folded into that array would make
+ *  "N connections" count dead links as active, silently. `last_at` here is the ALL-TIME last
+ *  message on that pair (NOT windowed) — that is what actually distinguishes DEAD (last
+ *  traffic long ago) from QUIET (last traffic just outside this window's edge); a windowed
+ *  last_at would be null for every dead pair by definition and carry no signal at all.
+ *  No `by_type` here: a dead pair has no in-window traffic to break down, so every bucket
+ *  would just be zero — not worth the row weight for a row whose only job is "count: 0,
+ *  last_at: when it stopped." Missing db/table => []. */
+export function deadPairs(dataDir: string, windowHours = 24, asofMs?: number | null): PairCount[] {
+  const db = openMessagesDb(dataDir);
+  if (!db) return [];
+  const { from, to } = windowBounds(windowHours, asofMs);
+  try {
+    const rows = db.prepare(
+      `select min(from_agent, to_agent) as a, max(from_agent, to_agent) as b,
+              0 as count, max(created_at) as last_at
+         from messages
+        where archived_at is null
+          and from_agent <> to_agent
+        group by a, b
+       having sum(case when julianday(created_at) >= julianday(?)
+                         and julianday(created_at) <= julianday(?) then 1 else 0 end) = 0
+        order by last_at desc`).all(from, to) as Omit<PairCount, 'by_type'>[];
+    return rows.map((r) => ({ ...r, by_type: {} }));
   } catch { return []; } finally { db.close(); }
 }
 
@@ -309,6 +373,10 @@ router.get('/pair-counts', (req: Request, res: Response) => {
     // window arithmetic. null means an empty store, which is distinct from "unknown".
     oldest_at: oldestMessageAt(ORCHESTRA),
     pairs: pairCounts(ORCHESTRA, hours, asofMs),
+    // Dead links: real pairs, zero traffic in this window. A SEPARATE array from `pairs` on
+    // purpose (see deadPairs() doc) — existing consumers of `pairs`/`pairs.length` are
+    // unaffected unless they explicitly opt into reading this new field.
+    dead_pairs: deadPairs(ORCHESTRA, hours, asofMs),
   });
 });
 

@@ -18,14 +18,17 @@ import { mkdtempSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import Database from 'better-sqlite3';
-import { pairCounts, pairMessages, parseAsof, oldestMessageAt } from './messages.js';
+import { pairCounts, deadPairs, pairMessages, parseAsof, oldestMessageAt } from './messages.js';
 
 function hoursAgo(h: number): string {
   return new Date(Date.now() - h * 3600_000).toISOString();
 }
 
 /** Fixture: gm<->build 3 rows in-window + 1 row 40 days old, gm<->plan 1, one self-send,
- *  one archived row, and one row written in the column's DEFAULT format (no 'T', no offset). */
+ *  one archived row, one row written in the column's DEFAULT format (no 'T', no offset),
+ *  and gm<->ship with ONLY a 40-day-old row (a real pair, zero traffic in a 24h window —
+ *  the dead-link case). gm<->build's in-window rows are deliberately mixed type (task,
+ *  reply, task) so the same fixture also exercises the by_type breakdown without a second db. */
 function makeDb(): string {
   const data = mkdtempSync(join(tmpdir(), 'orch-pairs-'));
   mkdirSync(join(data, 'state'));
@@ -47,6 +50,8 @@ function makeDb(): string {
   // Lexicographically this sorts BEFORE every ISO row; julianday() places it correctly.
   ins.run('m8', 'gm', 'review', 'task', 'default-fmt', 'b8',
     new Date(Date.now() - 2 * 3600_000).toISOString().replace('T', ' ').replace(/\..*$/, ''), null);
+  ins.run('m9', 'gm', 'ship', 'task', 'long-dead', 'b9', hoursAgo(24 * 40), null); // dead: real pair, zero in-window traffic
+  ins.run('m10', 'gm', 'test', 'task', 'archived-only', 'b10', hoursAgo(24 * 40), hoursAgo(24 * 39)); // archived AND outside the window — not a real pair at all
   db.close();
   return data;
 }
@@ -77,6 +82,87 @@ test('pairCounts collapses both directions, honours the window, drops self-sends
   assert.equal(wide.get('build|gm')?.count, 4);
 
   assert.deepEqual(pairCounts(join(data, 'nowhere'), 24), []);  // no db = empty, never throws
+});
+
+test('by_type breaks down per pair and always sums to the existing total', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const byPair = new Map(rows.map((r) => [`${r.a}|${r.b}`, r]));
+
+  // m1 (task) + m2 (reply) + m3 (task) = build|gm, mixed types.
+  const buildGm = byPair.get('build|gm');
+  assert.ok(buildGm, 'build|gm must be present, or this proves nothing');
+  assert.deepEqual(buildGm.by_type, { task: 2, reply: 1 });
+  assert.equal(buildGm.by_type.task + buildGm.by_type.reply,
+    buildGm.count, 'the cheap invariant: breakdown sums to the total');
+
+  // A single-type pair still gets a breakdown, just with one key.
+  assert.deepEqual(byPair.get('gm|plan')?.by_type, { task: 1 });
+
+  // The sum invariant holds for every row, not just the one hand-picked above.
+  for (const r of rows) {
+    const sum = Object.values(r.by_type).reduce((a, b) => a + b, 0);
+    assert.equal(sum, r.count, `by_type for ${r.a}|${r.b} sums to ${sum}, not count ${r.count}`);
+  }
+});
+
+test('deadPairs: a pair with traffic only outside the window comes back with count 0 and a real (all-time) last_at', () => {
+  const data = makeDb();
+  const dead = deadPairs(data, 24);
+  const byPair = new Map(dead.map((r) => [`${r.a}|${r.b}`, r]));
+
+  const ship = byPair.get('gm|ship');
+  assert.ok(ship, 'gm<->ship has real (40-day-old) traffic and zero in-window traffic — must be reported dead');
+  assert.equal(ship?.count, 0);
+  // last_at is the row's actual timestamp (~40 days ago), NOT null and NOT a windowed value —
+  // this is the field that lets the client render DEAD differently from QUIET.
+  assert.ok(ship?.last_at, 'last_at must be a real timestamp, not null');
+  assert.ok(Date.now() - new Date(String(ship?.last_at)).getTime() > 39 * 86_400_000,
+    'last_at must be the ALL-TIME last message, not clipped to the window');
+
+  // A pair whose ONLY row is archived is not a real pair at all — must not appear as "dead".
+  assert.equal(byPair.get('gm|test'), undefined, 'archived-only traffic must not be reported as a dead pair');
+
+  // A pair with in-window traffic is a live pair, not a dead one — must not appear here too.
+  assert.equal(byPair.get('build|gm'), undefined, 'a pair with in-window traffic is not dead');
+});
+
+test('a pair with traffic inside the window is unaffected by the by_type/dead_pairs changes', () => {
+  const data = makeDb();
+  // Same assertion the original suite made before this change — count must be identical.
+  const rows = pairCounts(data, 24);
+  const byPair = new Map(rows.map((r) => [`${r.a}|${r.b}`, r]));
+  assert.equal(byPair.get('build|gm')?.count, 3);
+  assert.equal(byPair.get('gm|plan')?.count, 1);
+});
+
+test('activeConnections-style consumers do not see dead links as active', () => {
+  const data = makeDb();
+  const live = pairCounts(data, 24);
+  const dead = deadPairs(data, 24);
+
+  // The in-window row count/length — what an "N connections active" consumer reads — is
+  // unaffected by dead_pairs existing at all: they are a SEPARATE array, never merged in.
+  const liveIds = new Set(live.map((r) => `${r.a}|${r.b}`));
+  const deadIds = new Set(dead.map((r) => `${r.a}|${r.b}`));
+  for (const id of deadIds) {
+    assert.ok(!liveIds.has(id), `${id} is in both pairCounts() and deadPairs() — it would double-count as active`);
+  }
+  // Concretely: gm<->ship is dead and must not inflate the live/active pair count.
+  assert.ok(!live.some((r) => `${r.a}|${r.b}` === 'gm|ship'));
+  assert.ok(dead.some((r) => `${r.a}|${r.b}` === 'gm|ship'));
+});
+
+test('archived_at is null is respected on both pairCounts and deadPairs', () => {
+  const data = makeDb();
+  // m7 (gm<->build, archived) must not inflate the live count above the 3 real in-window rows.
+  const live = pairCounts(data, 24);
+  assert.equal(new Map(live.map((r) => [`${r.a}|${r.b}`, r])).get('build|gm')?.count, 3);
+
+  // m10 (gm<->test) is archived AND its only row is outside the window — archived_at excludes
+  // it from consideration entirely, so it must not show up as a dead pair either.
+  const dead = deadPairs(data, 24);
+  assert.equal(new Map(dead.map((r) => [`${r.a}|${r.b}`, r])).get('gm|test'), undefined);
 });
 
 test('pairMessages pages newest-first by a created_at cursor, past the window', () => {
