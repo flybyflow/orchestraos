@@ -38,7 +38,9 @@ Two workstreams, both at a clean stopping point. Nothing half-applied in either 
 - **Two a11y items from the same pass:** the focused-panel close button and the prompt-viewer close were icon-only with no text, no `aria-label`, no `title`. review hit one by accident — that was a symptom, not clumsiness. Also the mode toggle still said "inbox" / "sends to agent inbox", describing the directory `dcee8d0` had just orphaned.
 - **Verify a bundle claim with a NEGATIVE CONTROL.** Grepping the minified bundle for `/message"` returned 0 — worthless on its own, since a pattern that can never match looks identical to one that matches nothing. Confirmed the probe works by finding `/send` (2) and `/messages` (5) first. Same "silence read as data" trap in a different costume.
 
-## 2b. Deploy surface as of `e5d0576` (read before building anything)
+## 2b. Deploy surface as of `0bbe2ff` (read before building anything)
+- **`npm run build:live` VERIFIES ITSELF** — it curls the proxy after stamping and compares served-vs-written, printing `OK` / `COULD NOT VERIFY` / `MISMATCH`. You no longer have to remember the compare. Unreachable exits 0 on purpose (dev boxes and CI have no proxy).
+- **`grep -c` on a minified bundle counts LINES, not occurrences** — use `grep -o | wc -l` for counts, and always run a negative control.
 - **dashboard:** `npm run build` is now the SAFE path (bundles to `/tmp`, never touches `dist`). The deploying build is **`npm run build:live`** — it writes `dist`, stamps `dist/BUILD_SHA`, and says so. `orchestra init` and `doctor`'s remedy name `build:live`; CI deliberately still calls `build` and gets the safe path. Consequence to remember: if you want your dashboard change live, plain `build` will leave you wondering why nothing changed.
 - **api:** `npm run build` is unchanged and IS the real one — the live API serves `api/dist/server.js`. Build, then restart the recorded child pid from `./bin/orchestra status`.
 - Both paths use `tsc -b --force`; plain `-b` skips when `.tsbuildinfo` looks current.
