@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { routeEdge, type Box, type EdgeRoute } from '../lib/edgeRouting';
-import { toLocalBox, samePositions, type RectLike } from '../lib/overlayGeometry';
+import { toLocalBox, samePositions, overlayContentSize, type RectLike } from '../lib/overlayGeometry';
 import { pairKey } from '../lib/topologyLines';
 import { pulseId, pulseProgress, pulsePositionOnRoute, pruneDeadPulses, type ReplayPulse } from '../lib/replayPulses';
 
@@ -54,13 +54,18 @@ export interface OverlayEdge {
 export function useNodePositions(containerRef: React.RefObject<HTMLElement | null>) {
   const nodeRefs = useRef(new Map<string, HTMLElement>());
   const [positions, setPositions] = useState<Map<string, Box>>(new Map());
-  // The overlay's own size, measured from the container's CLIENT box.
-  //
-  // It used to come from scrollWidth, which INCLUDES the overlay itself — so the svg
-  // could only ever grow. Opening the conversation panel dropped clientWidth to 674
-  // while scrollWidth and the svg stayed 1070, producing a phantom horizontal
-  // scrollbar; shrinking the window ratcheted the same way. A measurement that feeds
-  // the thing it measures is not a measurement.
+  // The overlay's own size: at least the container's CLIENT box, widened to the tree's
+  // own content extent by overlayContentSize (lib/overlayGeometry.ts) — see that
+  // function's comment for why this is computed from `positions`, not from
+  // `container.scrollWidth`. scrollWidth was the ORIGINAL source here and had to be
+  // replaced for exactly the same reason overlayContentSize avoids it now: it INCLUDES
+  // the overlay itself, so the svg could only ever grow. Opening the conversation panel
+  // dropped clientWidth to 674 while scrollWidth and the svg stayed 1070, producing a
+  // phantom horizontal scrollbar; shrinking the window ratcheted the same way. Plain
+  // clientWidth (no widening at all) was tried next and under-shot the other direction —
+  // 630 vs 854 of real tree content, three nodes past the svg's own right edge. A
+  // measurement that feeds the thing it measures is not a measurement; a measurement of
+  // only the viewport is not a measurement of the content either.
   const [size, setSize] = useState<{ w: number; h: number }>({ w: 0, h: 0 });
   const frame = useRef<number | null>(null);
 
@@ -83,11 +88,13 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
     // what this component shipped as, and what review's control caught.
     setPositions((prev) => (samePositions(prev, next) ? prev : next));
     // clientWidth/Height: the content box the container actually offers, excluding
-    // anything absolutely positioned inside it. Rounded and compared before committing,
-    // for the same reason positions are — an unconditional set here would restart the
-    // render loop through a second door.
-    const w = Math.round(container.clientWidth);
-    const h = Math.round(container.clientHeight);
+    // anything absolutely positioned inside it. Widened/heightened to the tree's own
+    // content extent (overlayContentSize, from `next` — never from the svg's own size,
+    // see that function's comment on the feedback-loop this avoids) so the svg always
+    // covers every node, not just the visible viewport slice. Rounded and compared
+    // before committing, for the same reason positions are — an unconditional set here
+    // would restart the render loop through a second door.
+    const { w, h } = overlayContentSize(next, container.clientWidth, container.clientHeight);
     setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
   }, [containerRef]);
 

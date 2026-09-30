@@ -76,6 +76,38 @@ export function samePositions(a: Map<string, Box>, b: Map<string, Box>): boolean
   return true;
 }
 
+/**
+ * The overlay <svg>'s own width/height must cover every registered node, not just the
+ * container's visible viewport (design gap, operator QA 2026-09-30): sizing the svg from
+ * `container.clientWidth` alone left it NARROWER than the tree whenever the tree overflows
+ * horizontally (1000px window: svg 630, tree content 854 — build/builder-1/builder-2 sit past
+ * the svg's own right edge), and since an <svg>'s default overflow is hidden, any edge or pulse
+ * reaching those nodes was invisible past that edge even though `positions` had the right
+ * coordinates for them all along.
+ *
+ * Deliberately NOT `container.scrollWidth`: the overlay svg is itself an absolutely-positioned
+ * child of that same scrolling container, so scrollWidth already includes whatever the svg's
+ * OWN width contributed on the previous measure — a size fed from a number it also produces.
+ * That exact feedback loop is this file's own toLocalBox comment's "the svg could only ever
+ * grow" bug, the reason clientWidth replaced scrollWidth as the source in the first place.
+ * `positions` breaks the loop: every node box comes from ITS OWN element's
+ * getBoundingClientRect, never from the svg, so the max right/bottom edge across all of them is
+ * the tree's true content extent, independent of whatever the svg is currently sized to.
+ */
+export function overlayContentSize(
+  positions: Map<string, Box>,
+  clientWidth: number,
+  clientHeight: number,
+): { w: number; h: number } {
+  let maxRight = clientWidth;
+  let maxBottom = clientHeight;
+  for (const box of positions.values()) {
+    maxRight = Math.max(maxRight, box.cx + box.width / 2);
+    maxBottom = Math.max(maxBottom, box.cy + box.height / 2);
+  }
+  return { w: Math.round(maxRight), h: Math.round(maxBottom) };
+}
+
 export interface PairLike { a: string; b: string; count: number }
 
 export interface CrossEdgeSelection<T extends PairLike> {

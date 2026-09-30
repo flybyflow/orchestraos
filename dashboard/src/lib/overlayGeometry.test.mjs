@@ -5,7 +5,7 @@
 import assert from 'node:assert';
 import {
   toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions, edgeDirection,
-  bornUpTo,
+  bornUpTo, overlayContentSize,
 } from './overlayGeometry.ts';
 
 // ── samePositions: the guard that stops an infinite render loop ─────────────
@@ -220,6 +220,46 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   // A spawn with no id must not add the empty string as a node.
   assert.strictEqual(bornUpTo([{ kind: 'spawn' }], 1, pk).nodes.size, 0);
   console.log('PASS: bornUpTo — half events and id-less spawns reveal nothing');
+}
+
+// ── overlayContentSize: the svg must cover every node, not just the viewport ────────────────
+// THE BUG (operator live QA, 2026-09-30): sizing the svg from container.clientWidth alone left
+// it narrower than the tree whenever the tree overflows horizontally — at a 1000px window,
+// clientWidth 630 but real tree content 854, so build/builder-1/builder-2 sat past the svg's
+// own right edge, unreachable by anything the svg draws (an <svg>'s default overflow is
+// hidden). Fixture below reproduces the exact reported numbers.
+{
+  const box = (id, cx, cy, w = 110, h = 87) => ({ id, cx, cy, width: w, height: h });
+  // Three nodes whose right edge runs past clientWidth=630 -- the operator's 1000px-window
+  // reading (content needs to reach x=854, i.e. a box centered such that cx + w/2 = 854).
+  const positions = new Map([
+    ['gm', box('gm', 400, 40)],
+    ['build', box('build', 221, 170)],
+    ['builder-1', box('builder-1', 500, 300)],
+    ['builder-2', box('builder-2', 799, 300)], // cx 799 + w/2 55 = 854, the reported content width
+  ]);
+
+  const sized = overlayContentSize(positions, 630, 400);
+  // THE OLD BUG was exactly `sized.w === 630` (clientWidth alone, no widening) -- this
+  // assertion is what catches a regression back to that.
+  assert.strictEqual(sized.w, 854, 'svg widens to the tree content extent (854), not left at clientWidth (630)');
+
+  // A tree that fits comfortably inside the viewport must NOT be shrunk -- the svg is never
+  // smaller than the client box, only ever widened to cover overflow.
+  const fitsFine = new Map([['gm', box('gm', 100, 40)], ['build', box('build', 200, 170)]]);
+  assert.deepStrictEqual(overlayContentSize(fitsFine, 630, 400), { w: 630, h: 400 },
+    'content well inside the viewport leaves the svg at the client size, not shrunk to content');
+
+  // Empty positions (first paint, nothing registered yet) must not throw and must fall back to
+  // the client box exactly -- the svg still needs SOME size before any node has measured in.
+  assert.deepStrictEqual(overlayContentSize(new Map(), 630, 400), { w: 630, h: 400 });
+
+  // NOT container.scrollWidth: scrollWidth already includes the svg's own current width (it is
+  // itself an absolutely-positioned child of the scrolling container), so feeding it back in
+  // would only ever grow -- the exact regression toLocalBox's own comment describes. This
+  // function takes positions and a plain clientWidth number; it has no way to read scrollWidth
+  // at all, which is the guarantee, not just an assertion about this call's arguments.
+  console.log('PASS: overlayContentSize — widens to real tree content, never shrinks below the viewport, no scrollWidth feedback loop possible');
 }
 
 console.log('\nAll overlayGeometry tests passed.');
