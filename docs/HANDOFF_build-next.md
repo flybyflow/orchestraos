@@ -27,6 +27,11 @@ Two workstreams, both at a clean stopping point. Nothing half-applied in either 
 - [ ] **gm is holding a correction, not a deliverable.** `msg_b076d726_25616041`: the SEC-03/SEC-08 "real fix" I recommended and gm authorized **does not exist** for this app. Nothing was built. gm had planned a morning go/no-go for the operator built on my wrong premise; the correction reached gm before that. Do not resurrect the ElevenLabs initiation-webhook plan without re-reading it.
 - [ ] **My two 2D commits land inside PR #133**, whose head branch is the checked-out `fix-arturo-mapfile-bash32`. That PR is now 85 files spanning a router P0 fix, API identity-spoofing fixes, org hardening and this feature. A review problem, not a build problem, but nobody should be surprised by it.
 
+## 2b. Deploy surface as of `e5d0576` (read before building anything)
+- **dashboard:** `npm run build` is now the SAFE path (bundles to `/tmp`, never touches `dist`). The deploying build is **`npm run build:live`** — it writes `dist`, stamps `dist/BUILD_SHA`, and says so. `orchestra init` and `doctor`'s remedy name `build:live`; CI deliberately still calls `build` and gets the safe path. Consequence to remember: if you want your dashboard change live, plain `build` will leave you wondering why nothing changed.
+- **api:** `npm run build` is unchanged and IS the real one — the live API serves `api/dist/server.js`. Build, then restart the recorded child pid from `./bin/orchestra status`.
+- Both paths use `tsc -b --force`; plain `-b` skips when `.tsbuildinfo` looks current.
+
 ## 3. Decisions Made & Rationale
 1. **Both new message endpoints read only `<data>/state/tasks.db`'s `messages` table.** Rationale: spec §16, and three other stores in this repo already disagree with each other. "49 vs 40" is what picking two of them looks like.
 2. **`julianday()` for every time comparison, not string compare.** All 871 rows today are ISO-8601 with `+00:00`, but the column DEFAULT writes `'YYYY-MM-DD HH:MM:SS'`, which sorts before every ISO row (space < `'T'`) and would silently vanish from the window. The one remaining string compare (`last_at`) has its ceiling named in the code.
