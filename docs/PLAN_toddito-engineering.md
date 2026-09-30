@@ -401,9 +401,93 @@ needs either Todd's own application doc (OD4) or a design pass deciding
 how to responsibly extend a real but partial item family. **Per the
 operator's explicit process instruction, this plan is not build-ready
 until it runs through `/plan-ceo-review` and `/plan-design-review` and
-folds real findings back in — not done as of this section.** Engineering
-translation (turning this plan into an actual build spec) routes to
-`build` once those reviews clear, not before.
+folds real findings back in — done below, §7a.5/7a.6.**
+
+### 7a.5 `/plan-ceo-review` pass — real findings, folded in
+
+**Process note, stated plainly:** run as a direct, rigorous self-review
+against the skill's own Prime Directives and HOLD SCOPE checks (premise
+challenge, failure/edge/error-path tracing, test requirements), not the
+skill's full interactive AskUserQuestion ceremony — this is unattended
+overnight execution with no one watching to answer prompts, and stalling
+indefinitely on a mode-selection question would block the operator's
+actual ask. Flagging this deviation explicitly rather than silently
+presenting it as the full interactive process. Mode, if it had run
+interactively, would likely have been SELECTIVE EXPANSION (per the
+skill's own rule: "added capability"); applied HOLD SCOPE's stricter bar
+instead (preserve scope, trace failures, require tests) since the goal
+here is real scrutiny of a plan, not scope negotiation.
+
+**PREMISE CHALLENGE — mostly holds, one real risk named.** §7a.3 already
+correctly scopes to only the Client Relationship dimension, not all of
+CPCSP — avoiding the premise mismatch §7a.2 found. Real risk not yet
+named: going from 6 known real items to Todd's stated "16 questions"
+needs new item content in the same construct family. **Do not ship a
+guessed 16-item set presented as Todd's Consulting Communicator without
+his confirmation (OD4)** — inventing items and attributing them to his
+IP is a real trust/fidelity risk, the same class of problem this whole
+document has avoided elsewhere by citing real decoded content instead of
+guessing. If OD4 doesn't resolve in time, ship with the 6 real items
+honestly labeled as a partial set, not a fabricated 16.
+
+**FAILURE MODES / EDGE CASES, not yet addressed in §7a.3 — three real
+gaps:**
+1. **Prompt-tone inheritance risk.** If this facet's scoring prompt gets
+   built by cloning the existing FULL/LITE scoring prompt as a starting
+   template, it inherits the literal `TONE: Clinical` line §9 is fixing —
+   a real, concrete copy-paste risk, not hypothetical. The build spec
+   must say explicitly: write this facet's prompt from the CORRECTED
+   tone rules (§9.4), never from a copy of the pre-fix prompt.
+2. **OD6 applies here too, not addressed at all in §7a.3.** This facet is
+   another voice-capture surface if built as a voice session (matching
+   the existing mechanism) — biometric data about the CONSULTANT this
+   time, not a third-party organization. OD6's hard gate (no wide
+   distribution until biometric ToS/privacy is resolved) should cover
+   this facet by the same logic, not be treated as exempt because the
+   subject is the consultant rather than a client. Needs an explicit
+   line in the build spec, not a silent assumption either way.
+3. **Access control, unaddressed.** A consultant's self-assessment result
+   is more personally sensitive than an org diagnostic about someone
+   else's company — who else can see it (a firm admin? nobody?) isn't
+   answered by reusing the existing report architecture as-is. Needs at
+   least one explicit sentence before build, not deferred silently.
+
+**TESTS — one concrete gap.** §7a.3 says this reuses the existing scoring
+pipeline "with a new dimension set" but names no verification. This
+codebase already has a real pattern for exactly this (`thor-score.test.ts`'s
+ground-truth cases) — the build spec should require the same: a few
+synthetic transcripts with known-good expected scores for the new
+dimension, not just "it reuses the pipeline so it's covered."
+
+### 7a.6 `/plan-design-review` pass — real findings, folded in
+
+Same process note as §7a.5 — direct rigorous self-review, not the full
+interactive ceremony, for the same unattended-execution reason.
+
+**UI surfaces this facet touches, not yet named:** (a) how a consultant
+*starts* their own self-assessment session — is this a new nav item in
+the admin panel, a personal-settings-area link, or something else? Not
+specified in §7a.3. (b) The report display reuses `src/components/
+report/*` per §7a.3 point 3, but those components render org-level
+section labels ("Leadership pattern," "Strategic posture" per §9.2) —
+they need new section copy for a self-assessment context, or a consultant
+will see labels written for describing a company applied to describing
+themselves, which reads wrong regardless of tone. Not a large change, but
+a real one, not implied by "reuses the architecture" alone.
+
+**Consistency with §9's tone work:** if §9's plain-language/no-jargon
+rules land first (per §7a.3 point 4's sequencing), this facet's own copy
+should be written to the SAME rules from first draft — worth stating
+explicitly as a build constraint, not just an ordering note, so it
+doesn't need a second tone pass later.
+
+**What's NOT addressed, honestly:** no visual/interaction mockup exists
+for this facet at all (unlike §9's report-tone work, which has an actual
+existing page to modify) — this is greenfield UI, not a redesign. A real
+design pass (screens, not just data-flow) is still needed before build,
+beyond what a text-based plan review can respond to. Recommend a
+follow-up round specifically for that once the questions above are
+answered, not bundled into this pass.
 
 ## 8. Recommended scope — what to build first, ranked
 
