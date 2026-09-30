@@ -12,8 +12,11 @@ import {
   segmentIntersectsBox,
   quadPoint,
   curveClears,
+  cubicPoint,
+  cubicClears,
   clipToBoxEdge,
   routeEdge,
+  pointAtFraction,
 } from './edgeRouting.ts';
 
 /** Parse an SVG "M x,y Q cx,cy ex,ey" or "M x,y L x,y L x,y" path back into points, in order.
@@ -79,6 +82,40 @@ function parsePathPoints(d) {
   // uncorrected design) would miss — and exactly what sampling the actual curve catches.
   assert.equal(curveClears(p0, { x: 100, y: 40 }, p1, [shoulderBox], 32), false,
     'a curve whose CHORD clears can still clip on its own shoulder — sampling the curve, not the chord, is what catches this');
+}
+
+// ── cubicPoint / cubicClears: the S-shape, for obstacles on OPPOSITE sides ────────────────
+{
+  const p0 = { x: 0, y: 0 };
+  const c1 = { x: 33, y: 40 };
+  const c2 = { x: 66, y: -40 };
+  const p1 = { x: 100, y: 0 };
+  assert.deepEqual(cubicPoint(p0, c1, c2, p1, 0), p0, 't=0 is exactly p0');
+  assert.deepEqual(cubicPoint(p0, c1, c2, p1, 1), p1, 't=1 is exactly p1');
+
+  // THE POINT OF THE SHAPE: two boxes on OPPOSITE perpendicular sides of the chord, at
+  // different points along it. No single quadratic control point can clear both at any
+  // offset (proven live, msg_19e9a69e_79863885 / the real gm<->build-column case) — a cubic
+  // with two independent control points, bulging one way then the other, can.
+  const boxNearStartAbove = { id: 'a', cx: 25, cy: 25, width: 20, height: 20 }; // above the chord, near the start
+  const boxNearEndBelow = { id: 'b', cx: 75, cy: -25, width: 20, height: 20 }; // below the chord, near the end
+  assert.equal(
+    curveClears(p0, { x: 50, y: 0 }, p1, [boxNearStartAbove, boxNearEndBelow], 32),
+    true, // sanity: the offset-0 straight chord happens to miss both (they are off-axis)
+    'sanity: the straight chord alone already misses both boxes (they are off the direct line)'
+  );
+  // A single-hump quadratic bulging either way clips one of the two — offset=60 confirmed by
+  // direct experiment to fail in BOTH directions for this fixture (some offsets in between
+  // "overshoot" past one box without clearing the other, which is exactly the point: there is
+  // no ctrl.y this shape can pick that clears both at once).
+  assert.equal(curveClears(p0, { x: 50, y: 60 }, p1, [boxNearStartAbove, boxNearEndBelow], 32), false,
+    'quadratic bulging up still clips one of the two opposite-side boxes');
+  assert.equal(curveClears(p0, { x: 50, y: -60 }, p1, [boxNearStartAbove, boxNearEndBelow], 32), false,
+    'quadratic bulging down still clips the other of the two opposite-side boxes');
+  // The cubic S clears both at once: bulge toward the start-side box's opposite direction
+  // near the start, and the end-side box's opposite direction near the end.
+  assert.equal(cubicClears(p0, { x: 33, y: -30 }, { x: 66, y: 30 }, p1, [boxNearStartAbove, boxNearEndBelow], 32),
+    true, 'the cubic S-shape clears both opposite-side obstacles where no quadratic offset could');
 }
 
 // ── clipToBoxEdge: all four sides plus a diagonal ──────────────────────────────────────
@@ -211,6 +248,62 @@ function parsePathPoints(d) {
   }
 }
 
+// ── routeEdge: the S-shape closes a REAL opposite-sides QA failure ─────────────────────────
+// TRANSCRIBED from build's corrected real geometry (their /tmp/real-geometry-v2.json,
+// 2026-09-30 — 18 nodes incl. rim endpoints, 12 real pills, overlay-local coords). This is the
+// exact test<->build pair the operator's QA sweep reported failing (len 287, crossing
+// builder-1 + ship + a count pill) — build/builder-1/ship/pill:9:5 sit on OPPOSITE
+// perpendicular sides of the chord at different points along it (t=0.27 / t=0.75 in the
+// original, since-corrected geometry; the structural shape is the same in the real one).
+{
+  const from = { id: 'test', cx: 420, cy: 538, width: 110, height: 87 };
+  const to = { id: 'build', cx: 112, cy: 258, width: 110, height: 87 };
+  // The full real obstacle field, not just the 3 named crossings — `scale` (how many boxes
+  // the straight chord crosses) is computed from the WHOLE field routeEdge actually gets
+  // called with in production, and it changes which offsets get tried. A reduced fixture with
+  // only the 3 reported crossings resolves via a plain quadratic instead — it is a different,
+  // easier case, not the one QA actually hit.
+  const obstacles = [
+    from, to,
+    { id: 'gm', cx: 535, cy: 68, width: 110, height: 87 },
+    { id: 'builder-1', cx: 51, cy: 392, width: 110, height: 87 },
+    { id: 'builder-2', cx: 173, cy: 392, width: 110, height: 87 },
+    { id: 'review', cx: 420, cy: 258, width: 110, height: 87 },
+    { id: 'reflect', cx: 359, cy: 392, width: 110, height: 87 },
+    { id: 'ship', cx: 481, cy: 392, width: 110, height: 87 },
+    { id: 'ea', cx: 667, cy: 258, width: 110, height: 87 },
+    { id: 'plan', cx: 914, cy: 258, width: 110, height: 87 },
+    { id: 'bshr', cx: 853, cy: 392, width: 110, height: 87 },
+    { id: 'think', cx: 975, cy: 392, width: 110, height: 87 },
+    { id: 'brain', cx: 914, cy: 538, width: 110, height: 87 },
+    { id: 'telegram', cx: 313, cy: 674, width: 88, height: 48 },
+    { id: 'operator', cx: 413, cy: 674, width: 88, height: 48 },
+    { id: 'lineage-daemon', cx: 523, cy: 674, width: 107, height: 48 },
+    { id: 'approval-loop', cx: 636, cy: 674, width: 95, height: 48 },
+    { id: 'message-router', cx: 748, cy: 674, width: 106, height: 48 },
+    { id: 'pill:99:0', cx: 112, cy: 187, width: 25, height: 19 },
+    { id: 'pill:34:1', cx: 51, cy: 325, width: 25, height: 19 },
+    { id: 'pill:25:2', cx: 173, cy: 325, width: 24, height: 19 },
+    { id: 'pill:59:3', cx: 420, cy: 187, width: 25, height: 19 },
+    { id: 'pill:2:4', cx: 359, cy: 325, width: 18, height: 19 },
+    { id: 'pill:9:5', cx: 481, cy: 325, width: 18, height: 19 },
+    { id: 'pill:14:6', cx: 420, cy: 471, width: 23, height: 19 },
+    { id: 'pill:106:7', cx: 667, cy: 187, width: 30, height: 19 },
+    { id: 'pill:132:8', cx: 914, cy: 187, width: 29, height: 19 },
+    { id: 'pill:27:9', cx: 853, cy: 325, width: 24, height: 19 },
+    { id: 'pill:—:10', cx: 975, cy: 325, width: 21, height: 19 },
+    { id: 'pill:—:11', cx: 914, cy: 471, width: 21, height: 19 },
+  ];
+  const route = routeEdge(from, to, obstacles);
+  assert.equal(route.kind, 'curve-s', 'the real opposite-sides failure resolves via the cubic S-shape, not a wider quadratic or a polyline');
+  const [p0, c1, c2, p1] = parsePathPoints(route.d);
+  // Re-verify from the RETURNED path only, via the exported cubicClears — never trust that
+  // the algorithm's own internal check was the one that shipped.
+  const others = obstacles.filter((o) => o.id !== 'test' && o.id !== 'build');
+  assert.equal(cubicClears(p0, c1, c2, p1, others, 32), true,
+    'the returned cubic path, re-sampled independently, actually clears builder-1, ship, and the pill');
+}
+
 // ── routeEdge: an obstacle field dense enough that NO curve clears (the real QA failure) ──
 // TRANSCRIBED from the real running page, not invented: browse skill against build-v2 at
 // 1440x900, Topology view, every visible AgentNode's getBoundingClientRect, converted to the
@@ -237,10 +330,12 @@ function parsePathPoints(d) {
   ];
   const route = routeEdge(from, to, obstacles);
   assert.ok(route.kind === 'curve' || route.kind === 'polyline');
-  // The point of this test is not "it clears" (it is modelled on a real case that does NOT),
-  // it is "the module does not sprawl trying" — every point stays within maxOffset (default
-  // 80) of the direct chord, proving the short-budget policy actually bounds the search
-  // rather than merely being untested.
+  // The point of this test is not "it clears" (it is modelled on a real case that does NOT —
+  // reflect and plan sit dead-center on the chord at different points, not on opposite
+  // perpendicular sides, so even the cubic S-shape cannot help here either), it is "the module
+  // does not sprawl trying" — every point stays within maxOffset (default 180) of the direct
+  // chord, proving the short-budget policy actually bounds the search rather than merely
+  // being untested.
   const pts = parsePathPoints(route.d);
   const chordLen = Math.hypot(to.cx - from.cx, to.cy - from.cy);
   for (const p of pts) {
@@ -249,8 +344,36 @@ function parsePathPoints(d) {
     const ux = (to.cx - from.cx) / chordLen, uy = (to.cy - from.cy) / chordLen;
     const relX = p.x - from.cx, relY = p.y - from.cy;
     const perpDist = Math.abs(relX * -uy + relY * ux);
-    assert.ok(perpDist <= 80 + 1, `waypoint (${p.x},${p.y}) stayed within maxOffset of the chord (perpDist=${perpDist.toFixed(1)})`);
+    assert.ok(perpDist <= 180 + 1, `waypoint (${p.x},${p.y}) stayed within maxOffset of the chord (perpDist=${perpDist.toFixed(1)})`);
   }
+}
+
+// ── routeEdge: gm<->operator, settled as a budget case (build guessed; this confirms it) ──
+// The third real QA failure (len ~549, crossing ship + test + a count pill). build guessed
+// this was a plain budget case rather than an opposite-sides S, since operator sits on the
+// rim (cy 674) while the crossings are mid-tree — confirmed here: at the OLD default (140) it
+// still clips; at 180 it clears via a plain quadratic, no S-shape needed. Settles the guess
+// with the actual coordinates rather than leaving it unverified.
+{
+  const from = { id: 'gm', cx: 535, cy: 68, width: 110, height: 87 };
+  const to = { id: 'operator', cx: 413, cy: 674, width: 88, height: 48 };
+  const obstacles = [
+    from, to,
+    { id: 'ship', cx: 481, cy: 392, width: 110, height: 87 },
+    { id: 'test', cx: 420, cy: 538, width: 110, height: 87 },
+    { id: 'pill:9:5', cx: 481, cy: 325, width: 18, height: 19 },
+  ];
+  const stillClips = routeEdge(from, to, obstacles, { maxOffset: 140 });
+  {
+    const [p0, c, p1] = parsePathPoints(stillClips.d);
+    const others = obstacles.filter((o) => o.id !== 'gm' && o.id !== 'operator');
+    assert.equal(curveClears(p0, c, p1, others, 32), false, 'at the old maxOffset=140 this real pair still clips — confirms it needed more than a tiny bump');
+  }
+  const clears = routeEdge(from, to, obstacles); // default (180) now
+  assert.equal(clears.kind, 'curve', 'settled: a plain quadratic at 180 -- a budget case, not a structural S-shape one');
+  const [p0, c, p1] = parsePathPoints(clears.d);
+  const others = obstacles.filter((o) => o.id !== 'gm' && o.id !== 'operator');
+  assert.equal(curveClears(p0, c, p1, others, 32), true, 're-verified from the returned path: it actually clears at the new default');
 }
 
 // ── determinism: same input twice -> identical path string ─────────────────────────────
@@ -261,6 +384,100 @@ function parsePathPoints(d) {
   const r1 = routeEdge(from, to, [from, to, obstacle]);
   const r2 = routeEdge(from, to, [from, to, obstacle]);
   assert.deepEqual(r1, r2, 'identical input must produce an identical result — no randomness, no hidden state');
+}
+
+// ── pointAtFraction: where a travelling pulse sits along an ALREADY-ROUTED edge ───────────
+// For the operator's PLAY/GROW replay port (2D Agents View v2) — a pulse rides the exact
+// route routeEdge already computed, not a re-derived straight line, so a pulse never visibly
+// cuts a corner routeEdge just spent its whole budget avoiding.
+{
+  // Plain quadratic: parses "M x,y Q cx,cy ex,ey" and matches quadPoint exactly.
+  const from = { id: 'a', cx: 0, cy: 0, width: 20, height: 20 };
+  const to = { id: 'b', cx: 200, cy: 0, width: 20, height: 20 };
+  const route = routeEdge(from, to, [from, to]); // no obstacles -> the straight offset-0 curve
+  assert.deepEqual(pointAtFraction(route, 0), { x: 10, y: 0 }, 't=0 is the route start');
+  assert.deepEqual(pointAtFraction(route, 1), { x: 190, y: 0 }, 't=1 is the route end');
+  const [p0, ctrl, p1] = parsePathPoints(route.d);
+  assert.deepEqual(pointAtFraction(route, 0.5), quadPoint(p0, ctrl, p1, 0.5),
+    'midpoint matches quadPoint exactly, re-derived from the parsed route, not assumed');
+}
+{
+  // Cubic S: parses "M x,y C c1x,c1y c2x,c2y ex,ey" and matches cubicPoint exactly. Reuses the
+  // real opposite-sides fixture proven elsewhere in this file to actually produce a curve-s.
+  const from = { id: 'test', cx: 420, cy: 538, width: 110, height: 87 };
+  const to = { id: 'build', cx: 112, cy: 258, width: 110, height: 87 };
+  const obstacles = [
+    from, to,
+    { id: 'gm', cx: 535, cy: 68, width: 110, height: 87 },
+    { id: 'builder-1', cx: 51, cy: 392, width: 110, height: 87 },
+    { id: 'builder-2', cx: 173, cy: 392, width: 110, height: 87 },
+    { id: 'review', cx: 420, cy: 258, width: 110, height: 87 },
+    { id: 'reflect', cx: 359, cy: 392, width: 110, height: 87 },
+    { id: 'ship', cx: 481, cy: 392, width: 110, height: 87 },
+    { id: 'ea', cx: 667, cy: 258, width: 110, height: 87 },
+    { id: 'plan', cx: 914, cy: 258, width: 110, height: 87 },
+    { id: 'bshr', cx: 853, cy: 392, width: 110, height: 87 },
+    { id: 'think', cx: 975, cy: 392, width: 110, height: 87 },
+    { id: 'brain', cx: 914, cy: 538, width: 110, height: 87 },
+    { id: 'telegram', cx: 313, cy: 674, width: 88, height: 48 },
+    { id: 'operator', cx: 413, cy: 674, width: 88, height: 48 },
+    { id: 'lineage-daemon', cx: 523, cy: 674, width: 107, height: 48 },
+    { id: 'approval-loop', cx: 636, cy: 674, width: 95, height: 48 },
+    { id: 'message-router', cx: 748, cy: 674, width: 106, height: 48 },
+    { id: 'pill:99:0', cx: 112, cy: 187, width: 25, height: 19 },
+    { id: 'pill:34:1', cx: 51, cy: 325, width: 25, height: 19 },
+    { id: 'pill:25:2', cx: 173, cy: 325, width: 24, height: 19 },
+    { id: 'pill:59:3', cx: 420, cy: 187, width: 25, height: 19 },
+    { id: 'pill:2:4', cx: 359, cy: 325, width: 18, height: 19 },
+    { id: 'pill:9:5', cx: 481, cy: 325, width: 18, height: 19 },
+    { id: 'pill:14:6', cx: 420, cy: 471, width: 23, height: 19 },
+    { id: 'pill:106:7', cx: 667, cy: 187, width: 30, height: 19 },
+    { id: 'pill:132:8', cx: 914, cy: 187, width: 29, height: 19 },
+    { id: 'pill:27:9', cx: 853, cy: 325, width: 24, height: 19 },
+    { id: 'pill:—:10', cx: 975, cy: 325, width: 21, height: 19 },
+    { id: 'pill:—:11', cx: 914, cy: 471, width: 21, height: 19 },
+  ];
+  const route = routeEdge(from, to, obstacles);
+  assert.equal(route.kind, 'curve-s', 'sanity: this fixture really does produce a cubic route');
+  const [p0, c1, c2, p1] = parsePathPoints(route.d);
+  assert.deepEqual(pointAtFraction(route, 0.5), cubicPoint(p0, c1, c2, p1, 0.5),
+    'cubic midpoint matches cubicPoint exactly');
+}
+{
+  // Polyline: equal ARC-LENGTH speed, not equal segment-count speed — a pulse must not
+  // visibly speed up crossing a short segment and slow down on a long one.
+  // Same near-endpoint block as the "corridor too tight for any curve" case above: a
+  // quadratic's deviation tapers to ~0 near an endpoint regardless of offset, so this
+  // genuinely needs the polyline shape (not a wide search finding a degenerate long curve).
+  const from = { id: 'a', cx: 0, cy: 0, width: 20, height: 20 };
+  const to = { id: 'b', cx: 400, cy: 0, width: 20, height: 20 };
+  const nearEndBlock = { id: 'block', cx: 40, cy: 0, width: 30, height: 40 };
+  const route = routeEdge(from, to, [from, to, nearEndBlock]);
+  assert.equal(route.kind, 'polyline', 'sanity: this near-endpoint fixture genuinely needs the polyline shape');
+  const pts = parsePathPoints(route.d);
+  // A short first/last segment and a long middle segment is exactly this shape (start ->
+  // straight up -> straight across -> straight down -> end): fraction 0.5 must sit near the
+  // MIDDLE of total arc length, not at the midpoint of the point ARRAY (which would be biased
+  // toward whichever segment happens to be second).
+  let total = 0;
+  for (let i = 0; i < pts.length - 1; i++) total += Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
+  const half = pointAtFraction(route, 0.5);
+  // Walk the same arc-length accumulation independently (re-derived, not copied from the
+  // implementation) to find where the TRUE half-length point should be, then compare.
+  let acc = 0, expected = pts[0];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const segLen = Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
+    if (acc + segLen >= total / 2) {
+      const segT = segLen === 0 ? 0 : (total / 2 - acc) / segLen;
+      expected = { x: pts[i].x + (pts[i+1].x - pts[i].x) * segT, y: pts[i].y + (pts[i+1].y - pts[i].y) * segT };
+      break;
+    }
+    acc += segLen;
+  }
+  assert.ok(Math.abs(half.x - expected.x) < 0.01 && Math.abs(half.y - expected.y) < 0.01,
+    `t=0.5 sits at the true half-ARC-LENGTH point (${expected.x},${expected.y}), got (${half.x},${half.y})`);
+  assert.deepEqual(pointAtFraction(route, 0), pts[0], 't=0 is the polyline start');
+  assert.deepEqual(pointAtFraction(route, 1), pts[pts.length - 1], 't=1 is the polyline end');
 }
 
 console.log('edgeRouting: all assertions passed');

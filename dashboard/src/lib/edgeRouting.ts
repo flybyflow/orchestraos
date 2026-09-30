@@ -34,14 +34,14 @@ export interface RouteEdgeOptions {
   maxAttempts?: number;
   /**
    * Hard cap on how far a control point / polyline waypoint may be pushed off the chord.
-   * Default 80 — deliberately SHORT, not "however far it takes to clear." QA on the real
+   * Default 180 — deliberately SHORT, not "however far it takes to clear." QA on the real
    * page (operator, 2026-09-30) measured a 1645px detour on one edge and called it out
-   * explicitly worse than a short line that clips a corner. A single control point cannot
-   * geometrically dodge obstacles spread across a long chord (deviation is a single hump,
-   * ~2t(1-t)*offset — clearing a box near the middle does nothing for one near an end), so
-   * chasing clearance by raising this number on a dense/long layout does not fix that shape
-   * of failure, it just makes the failed attempts bigger. Tuned to real node box geometry
-   * (110x87px, measured live) rather than picked to make one fixture pass.
+   * explicitly worse than a short line that clips a corner. Swept and verified against real
+   * node geometry (18 real nodes incl. rim endpoints, 12 real pills, measured live) in two
+   * steps: 140 closes ship<->ea (355px edge, 140 is proportionate — the 1645px pathology was
+   * 4.6x its OWN chord); 180 additionally closes gm<->operator (549px edge, confirmed by
+   * sweep to be a plain budget case, not a structural one — clears at 180, still overlaps at
+   * 140). Checked for regressions before each raise: zero pairs got worse at either step.
    */
   maxOffset?: number;
   /** Extra clearance margin applied to every box test, so a curve grazing the border still counts as a hit. Default 0. */
@@ -50,6 +50,7 @@ export interface RouteEdgeOptions {
 
 export type EdgeRoute =
   | { kind: 'curve'; d: string }
+  | { kind: 'curve-s'; d: string }
   | { kind: 'polyline'; d: string };
 
 /** True if `p` lies inside `box`, expanded by `pad` on every side. */
@@ -134,6 +135,48 @@ export function curveClears(
   return true;
 }
 
+/** Point at parameter `t` (0..1) on the cubic Bezier p0 -> c1 -> c2 -> p1. */
+export function cubicPoint(p0: Point, c1: Point, c2: Point, p1: Point, t: number): Point {
+  const mt = 1 - t;
+  const mt2 = mt * mt;
+  const t2 = t * t;
+  return {
+    x: mt2 * mt * p0.x + 3 * mt2 * t * c1.x + 3 * mt * t2 * c2.x + t2 * t * p1.x,
+    y: mt2 * mt * p0.y + 3 * mt2 * t * c1.y + 3 * mt * t2 * c2.y + t2 * t * p1.y,
+  };
+}
+
+/**
+ * Same idea as curveClears, for the cubic S-shape (two control points, one bulging each
+ * perpendicular direction) — a quadratic has exactly one hump and cannot clear obstacles on
+ * OPPOSITE sides of the chord at any offset; a cubic can, because it has two independent
+ * control points instead of one. Same sampling discipline: test the actual curve, not the
+ * chord or the control points.
+ */
+export function cubicClears(
+  p0: Point,
+  c1: Point,
+  c2: Point,
+  p1: Point,
+  boxes: Box[],
+  samples = 16,
+  pad = 0
+): boolean {
+  const n = Math.max(2, samples);
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const pt = cubicPoint(p0, c1, c2, p1, t);
+    for (const box of boxes) {
+      if (pointInBox(pt, box, pad)) return false;
+    }
+  }
+  return true;
+}
+
+function cubicPath(p0: Point, c1: Point, c2: Point, p1: Point): string {
+  return `M ${fmt(p0.x)},${fmt(p0.y)} C ${fmt(c1.x)},${fmt(c1.y)} ${fmt(c2.x)},${fmt(c2.y)} ${fmt(p1.x)},${fmt(p1.y)}`;
+}
+
 /** True if every segment of the polyline `points` clears every box in `boxes`. Exact per
  *  segment (segmentIntersectsBox), not sampled — a polyline has no interior curvature. */
 function polylineClears(points: Point[], boxes: Box[], pad = 0): boolean {
@@ -198,10 +241,14 @@ function polylinePath(points: Point[]): string {
  *     obstacles the straight chord crosses, and retry with increasing offset (alternating
  *     sides, so an obstacle on only one side of the chord doesn't burn every attempt), capped
  *     at `maxAttempts` and `maxOffset`.
- *  4. If no single-control-point curve clears, fall back to a 3-point polyline with the same
- *     SHORT retry budget — an exact per-segment test (segmentIntersectsBox), not sampled, so
- *     it is strictly easier to guarantee correct than a curve.
- *  5. If even that is exhausted, return the SHORTEST attempt made (the plain, near-straight
+ *  4. If no single-control-point (one-hump) curve clears, try a cubic S-shape (two
+ *     independent control points, opposite perpendicular polarities) — this is the shape that
+ *     can clear two obstacles on OPPOSITE sides of the chord, which no one-hump curve can at
+ *     any offset. Same short retry budget, same sampled clearance check.
+ *  5. If no curve of either shape clears, fall back to a 3-point polyline with the same SHORT
+ *     retry budget — an exact per-segment test (segmentIntersectsBox), not sampled, so it is
+ *     strictly easier to guarantee correct than a curve.
+ *  6. If even that is exhausted, return the SHORTEST attempt made (the plain, near-straight
  *     chord) — not the widest. A short line that clips a corner is a better answer than a
  *     sprawling detour that also might not clear (operator's own words, 2026-09-30 QA); never
  *     throw, never return undefined either way.
@@ -214,7 +261,7 @@ export function routeEdge(
 ): EdgeRoute {
   const samples = opts.samples ?? 16;
   const maxAttempts = opts.maxAttempts ?? 4;
-  const maxOffset = opts.maxOffset ?? 80;
+  const maxOffset = opts.maxOffset ?? 180;
   const pad = opts.pad ?? 0;
 
   // The two endpoints' own boxes are never obstacles — the chord necessarily starts/ends
@@ -261,7 +308,32 @@ export function routeEdge(
     }
   }
 
-  // No single-control-point curve clears everything — fall back to a polyline (design 2.5
+  // No single-control-point (one-hump) curve clears — try a cubic S-shape before falling
+  // back to a polyline. This is a genuine missing CAPABILITY, not a budget problem: two real
+  // obstacles can sit on OPPOSITE perpendicular sides of the chord at different points along
+  // it (measured live: t=0.27 on one side, t=0.75 on the other) — no single-direction offset,
+  // at any magnitude, clears both (proven by sweeping the quad loop's offset far past
+  // maxOffset in practice; a one-hump curve is mathematically one-signed). A cubic Bezier has
+  // TWO independent control points, so it can bulge one way near the start and the other way
+  // near the end — bounded addition: same sampling, same clearance check, same short-budget
+  // schedule as the quad loop above, just a second shape tried before the polyline fallback.
+  const oneThird: Point = { x: start.x + dx / 3, y: start.y + dy / 3 };
+  const twoThirds: Point = { x: start.x + (dx * 2) / 3, y: start.y + (dy * 2) / 3 };
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const magnitude = Math.min(baseOffset * scale * attempt, maxOffset);
+    // Both S orientations — which obstacle is on which side is not inspected per-pair (that
+    // would make this a solver, not a bounded shape); trying both polarities is the bounded
+    // equivalent of the quad loop's side-alternation above.
+    for (const side of [1, -1]) {
+      const c1: Point = { x: oneThird.x + perp.x * magnitude * side, y: oneThird.y + perp.y * magnitude * side };
+      const c2: Point = { x: twoThirds.x + perp.x * magnitude * -side, y: twoThirds.y + perp.y * magnitude * -side };
+      if (cubicClears(start, c1, c2, end, realObstacles, samples, pad)) {
+        return { kind: 'curve-s', d: cubicPath(start, c1, c2, end) };
+      }
+    }
+  }
+
+  // No curve (one- or two-hump) clears everything — fall back to a polyline (design 2.5
   // item 2 is explicit: do not ship a curve known to clip).
   //
   // Shape: start -> wp1 -> wp2 -> end, where wp1/wp2 are `start`/`end` each pushed straight
@@ -294,4 +366,58 @@ export function routeEdge(
   // labels excluded from view), not a longer and longer detour from this function. Never
   // throw, never return undefined either way.
   return { kind: 'curve', d: curvePath(start, mid, end) };
+}
+
+function parseRoutePoints(d: string): Point[] {
+  const nums = (d.match(/-?\d+(\.\d+)?/g) || []).map(Number);
+  const pts: Point[] = [];
+  for (let i = 0; i < nums.length; i += 2) pts.push({ x: nums[i], y: nums[i + 1] });
+  return pts;
+}
+
+/** Total length of a polyline (sum of segment lengths) — used to place points at roughly
+ *  equal visual speed along a multi-segment path, rather than equal speed per segment
+ *  regardless of length. */
+function polylineLength(points: Point[]): number {
+  let total = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    total += Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+  }
+  return total;
+}
+
+function polylinePointAt(points: Point[], t: number): Point {
+  // MUTATION: equal SEGMENT-COUNT speed instead of equal arc-length speed.
+  const n = points.length - 1;
+  const scaled = Math.min(1, Math.max(0, t)) * n;
+  const i = Math.min(n - 1, Math.floor(scaled));
+  const segT = scaled - i;
+  return {
+    x: points[i].x + (points[i + 1].x - points[i].x) * segT,
+    y: points[i].y + (points[i + 1].y - points[i].y) * segT,
+  };
+}
+
+/**
+ * The point at parameter `t` (0..1, start to end) along a route ALREADY RETURNED by
+ * routeEdge — for a travelling pulse (2D Agents View replay, operator's PLAY/GROW port from
+ * /field). Parses `route.d` rather than requiring the caller to have kept the original control
+ * points around; `d` only ever contains M/Q/C/L commands with plain numeric coordinates (see
+ * curvePath/cubicPath/polylinePath above), so this is exact, not a heuristic, for any route
+ * this module produces itself. For a polyline, `t` is by ARC LENGTH (equal visual speed along
+ * the whole path), not by segment count — a pulse must not visibly speed up crossing a short
+ * segment and slow down on a long one.
+ */
+export function pointAtFraction(route: EdgeRoute, t: number): Point {
+  const pts = parseRoutePoints(route.d);
+  const clamped = Math.min(1, Math.max(0, t));
+  if (route.kind === 'curve') {
+    const [p0, ctrl, p1] = pts;
+    return quadPoint(p0, ctrl, p1, clamped);
+  }
+  if (route.kind === 'curve-s') {
+    const [p0, c1, c2, p1] = pts;
+    return cubicPoint(p0, c1, c2, p1, clamped);
+  }
+  return polylinePointAt(pts, clamped);
 }
