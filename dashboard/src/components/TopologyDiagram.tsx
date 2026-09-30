@@ -448,6 +448,14 @@ export function TopologyDiagram({
   }, [agents]);
   const { root: gm, leads: pms, workersByLead: workersByParent, rest: orphanAgents } = partition;
 
+  // GROW cosmetics (operator QA item 4): the gm->PM trunk and the PM-row bus bar are
+  // structural connectors, not tied to any one pair, so unbornEdge (which only knows
+  // about specific (a, b) pairs) never gated them — they used to draw immediately at
+  // t=0, before a single lead was born, implying a structure that GROW had not revealed
+  // yet. Same `invisible`-not-unmounted treatment every other GROW-gated element uses
+  // (geometry stays frozen so nothing reflows when a lead is finally revealed).
+  const leadRowBorn = bornIds == null || pms.some((pm) => bornIds.has(pm.id));
+
   const lookup = usePairLookup(pairs, drawnKeys);
   const selectionBright = useBrightSet(selectedAgentId, pairs);
   // An explicit highlight wins over the selection-derived set: the two are different questions
@@ -598,7 +606,7 @@ export function TopologyDiagram({
           {/* Trunk down to the PM bar. Deliberately unlabelled: this is a bus, not a pair,
               and the "hub-spoke" string it replaces described the shape rather than the
               traffic. The real gm<->pm counts sit on each PM's own segment below. */}
-          <div className="w-px h-12 bg-neutral-700" />
+          <div className={clsx('w-px h-12 bg-neutral-700', !leadRowBorn && 'invisible')} />
         </>
       )}
 
@@ -621,14 +629,14 @@ export function TopologyDiagram({
               if (first && last && container) {
                 return (
                   <div
-                    className="absolute top-0 h-px bg-neutral-700"
+                    className={clsx('absolute top-0 h-px bg-neutral-700', !leadRowBorn && 'invisible')}
                     style={{ left: `${first.cx}px`, width: `${Math.max(0, last.cx - first.cx)}px` }}
                   />
                 );
               }
               return (
                 <div
-                  className="absolute top-0 h-px bg-neutral-700"
+                  className={clsx('absolute top-0 h-px bg-neutral-700', !leadRowBorn && 'invisible')}
                   style={{
                     left: `calc(50% - ${(pms.length - 1) * 80}px)`,
                     width: `${(pms.length - 1) * 160}px`,
