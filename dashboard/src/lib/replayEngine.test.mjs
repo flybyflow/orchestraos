@@ -4,8 +4,8 @@ import {
   REPLAY_MS, SNAP_N, initReplay, span, fraction, startPlay, advance, seek, pause, setLive, setSpeed, setGrowth,
 } from './replayEngine.ts';
 
-function ev(t, from = 'a', to = 'b', type = 'task') {
-  return { t, from, to, type };
+function ev(t, from = 'a', to = 'b', type = 'task', id) {
+  return { t, from, to, type, id };
 }
 
 test('advance fires events in t order and never re-fires one', () => {
@@ -49,7 +49,10 @@ test('startPlay restart (f>=0.999 -> 0): cursor resets to t0, idx resets to the 
   // functions' comments at the top of this file for why they must stay different. This test
   // pins both things that matter: idx actually resets on restart (build's brief: "asserting
   // cursor alone passes even if idx is wrong"), AND the earliest event is reachable.
-  const events = [ev(1000), ev(2000), ev(3000)];
+  // Distinct ids, per build's ask: a count- or timestamp-only assertion passes even if the
+  // WRONG event at the right instant fires (exactly how QA caught this live -- firstFiredId
+  // was one row off from the API's actual first event, not merely "an event was missing").
+  const events = [ev(1000, 'a', 'b', 'task', 'tg-589340096'), ev(2000, 'a', 'b', 'task', 'tg-589340097'), ev(3000, 'a', 'b', 'task', 'tg-589340098')];
   const midPlayback = { events, playing: true, idx: 2, live: false, cursor: 2900, t0: 1000, t1: 3000, speed: 1, growth: false };
 
   const restarted = startPlay(midPlayback, 0.9995);
@@ -57,7 +60,7 @@ test('startPlay restart (f>=0.999 -> 0): cursor resets to t0, idx resets to the 
   assert.strictEqual(restarted.idx, 0, 'idx must reset to the START of the window (index 0, the earliest event), not stay at 2');
 
   const { fired } = advance(restarted, 1); // any dt>0; cursor already sits ON t0=events[0].t
-  assert.strictEqual(fired[0]?.t, 1000, 'the very first event in the window must fire on a from-scratch restart');
+  assert.strictEqual(fired[0]?.id, 'tg-589340096', 'the first fired event must be the actual earliest event by id, not just any event at t0');
 });
 
 test('seek trail: exactly min(SNAP_N, available) entries, strictly descending weights, newest 1.0, oldest at the real formula value', () => {
