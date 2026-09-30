@@ -111,6 +111,12 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
 
   useEffect(() => {
     stopLoop();
+    // Pause the STATE as well as the loop. Cancelling the frame without clearing `playing`
+    // is the other half of the same inconsistency the loop guard covers: if this effect runs
+    // after a play() has already scheduled a frame, the button reads "pause replay" forever
+    // with nothing advancing. The new window's events land as a not-playing state anyway, so
+    // this only closes the gap between the two.
+    setState((s) => (s.playing ? pauseEngine(s) : s));
     loadHistory(windowHours);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowHours]);
@@ -118,6 +124,15 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
   useEffect(() => () => stopLoop(), [stopLoop]);
 
   const loop = useCallback((now: number) => {
+    // Bail if the state says we are not playing. stopLoop() cancels the frame but does NOT
+    // touch `playing`, and loadHistory() replaces the whole state with a not-playing one --
+    // so a stop that races a play can leave playing:true with no frame scheduled, or a
+    // scheduled frame advancing a state nobody asked to advance. Observed on the page:
+    // a fresh load, an immediate window change and an immediate Play left the button reading
+    // "pause replay" with the slider frozen at 34 and nothing moving. Checking the state
+    // rather than a second boolean means there is one answer to "are we playing", not two
+    // that can disagree.
+    if (!stateRef.current.playing) { rafRef.current = null; return; }
     const dt = now - lastRef.current;
     lastRef.current = now;
     const { state: next, fired: justFired, ended } = advance(stateRef.current, dt);
