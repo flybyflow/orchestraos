@@ -44,7 +44,7 @@ assert.deepEqual([...WINDOW_OPTIONS], [1, 6, 24, 72, 168, 720, 2160]);
 console.log('timeBar: all assertions passed');
 
 // ── v2 (a): window options, labels, and the scrubber clamp ───────────────────────────────
-import { windowLabel, scrubSpanHours } from './timeBar.ts';
+import { windowLabel, scrubSpanHours, REPLAY_WINDOW_OPTIONS, ALL_HOURS } from './timeBar.ts';
 
 // (the option set itself is asserted once, above — 2160h is the server cap, so 90d is the
 // largest by design rather than an unbounded "all")
@@ -57,6 +57,18 @@ assert.equal(windowLabel(72), '3d');
 assert.equal(windowLabel(168), '7d');
 assert.equal(windowLabel(720), '30d');
 assert.equal(windowLabel(2160), '90d');
+
+// ── PLAY/GROW/LIVE port (operator, 2026-09-30): a SEPARATE replay window list ──────────────
+// Deliberately NOT the same array as WINDOW_OPTIONS — see the comment on REPLAY_WINDOW_OPTIONS
+// for why: the live picker's own server caps at 2160h regardless of what the control claims,
+// so "all" only belongs on the list whose backing endpoint (the new /messages/history) the
+// operator's spec actually wants it on.
+assert.deepEqual([...REPLAY_WINDOW_OPTIONS], [1, 6, 24, 72, 168, 720, 2160, 8760]);
+assert.equal(ALL_HOURS, 8760);
+assert.equal(windowLabel(ALL_HOURS), 'all');
+// The live picker's own list must NOT have picked up "all" as a side effect of adding it
+// elsewhere — this is the regression the two-array split exists to prevent.
+assert.ok(!WINDOW_OPTIONS.includes(ALL_HOURS), 'ALL_HOURS must never leak into the live counts picker');
 
 // THE CLAMP — the operator's complaint. Measured on the real install: oldest message 254h old
 // while the largest option was 72h, so the bar hid 182h. The span must reach real history.

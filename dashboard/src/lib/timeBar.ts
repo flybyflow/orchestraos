@@ -4,19 +4,36 @@
  * react-refresh/only-export-components forbids exporting non-components from one.
  */
 
-/** Windows the picker offers. 72h is included because the 3D surface gm saw uses 72h, and
- *  two views offering different windows would be a fresh version of the same
- *  two-sources-disagreeing problem this feature exists to remove. */
+/** Windows the LIVE COUNTS picker offers. 72h is included because the 3D surface gm saw uses
+ *  72h, and two views offering different windows would be a fresh version of the same
+ *  two-sources-disagreeing problem this feature exists to remove. Deliberately has NO "all":
+ *  its backing server (api/src/routes/messages.ts pair-counts) caps at 2160h regardless of
+ *  what the control claims, so an "all" here would silently mean 90d — the same class of lie
+ *  as a window that hid history. See REPLAY_WINDOW_OPTIONS below for why replay gets a
+ *  genuine "all" and this list does not. */
 export const WINDOW_OPTIONS = [1, 6, 24, 72, 168, 720, 2160] as const;
 
 /**
+ * Windows the REPLAY window-select offers (PLAY/GROW/LIVE port, operator 2026-09-30) — a
+ * SEPARATE list from WINDOW_OPTIONS on purpose, not a rename. build's spec asks for an "all"
+ * option matching /field's own picker (/field's server caps at 8760h/365d, not 90d), backed
+ * by the NEW GET /api/messages/history endpoint (builder-2). Sharing one array between the two
+ * pickers would have put "all" on the LIVE counts picker too, whose own server still caps at
+ * 2160h — reintroducing the exact lie the WINDOW_OPTIONS comment above exists to prevent, just
+ * via a different code path. If /api/messages/history turns out to also clamp below 8760h,
+ * this "all" would lie the same way; flagged to builder-2/build rather than assumed.
+ */
+export const ALL_HOURS = 8760;
+export const REPLAY_WINDOW_OPTIONS = [1, 6, 24, 72, 168, 720, 2160, ALL_HOURS] as const;
+
+/**
  * Human label for a window. "2160h" is not a readable number — the operator thinks in days
- * past about three of them, so anything from 48h up reads as days. 2160h is the server-side
- * cap (messages.ts: Math.min(24 * 90, h)), so 90d is deliberately the largest option rather
- * than an unbounded "all": an "all" that silently meant 90d would be the same class of lie as
- * a window that hid history.
+ * past about three of them, so anything from 48h up reads as days. Shared by both pickers:
+ * ALL_HOURS only ever appears in REPLAY_WINDOW_OPTIONS, so the "all" branch is unreachable
+ * from the live picker's own list.
  */
 export function windowLabel(hours: number): string {
+  if (hours === ALL_HOURS) return 'all';
   if (hours < 48) return `${hours}h`;
   const days = Math.round(hours / 24);
   return `${days}d`;
