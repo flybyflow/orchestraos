@@ -285,11 +285,18 @@ function AgentNode({
  *  `stubPx` is the length of the line above and below the label, so the caller keeps the
  *  spacing the tree already had instead of this component guessing at layout. */
 function Connection({
-  a, b, lookup, windowHours, onSelect, stubPx, dimmed, dots,
+  a, b, lookup, windowHours, onSelect, stubPx, dimmed, dots, labelRef,
 }: {
   a: string; b: string; lookup: PairLookup; windowHours: number;
   onSelect?: (a: string, b: string) => void; stubPx: number;
   dimmed?: boolean; dots?: TrafficMessage[];
+  /** Registers the count pill as a routing OBSTACLE.
+   *
+   *  builder-1 measured 12 of 12 cross edges overlapping something on the real page,
+   *  26 overlaps in total, and the single biggest cause was that these pills were
+   *  never obstacles at all — the router only ever saw AgentNode boxes. A perfect
+   *  routing algorithm cannot avoid a rectangle nobody told it about. */
+  labelRef?: (el: HTMLElement | null) => void;
 }) {
   const row = lookup.get(a, b);
   const count = row?.count ?? 0;
@@ -308,6 +315,7 @@ function Connection({
   // everyone). No onSelect and it degrades to plain text rather than a dead button.
   const label = onSelect ? (
     <button
+      ref={labelRef as ((el: HTMLButtonElement | null) => void) | undefined}
       type="button"
       onClick={() => onSelect(a, b)}
       title={tip}
@@ -322,6 +330,7 @@ function Connection({
     </button>
   ) : (
     <span
+      ref={labelRef as ((el: HTMLSpanElement | null) => void) | undefined}
       title={tip}
       className={clsx('text-[10px] bg-neutral-950 px-1.5 py-0.5 rounded z-10 relative',
         count ? 'text-neutral-400' : 'text-neutral-600')}
@@ -517,6 +526,7 @@ export function TopologyDiagram({
                   {/* The gm<->pm line itself: count, thickness and click all live here. */}
                   {gm && (
                     <Connection
+                      labelRef={register(`label:${pairKey(gm.id, pm.id)}`)}
                       a={gm.id} b={pm.id} lookup={lookup} windowHours={windowHours}
                       onSelect={onSelectConnection} stubPx={18}
                       dimmed={lineDim(gm.id, pm.id)}
@@ -533,6 +543,7 @@ export function TopologyDiagram({
                       {pmWorkers.map((w) => (
                         <div key={w.id} className="flex flex-col items-center gap-0">
                           <Connection
+                            labelRef={register(`label:${pairKey(pm.id, w.id)}`)}
                             a={pm.id} b={w.id} lookup={lookup} windowHours={windowHours}
                             onSelect={onSelectConnection} stubPx={14}
                             dimmed={lineDim(pm.id, w.id)}

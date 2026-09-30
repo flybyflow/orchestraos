@@ -156,7 +156,11 @@ function parsePathPoints(d) {
   }
 }
 
-// ── routeEdge: capped attempts exhausted -> still returns something drawable ────────────
+// ── routeEdge: capped attempts exhausted -> returns the SHORT fallback, not a wide one ───
+// Post-QA policy (operator, 2026-09-30 real-page finding): when nothing short clears, return
+// the shortest thing tried (the plain chord) rather than escalating the search wider. This
+// replaced the old "return the widest polyline attempt" fallback, which is what produced a
+// real 1645px detour on the actual page.
 {
   const from = { id: 'a', cx: 0, cy: 0, width: 20, height: 20 };
   const to = { id: 'b', cx: 200, cy: 0, width: 20, height: 20 };
@@ -170,17 +174,83 @@ function parsePathPoints(d) {
   }
   const route = routeEdge(from, to, obstacles);
   assert.ok(route !== undefined && route !== null, 'never undefined, even when every attempt is exhausted');
-  assert.ok(route.kind === 'curve' || route.kind === 'polyline', 'still a valid, drawable kind');
-  assert.equal(typeof route.d, 'string', 'still a real path string');
-  assert.ok(route.d.length > 0, 'not an empty path');
-  // Confirm this genuinely IS the exhausted case, not an accidental pass: the widest possible
-  // polyline attempt still cannot clear this wall (every segment must cross the fully-blocked
-  // x-strip somewhere).
+  assert.equal(route.kind, 'curve', 'the exhausted fallback is the short plain chord, not a wide polyline');
+  assert.deepEqual(parsePathPoints(route.d), [{ x: 10, y: 0 }, { x: 100, y: 0 }, { x: 190, y: 0 }],
+    'specifically the straight (offset-0) chord — the shortest thing this module ever tries');
+  // Confirm this genuinely IS the exhausted case, not an accidental pass: the returned
+  // (short) chord still crosses the wall, and no attempt in between found daylight either.
   const pts = parsePathPoints(route.d);
   const anySegmentHitsAWall = obstacles
     .filter((o) => o.id.startsWith('wall-'))
     .some((wall) => pts.slice(0, -1).some((p, i) => segmentIntersectsBox(p, pts[i + 1], wall)));
   assert.equal(anySegmentHitsAWall, true, 'sanity: this fixture really is unroutable, so the fallback path is the one under test, not a lucky success');
+}
+
+// ── routeEdge: a route must stay inside a bounded viewport ──────────────────────────────
+// build's constraint: "it must hold at 1000x700 as well as 1440x900, so nothing may assume a
+// width." This module never reads a viewport size — it is pure relative geometry — so the
+// real guarantee to test is that "prefer short" keeps every waypoint within a modest margin
+// of the direct chord, in a layout no wider than the SMALLER of the two real viewports QA
+// checked. A route that stays within maxOffset of the chord cannot sprawl outside a
+// reasonably-sized container regardless of which viewport it is drawn in.
+{
+  const VIEWPORT = { width: 1000, height: 700 };
+  const from = { id: 'a', cx: 60, cy: 350, width: 110, height: 87 };
+  const to = { id: 'b', cx: 940, cy: 350, width: 110, height: 87 };
+  // A cluster of obstacles near the middle — dense enough to force real offset attempts,
+  // not so pathological that it is the all-attempts-exhausted case (that is the block above).
+  const obstacles = [from, to];
+  for (let x = 400; x <= 600; x += 60) {
+    obstacles.push({ id: `mid-${x}`, cx: x, cy: 350, width: 50, height: 40 });
+  }
+  const route = routeEdge(from, to, obstacles);
+  const pts = parsePathPoints(route.d);
+  for (const p of pts) {
+    assert.ok(p.x >= 0 && p.x <= VIEWPORT.width, `x=${p.x} stays within the ${VIEWPORT.width}px viewport`);
+    assert.ok(p.y >= 0 && p.y <= VIEWPORT.height, `y=${p.y} stays within the ${VIEWPORT.height}px viewport`);
+  }
+}
+
+// ── routeEdge: an obstacle field dense enough that NO curve clears (the real QA failure) ──
+// TRANSCRIBED from the real running page, not invented: browse skill against build-v2 at
+// 1440x900, Topology view, every visible AgentNode's getBoundingClientRect, converted to the
+// overlay's local coordinate space (SVG origin was (305, 330.5) at capture time). This is
+// exactly the obstacle field routeEdge is actually called against in production today.
+//
+// gm and brain sit on the SAME real x-column (535) with reflect and plan directly between
+// them on that column too — a genuinely straight, un-nudgeable line of real boxes, not a
+// constructed worst case. A single-control-point curve cannot solve this: reflect sits near
+// the middle (cy=392, roughly 36% of the way down) and plan sits further along (cy=712,
+// roughly 71% down) — clearing one is a different offset than clearing the other, and a
+// single hump cannot be two different heights at once.
+{
+  const from = { id: 'gm', cx: 535.0, cy: 68.0, width: 110, height: 87 };
+  const to = { id: 'brain', cx: 535.0, cy: 992.0, width: 110, height: 87 }; // real ~924px span
+  const obstacles = [
+    from, to,
+    { id: 'reflect', cx: 535.0, cy: 392.0, width: 110, height: 87 }, // real: directly on the gm-brain column
+    { id: 'plan', cx: 535.0, cy: 712.0, width: 110, height: 87 },    // real: same column, further down
+    { id: 'builder-1', cx: 227.0, cy: 392.0, width: 110, height: 87 },
+    { id: 'ship', cx: 657.0, cy: 392.0, width: 110, height: 87 },
+    { id: 'bshr', cx: 474.0, cy: 846.0, width: 110, height: 87 },
+    { id: 'think', cx: 596.0, cy: 846.0, width: 110, height: 87 },
+  ];
+  const route = routeEdge(from, to, obstacles);
+  assert.ok(route.kind === 'curve' || route.kind === 'polyline');
+  // The point of this test is not "it clears" (it is modelled on a real case that does NOT),
+  // it is "the module does not sprawl trying" — every point stays within maxOffset (default
+  // 80) of the direct chord, proving the short-budget policy actually bounds the search
+  // rather than merely being untested.
+  const pts = parsePathPoints(route.d);
+  const chordLen = Math.hypot(to.cx - from.cx, to.cy - from.cy);
+  for (const p of pts) {
+    // Distance from the point to the INFINITE line through start/end, not to the segment —
+    // a cheap, sufficient proxy for "how far off the direct chord did this wander".
+    const ux = (to.cx - from.cx) / chordLen, uy = (to.cy - from.cy) / chordLen;
+    const relX = p.x - from.cx, relY = p.y - from.cy;
+    const perpDist = Math.abs(relX * -uy + relY * ux);
+    assert.ok(perpDist <= 80 + 1, `waypoint (${p.x},${p.y}) stayed within maxOffset of the chord (perpDist=${perpDist.toFixed(1)})`);
+  }
 }
 
 // ── determinism: same input twice -> identical path string ─────────────────────────────

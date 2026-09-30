@@ -30,9 +30,19 @@ export interface Box {
 export interface RouteEdgeOptions {
   /** Points sampled along a candidate curve for clearance testing. Default 16 (design 2.5: "10-20 points"). */
   samples?: number;
-  /** Capped retry count for both the curve and the polyline fallback search. Default 6 (design's own suggestion). */
+  /** Capped retry count for both the curve and the polyline fallback search. Default 4. */
   maxAttempts?: number;
-  /** Hard cap on how far a control point / polyline waypoint may be pushed off the chord. Default 160. */
+  /**
+   * Hard cap on how far a control point / polyline waypoint may be pushed off the chord.
+   * Default 80 — deliberately SHORT, not "however far it takes to clear." QA on the real
+   * page (operator, 2026-09-30) measured a 1645px detour on one edge and called it out
+   * explicitly worse than a short line that clips a corner. A single control point cannot
+   * geometrically dodge obstacles spread across a long chord (deviation is a single hump,
+   * ~2t(1-t)*offset — clearing a box near the middle does nothing for one near an end), so
+   * chasing clearance by raising this number on a dense/long layout does not fix that shape
+   * of failure, it just makes the failed attempts bigger. Tuned to real node box geometry
+   * (110x87px, measured live) rather than picked to make one fixture pass.
+   */
   maxOffset?: number;
   /** Extra clearance margin applied to every box test, so a curve grazing the border still counts as a hit. Default 0. */
   pad?: number;
@@ -189,10 +199,12 @@ function polylinePath(points: Point[]): string {
  *     sides, so an obstacle on only one side of the chord doesn't burn every attempt), capped
  *     at `maxAttempts` and `maxOffset`.
  *  4. If no single-control-point curve clears, fall back to a 3-point polyline with the same
- *     retry schedule — an exact per-segment test (segmentIntersectsBox), not sampled, so it is
- *     strictly easier to guarantee correct than a curve.
- *  5. If even that is exhausted, return the widest polyline attempt anyway: never throw, never
- *     return undefined. A best-effort visible line beats a crashed overlay.
+ *     SHORT retry budget — an exact per-segment test (segmentIntersectsBox), not sampled, so
+ *     it is strictly easier to guarantee correct than a curve.
+ *  5. If even that is exhausted, return the SHORTEST attempt made (the plain, near-straight
+ *     chord) — not the widest. A short line that clips a corner is a better answer than a
+ *     sprawling detour that also might not clear (operator's own words, 2026-09-30 QA); never
+ *     throw, never return undefined either way.
  */
 export function routeEdge(
   from: Box,
@@ -201,8 +213,8 @@ export function routeEdge(
   opts: RouteEdgeOptions = {}
 ): EdgeRoute {
   const samples = opts.samples ?? 16;
-  const maxAttempts = opts.maxAttempts ?? 6;
-  const maxOffset = opts.maxOffset ?? 160;
+  const maxAttempts = opts.maxAttempts ?? 4;
+  const maxOffset = opts.maxOffset ?? 80;
   const pad = opts.pad ?? 0;
 
   // The two endpoints' own boxes are never obstacles — the chord necessarily starts/ends
@@ -225,18 +237,24 @@ export function routeEdge(
   }
 
   const perp: Point = { x: -dy / len, y: dx / len };
+  // Capped at 2, deliberately: scaling the offset UP with how many boxes the chord crosses is
+  // exactly the "loop outward" behaviour the operator's real-page QA caught producing a
+  // 1645px detour on a dense/long layout — more obstacles were making the search WIDER, which
+  // is the wrong direction when the policy is "prefer short." A small nudge for "more than
+  // one in the way" is still useful; an unbounded one is the bug.
   const crossingCount = realObstacles.filter((b) => segmentIntersectsBox(start, end, b, pad)).length;
-  const scale = Math.max(1, crossingCount);
+  const scale = Math.min(2, Math.max(1, crossingCount));
   const baseOffset = 24; // px — deterministic step size, no randomness
 
-  // Attempt 0: the straight chord itself (control point ON the midpoint).
+  // Attempt 0: the straight chord itself (control point ON the midpoint). This doubles as the
+  // final SHORT fallback below if nothing clears — it is already the shortest thing tried.
   if (curveClears(start, mid, end, realObstacles, samples, pad)) {
     return { kind: 'curve', d: curvePath(start, mid, end) };
   }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const side = attempt % 2 === 1 ? 1 : -1;
-    const magnitude = Math.min(baseOffset * scale * Math.ceil(attempt / 2), maxOffset);
+    const magnitude = Math.min(baseOffset * scale * attempt, maxOffset);
     const ctrl: Point = { x: mid.x + perp.x * magnitude * side, y: mid.y + perp.y * magnitude * side };
     if (curveClears(start, ctrl, end, realObstacles, samples, pad)) {
       return { kind: 'curve', d: curvePath(start, ctrl, end) };
@@ -255,20 +273,25 @@ export function routeEdge(
   // perpendicular-jump-then-flat-run shape instead reaches the FULL offset in one short step
   // at each end, so the long middle segment (wp1 -> wp2, parallel to the chord) carries the
   // complete clearance margin for its entire length with no taper at all.
-  let lastPolyline: Point[] = [start, mid, end];
+  //
+  // Same `maxOffset` cap as the curve loop, NOT a wider one — a real-page measurement showed
+  // the old maxOffset*2 escalation here is what produced the 1645px gm<->telegram detour.
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const side = attempt % 2 === 1 ? 1 : -1;
-    const magnitude = Math.min(baseOffset * (scale + 1) * attempt, maxOffset * 2);
+    const magnitude = Math.min(baseOffset * scale * attempt, maxOffset);
     const wp1: Point = { x: start.x + perp.x * magnitude * side, y: start.y + perp.y * magnitude * side };
     const wp2: Point = { x: end.x + perp.x * magnitude * side, y: end.y + perp.y * magnitude * side };
     const pts = [start, wp1, wp2, end];
-    lastPolyline = pts;
     if (polylineClears(pts, realObstacles, pad)) {
       return { kind: 'polyline', d: polylinePath(pts) };
     }
   }
 
-  // Every attempt exhausted. Never throw, never return undefined — ship the widest attempt
-  // rather than leave the caller with nothing to draw.
-  return { kind: 'polyline', d: polylinePath(lastPolyline) };
+  // Every SHORT attempt exhausted. Return the shortest thing tried — the plain chord — rather
+  // than the widest polyline attempt. A single obstacle field dense/long enough to defeat every
+  // short attempt is real information (the layout has no clean gap this module's shape of
+  // search can find); the fix for that is elsewhere (fewer edges drawn, a different layout,
+  // labels excluded from view), not a longer and longer detour from this function. Never
+  // throw, never return undefined either way.
+  return { kind: 'curve', d: curvePath(start, mid, end) };
 }
