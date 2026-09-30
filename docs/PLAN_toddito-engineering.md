@@ -426,30 +426,22 @@ rather than inventing a parallel system:
    this facet's copy AFTER §9's tone fix lands, not before, so it doesn't
    inherit the "TONE: Clinical" problem on day one.
 
-**Update (gm, `msg_3919283a_77535776`, 2026-09-30 14:12 UTC): the
-recovered What/So-What/Now-What content (§2a) sharpens this facet's
-REPORT FORMAT specifically, distinct from and additive to point 2's
-question-content source.** Two different real 1987/Koherent sources for
-two different parts of the same facet, not competing or overlapping:
-- **CPCSP's Client Relationship dimension (§7a.2) supplies the
-  diagnostic CONTENT** — what to ask, the trust/influence-style item
-  family.
-- **Koherent's recovered What/So-What/Now-What(Self/Other/Whole)
-  structure (§2a) supplies the REPORT FORMAT** — how to present the
-  result back to the consultant. This maps unusually well onto a
-  consultant self-feedback facet specifically, better than it maps onto
-  Pulse's org-level report (§2a's "different altitude" point): **What** =
-  the observed pattern in their influence style; **So What** = what it
-  means for their practice; **Now What** = three concrete practices,
-  and the real Self/Other/Whole typing maps almost directly —
-  **Self** = a personal-development practice, **Other** = a practice
-  specific to the client relationship being assessed, **Whole** = a
-  practice for their consulting practice as a whole. This is a genuine
-  fit, not a forced one — worth building the report step this way rather
-  than reusing Pulse's org-level report components (`src/components/
-  report/*`) as originally proposed in point 3 above; point 3 is
-  superseded by this for the report-rendering piece specifically, the
-  scoring/data pipeline reuse in point 3 still stands.
+**CORRECTED (gm relaying the operator directly, `msg_672becde_77824931`,
+2026-09-30 14:17 UTC) — the update immediately above was wrong and is
+retracted, not just superseded.** The operator drew a clean separation of
+concerns this seat had merged incorrectly: the recovered What/So-What/
+Now-What(Self/Other/Whole) structure is for **Thread A, the MAIN
+diagnostic report every respondent sees (§9)** — fixing the clinical
+tone Todd has raised across multiple meetings. It does **not** apply to
+this facet. **Thread B, this facet, stays exactly what point 2 above
+already said: CPCSP's Client Relationship dimension supplies the content,
+and this is additive self-coaching functionality on the existing
+consultant admin panel** — not a new report-rendering pattern borrowed
+from Thread A. Point 3 above (reuse Pulse's scoring/report architecture)
+is NOT superseded after all — restored. Leaving this retraction visible
+in the document rather than deleting the wrong version, matching this
+document's own standing practice of correcting in place with the
+record intact.
 
 ### 7a.4 What this section does not resolve
 
@@ -683,19 +675,23 @@ by the IP owner himself, months before anyone named the pattern.
    working technique for consistency without formula, but only where it
    reads naturally; forcing it onto every field risks the opposite
    problem (mechanical instead of clinical).
-6. **New, from the recovered real Now-What content (§2a): Pulse's schema
-   already has a `recommendation` field** (`src/lib/scoring/prompt.ts`'s
-   JSON output, read during §9.1's research) — currently a single
-   free-text string. The real Koherent structure (3 typed practices —
-   what changes for you, what changes for how you relate to others
-   affected, what changes at the whole-organization level) doesn't map
-   1:1 onto an org diagnostic the way it does onto individual coaching
-   (§2a's own "different altitude" point still holds), but the STRUCTURE
-   — a hook, a "why," a concrete "how" in 2 steps — is a real, reusable
-   shape for turning `recommendation` from one paragraph into something
-   more actionable, without needing the full individual-coaching
-   Self/Other/Whole typing. Flagging as a real opportunity, not scoping
-   it as required — genuinely a separate decision from items 1-5.
+6. **CONFIRMED, not just flagged (gm relaying the operator directly,
+   `msg_672becde_77824931`, 2026-09-30 14:17 UTC): the full recovered
+   What/So-What/Now-What(Self/Other/Whole) structure IS the intended
+   pattern for THIS report — the main diagnostic every respondent sees —
+   not an optional nice-to-have.** Corrects this item's earlier hedge
+   ("a real opportunity, not required") — it's required, per the
+   operator directly. Pulse's `recommendation` field (single free-text
+   string today, `src/lib/scoring/prompt.ts`) is the natural landing
+   spot for the Now-What/practices piece specifically; the What/So-What
+   pairing (`whatReadMore`/`soWhatReadMore` style short+long framing)
+   likely extends further into the report than just that one field —
+   exact scope (which existing sections get restructured vs. which stay
+   as-is) needs its own design pass, not decided in this text review.
+   **Real sequencing note, since §10's JTBD work touches the same report
+   page:** JTBD 1's reorder (lead with the divergence) and this
+   structural change both land on the same file — do these together, not
+   as two separate passes that both touch overlapping sections.
 
 ### 9.5 What this section does not resolve
 
