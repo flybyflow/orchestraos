@@ -553,13 +553,25 @@ should be written to the SAME rules from first draft — worth stating
 explicitly as a build constraint, not just an ordering note, so it
 doesn't need a second tone pass later.
 
-**What's NOT addressed, honestly:** no visual/interaction mockup exists
-for this facet at all (unlike §9's report-tone work, which has an actual
-existing page to modify) — this is greenfield UI, not a redesign. A real
-design pass (screens, not just data-flow) is still needed before build,
-beyond what a text-based plan review can respond to. Recommend a
-follow-up round specifically for that once the questions above are
-answered, not bundled into this pass.
+**Corrected (gm relaying the operator directly, `msg_17aefff3_77934674`,
+2026-09-30 14:18 UTC) — this is NOT fully greenfield, the "no existing
+page" framing above was wrong.** The operator pointed at
+`https://getyourpulse.io/dashboard/engagements` as the real starting
+point. Could not load it live (redirects to `/login`, no operator
+credentials available or appropriate to use), so read the underlying
+route directly instead: `src/app/admin/engagements/page.tsx`. Real,
+confirmed: this is the existing consultant admin console — a shared
+`ConsoleLayout` component with `activeNav` routing, a real nav-based
+page system, a real "New Engagement" flow pattern, a real engagement
+list UI. **The self-coaching facet should be a new page/nav item inside
+this SAME `ConsoleLayout` system** (e.g. a new `activeNav` route), reusing
+the console's existing chrome/navigation — not a from-scratch shell.
+What's still genuinely new is the SPECIFIC self-coaching content/flow
+(the consultant as respondent, the CPCSP-derived questions, the results
+view) — that part still needs its own screens-level design pass, just
+not the surrounding console/nav structure, which already exists and
+should be reused. Narrower gap than originally framed, not a different
+kind of gap.
 
 ## 8. Recommended scope — what to build first, ranked
 
