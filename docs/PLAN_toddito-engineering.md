@@ -393,15 +393,32 @@ rather than inventing a parallel system:
 
 ### 7a.4 What this section does not resolve
 
-Todd has not confirmed the Consulting Communicator ↔ CPCSP Client
-Relationship connection (OD4, still open) — §7a.2's read is the strongest
-evidence assembled so far, not a settled fact. Exact expansion from 6
-known scored items to Todd's stated "16 questions" is not derived here —
-needs either Todd's own application doc (OD4) or a design pass deciding
-how to responsibly extend a real but partial item family. **Per the
-operator's explicit process instruction, this plan is not build-ready
-until it runs through `/plan-ceo-review` and `/plan-design-review` and
-folds real findings back in — done below, §7a.5/7a.6.**
+**OD4 RESOLVED (gm, `msg_e7ef7d06_77168841`, 2026-09-30 14:06 UTC) — Todd
+confirmed directly, by phone, and requested this facet himself.** The
+Consulting Communicator ↔ CPCSP Client Relationship connection (§7a.2) is
+no longer a guessed/unconfirmed hypothesis — using Todd's IP for this
+facet is authorized. This clears §7a.5's specific caution against
+shipping content attributed to his IP without his confirmation — that
+caution was about authorization, not about having the real 16-item text
+in hand, which still doesn't exist here. **Separately, real new lead on
+the actual mockup/application-doc content:** the operator says the
+What/So-What/Now-What mockup was on a Koherent repo's homepage at some
+point, later wiped and redirected — consistent with this document's own
+zero-hits grep against current HEAD — but likely recoverable from **git
+history**. gm has dispatched that git-archaeology to bshr specifically;
+once found, it governs over any reconstruction in this document, per the
+same "operator's real answer beats a reconstruction" principle already
+applied here. **Do not expand from 6 known items toward 16 by invention
+before that search completes** — wait for it, same discipline as before,
+just with the authorization question now separately resolved.
+
+**Still open, unchanged by OD4 clearing (gm's own explicit words):**
+OD6-the-gate still applies to this facet if built as a voice session (see
+[[od6-voice-agent-status]] for the two-different-things distinction), and
+the greenfield UI design pass (§7a.6) is still needed. Not build-ready
+yet. **Per the operator's explicit process instruction, this plan ran
+through `/plan-ceo-review` and `/plan-design-review` and folded real
+findings back in — done below, §7a.5/7a.6.**
 
 ### 7a.5 `/plan-ceo-review` pass — real findings, folded in
 
@@ -422,13 +439,16 @@ here is real scrutiny of a plan, not scope negotiation.
 correctly scopes to only the Client Relationship dimension, not all of
 CPCSP — avoiding the premise mismatch §7a.2 found. Real risk not yet
 named: going from 6 known real items to Todd's stated "16 questions"
-needs new item content in the same construct family. **Do not ship a
-guessed 16-item set presented as Todd's Consulting Communicator without
-his confirmation (OD4)** — inventing items and attributing them to his
-IP is a real trust/fidelity risk, the same class of problem this whole
-document has avoided elsewhere by citing real decoded content instead of
-guessing. If OD4 doesn't resolve in time, ship with the 6 real items
-honestly labeled as a partial set, not a fabricated 16.
+needs new item content in the same construct family. **Update — OD4
+resolved (§7a.4): authorization to use Todd's IP is no longer the
+blocker.** The remaining risk narrows to a sourcing question, not a
+permission one: bshr is git-archaeology-searching for the real mockup
+content (§7a.4); if found, use it. If it isn't found before this needs to
+ship, extending the 6 real known items into new ones in the same
+construct family is now authorized (Todd requested this facet directly)
+but should still be flagged in-product as an extension, not presented as
+verbatim recovered 1987 content — that distinction is about honesty with
+the end user, not about whether it's allowed.
 
 **FAILURE MODES / EDGE CASES, not yet addressed in §7a.3 — three real
 gaps:**
@@ -515,8 +535,11 @@ answered, not bundled into this pass.
    opportunity, different altitude from what exists, deserves its own
    `/plan-design-review` pass the way the community-brain rebuild got one,
    not squeezed in here as an afterthought.
-5. **Consulting Communicator (§7) — blocked on Todd (OD4).** Do not scope
-   blind; flag as the next thing to unblock once his call happens.
+5. **Consulting Communicator / boutique-consultant facet (§7, §7a) — OD4
+   resolved 2026-09-30, Todd confirmed by phone and requested this
+   himself.** No longer blocked on authorization. Still blocked on the
+   greenfield UI design pass (§7a.6) and, ideally, bshr's git-archaeology
+   search for the real mockup content (§7a.4) before content work starts.
 
 ## 9. Operator priority (2026-09-30 12:02 UTC): make the diagnostic report
 less clinical — design proposal, grounded in real sources not invented
