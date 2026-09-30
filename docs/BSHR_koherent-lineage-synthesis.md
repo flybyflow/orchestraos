@@ -337,3 +337,22 @@ real but component-level evidence, 1 is a naming false-friend, 2 have none) and
 incidentally resolved the A–T industry-letter mapping that both companion documents
 flagged as blocked on Todd. That finding belongs to the engineering plan and product
 roadmap, not this synthesis — reported to gm, not reproduced here.
+
+## Second addendum (2026-09-30) — the What/So-What/Now-What homepage was found, in V3
+
+§2's "near-miss" framing understated this. The operator confirmed directly that the
+pattern was not just prompt text sitting in an unused repo (V2) or dead DB schema (V3) —
+it was a real, rendered homepage in relationalOS, and he personally deleted it. Found
+and confirmed: relationalOS's very first commit (`a60503a`, "init") shipped a working
+`app/(user)/page.tsx` home screen wired to `InsightsWizard.tsx` — a real step component
+literally labeled `["What", "So what", "Now what"]` — backed by a full system prompt
+(`app/api/insights/[insightsId]/prompts.ts`) that emits four What/So-What fields plus
+three practices explicitly typed `"Self"`, `"Other"`, `"Whole"`. One commit later
+(`e0e9381`, "cleanup", authored by the operator, 2025-09-17), that homepage and its
+supporting components were deleted in one pass; today's `app/page.tsx` is a one-line
+redirect to `/spectacle`. Exactly as remembered: wiped, and redirected toward the newer
+side, not never built. "Nugget" was checked again in this exact commit and is still
+absent — now four for four across every repo examined (V2, V3-`main`-HEAD,
+`daern91/koherent-mvp`, and this V3 init commit), strengthening §6's hypothesis that it
+may never have existed outside Notion. Full detail reported to plan and gm directly
+(msg_25785f88_77361808), not reproduced in full here.
