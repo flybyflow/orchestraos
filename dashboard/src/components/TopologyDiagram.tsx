@@ -5,7 +5,7 @@ import { TierBadge } from './TierBadge';
 import type { PairCountRow } from '../lib/api';
 import { lineWidthPx, pairKey, shortAgo, partitionTopology } from '../lib/topologyLines';
 import { dotColor, type TrafficMessage } from '../lib/fleetTraffic';
-import { TopologyOverlay, RimNode, useNodePositions, type OverlayEdge } from './TopologyOverlay';
+import { TopologyOverlay, RimNode, useNodePositions, type OverlayEdge, type ReplayFiredEvent } from './TopologyOverlay';
 import { externalEndpoints } from '../lib/rimNodes';
 import { selectCrossEdges, busiestDrawn, edgeLiveness, edgeDirection } from '../lib/overlayGeometry';
 
@@ -78,6 +78,11 @@ interface TopologyDiagramProps {
    *  node can be born by a spawn event with no edge at all, so neither implies the other. */
   bornIds?: ReadonlySet<string> | null;
   bornEdges?: ReadonlySet<string> | null;
+  /** Replay pulses and scrub trail, passed straight through to the overlay. This component
+   *  does not interpret them — it only knows which edges exist, and the overlay is the only
+   *  thing that knows where they are drawn. */
+  fired?: ReplayFiredEvent[];
+  trail?: { event: { from?: string; to?: string }; weight: number }[];
 }
 
 /** A box or a line is a real control when it has a handler and plain markup when it does not.
@@ -398,7 +403,7 @@ export function TopologyDiagram({
   agents, pairs, windowHours = 24, onSelectConnection, onSelectAgent, selectedAgentId,
   onClearSelection, dots, brightIds,
   allAgentIds, deadPairs, layers, crossTopN = 12, nodeAlerts, edgeAlerts, asof = null,
-  bornIds = null, bornEdges = null,
+  bornIds = null, bornEdges = null, fired, trail,
 }: TopologyDiagramProps) {
   // GROW predicates. Both collapse to `false` when the sets are absent, so every call site
   // below is a no-op outside growth rather than a branch each one has to remember.
@@ -535,6 +540,8 @@ export function TopologyDiagram({
           width={overlaySize.w}
           height={overlaySize.h}
           edges={drawnOverlayEdges}
+          fired={fired}
+          trail={trail}
           positions={positions}
           windowHours={windowHours}
           onSelectConnection={onSelectConnection}
