@@ -37,16 +37,37 @@ def test_process_table_default_shape(tmp_path):
     assert by["arturo"].port == 5071 and by["arturo"].argv[-1].endswith("services/arturo/run.sh")
     beats = {e.name: e.interval for e in table if e.kind == "beat"}
     assert beats == {"bus_beat": 60, "boundary_delivery": 60, "cron_beat": 900, "router": 60,
-                     "approval_resume": 60, "menu_bridge": 60, "session_index": 120}
+                     "approval_resume": 60, "menu_bridge": 60, "session_index": 120,
+                     "deploy_drift": 600}
+    # deploy_drift warns when a CODE commit is undeployed. `build:live` verifies only the deploy
+    # it just performed, so it cannot see one nobody ran — on 2026-09-30 the stamp and the proxy
+    # agreed while HEAD was a real-code commit ahead, and the self-check was correctly silent.
+    # OFF by default, like telegram, because it messages gm: arming a beat that talks changes
+    # fleet behaviour and is the operator's call ([deploy] drift_beat_enabled).
+    assert by["deploy_drift"].enabled is False
+    assert by["deploy_drift"].argv[-1].endswith("scripts/deploy-drift-beat.py")
     # session_index refreshes state/agent-sessions.json, which had gone stale at {} because
     # nothing repopulated it — every transcript reader saw an empty map (the /field "no
     # transcript" bug). Pin the scan subcommand: a beat that runs the wrong verb is silent.
     assert by["session_index"].argv[-2:] == [by["session_index"].argv[-2], "scan"]
     assert by["session_index"].argv[-2].endswith("scripts/session-index.py")
     assert by["boundary_delivery"].env["BOUNDARY_DELIVER_ARMED"] == "1"
-    assert all(e.enabled for e in table if e.name != "telegram")   # telegram is opt-in
+    # Two entries are opt-in, and both for the same reason: they TALK. telegram is an outbound
+    # channel; deploy_drift messages gm. Everything else is on by default.
+    OPT_IN = {"telegram", "deploy_drift"}
+    assert all(e.enabled for e in table if e.name not in OPT_IN)
+    assert all(not by[n].enabled for n in OPT_IN)
     for e in table:
         assert e.cwd == str(st.repo_root)
+
+
+def test_deploy_drift_beat_is_armed_only_by_its_toml_flag(tmp_path):
+    """The off-by-default half is asserted above; this is the other half — that the flag works.
+    A beat wired to a setting nobody can turn on is as useless as one that is always on."""
+    st = _settings(tmp_path, extra='[deploy]\ndrift_beat_enabled = true\n')
+    by = {e.name: e for e in PT.build_process_table(st)}
+    assert by["deploy_drift"].enabled is True
+    assert by["deploy_drift"].interval == 600
 
 
 def test_process_table_honors_config_toggles(tmp_path):

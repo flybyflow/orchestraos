@@ -69,6 +69,16 @@ def build_process_table(st: Settings) -> list:
         # approvals surface; the operator's answer is driven back into the pane.
         ProcEntry("menu_bridge", "beat", [py, str(root / "scripts" / "menu_bridge.py"), "--cron"], cwd,
                   interval=60, enabled=st.menu_bridge_enabled, note="in-agent menus -> decision cards ([menus] bridge_enabled)"),
+        # `build:live` verifies the deploy it just performed, but only when someone runs it. It
+        # cannot see a commit nobody deployed — on 2026-09-30 the stamp and the proxy agreed on
+        # f2eb883 while HEAD was a real-code commit ahead, and the self-check was correctly
+        # silent because nothing it checks was wrong. That half is a heartbeat. Stays quiet for
+        # docs-only drift and never repeats the same pair, because an alert that cries wolf gets
+        # muted and is then worse than nothing. OFF by default: it messages gm, so arming it
+        # changes fleet behaviour and is the operator's call ([deploy] drift_beat_enabled).
+        ProcEntry("deploy_drift", "beat", [py, str(root / "scripts" / "deploy-drift-beat.py")], cwd,
+                  interval=600, enabled=st.deploy_drift_beat_enabled,
+                  note="warn when a code commit is undeployed ([deploy] drift_beat_enabled)"),
         # Telegram channel plugin: inbound long-poll -> gm inbox, cards -> phone with buttons.
         # Off unless [plugins.telegram] enabled = true AND TELEGRAM_BOT_TOKEN is in the env.
         ProcEntry("telegram", "service", [py, str(root / "plugins" / "telegram" / "router.py")], cwd,
