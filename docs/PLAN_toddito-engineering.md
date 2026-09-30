@@ -984,6 +984,102 @@ build pass across all three rather than three separate ones landing on
 the same files in sequence, but that's a scheduling call for whoever
 routes this to build, not decided here.
 
+## 11. Operator GO-ahead (2026-09-30 15:10 UTC, `msg_5a8838f2_81000046`):
+Investor Insight Application — 4th thread, real content found, but the
+name doesn't match what's actually decoded
+
+**Re-verified directly, not trusted from bshr's summary alone:**
+`strings`'d the real `.ASF` files (`GPASCORE.ASF` and 7 sibling SCORE
+files — present in all 8 industry variants, confirming bshr's "all 8"
+count). **Real, material correction: "Saleability Index" is NOT an
+investor/M&A due-diligence signal.** The section is literally headed
+`"========= SALES ADVICE"` in the raw file, and its content — *"The %2
+is taking a long term perspective... likely to be willing to spend money
+today on products and services that will yield a pay off in the
+future,"* keyed to the org's Development Stage — is a **sales-receptivity
+signal for whoever is engaging the org: how likely is this company/its
+decision-maker to buy more products or services right now.** That's
+upsell/cross-sell guidance for a consultant's own engagement, not an
+outside investor's diligence lens. **Same class of naming false-friend
+as Client Service Planner (§7a.1)** — real content exists, but "Investor
+Insight Application" is not an accurate description of what it actually
+does.
+
+**Design proposal, corrected to match the real content:** build this as
+a **"Sales Readiness" or "Engagement Opportunity" signal** in the
+existing report/admin surface (not investor-diligence framing) —
+surfaces whether the org's current stage/posture suggests receptivity to
+additional services, using the real decoded stage-keyed sales-advice
+text as source material. This is smaller and more honest than an
+investor-diligence product would be: a report annotation reusing the
+existing scoring pipeline's `stage` output, not a new due-diligence
+report type. **If the operator specifically wants an investor/M&A
+diligence lens** (the name as originally framed), that's real NEW scope
+not covered by this decoded content — flag back rather than force the
+Saleability data to answer a question it wasn't built for.
+
+**CEO + design review, same self-directed process as every other section
+tonight, same reason (unattended execution):** the naming correction
+above IS the premise challenge — proceeding with the design as gm/the
+operator named it ("investor insight," "PE/M&A audience") would have
+built the wrong thing under a technically-true "real decoded content"
+banner. Failure mode avoided by re-verifying the source directly instead
+of trusting a one-line summary. Recommend: confirm with the operator
+which framing they actually want (sales-readiness, matching the real
+content, vs. investor-diligence, which needs new content) before any
+build work, same "confirm before build" discipline as everything else
+tonight — this is NOT build-ready as a "GO," it's build-ready as a
+question.
+
+## 12. Operator GO-ahead, same message: Executive Communicator — 5th
+thread, real content confirmed, matches the name this time
+
+**Re-verified directly:** `strings`'d `MV6COMBO.ASC` — a real 1992
+multi-rater combo report, raw numeric min-max ranges per dimension
+(Development Stage, Strategy, Structure, Culture, Leadership Style,
+Client Relationship, Saleability Index, Risk) across what the file
+itself labels as multiple raters. This genuinely matches "align exec
+teams on strategy by surfacing... operating gaps" — the real content
+IS a divergence-across-raters report, same shape as Todd's own naming.
+Caveat unchanged from §7a.1: the raters in this specific sample aren't
+confirmed to specifically be executives (could be any multi-rater
+scenario the 1987 system supported) — a real, if minor, gap between "we
+have multi-rater divergence data" and "we have exec-team-specific
+divergence data."
+
+**Design proposal:** this is structurally the SAME pattern Pulse's group
+report already implements for multi-respondent org diagnostics
+(`consensus_stage`, `stage_distribution`, `divergence_flags`,
+`critical_divergence` — §10's own research) — Executive Communicator is
+that same pattern, narrowed to an exec-team-specific framing and
+narrative. **Reuses §10's JTBD 1 "lead with the load-bearing gap"
+design directly**, not a new UI pattern. Per gm's corrected framing
+(`msg_af74ed49_79234813`): the Self/Other/Whole reflective LENS applies
+here as PROSE for writing the divergence narrative (what does this
+disagreement say about each leader, about their relationship, about the
+whole team) — not literal UI cards, same corrected understanding as
+§9's language-only scope. **This is likely the real home for the
+Self/Other/Whole ontology** gm flagged earlier (§2a) as a separate
+design-sprint seed, now with a concrete landing spot.
+
+**CEO + design review:** premise holds — real content, real name match,
+no false-friend risk found here unlike §11. Real gap: MV6COMBO.ASC is
+one 1992 sample file, not a live data source — the actual multi-rater
+input mechanism (how does Pulse capture "multiple named executives
+rating the same org" as distinct from the existing group-report flow,
+which already does multi-respondent aggregation) needs its own design
+pass, not assumed identical to the existing group report just because
+the OUTPUT shape matches. Test requirement, same pattern as §10.3: if
+this reuses `divergence_flags`-style output, needs the same ground-truth
+verification discipline already established for that code path.
+
+**What both new sections do not resolve:** §11 needs an explicit
+operator answer on sales-readiness vs. investor-diligence framing before
+any design proceeds past this text. §12's exec-specific-rater intake
+mechanism needs its own pass. Neither is build-ready — same multi-PR,
+preview-deploy, QA-before-ship discipline as the other three threads,
+per gm's instruction, once each clears its own open question.
+
 ## GSTACK REVIEW REPORT
 
 **Mode: HOLD SCOPE.** This is improvement work on an existing, mature,
