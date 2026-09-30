@@ -186,3 +186,55 @@ and the standing shared-checkout discipline.
 **Scope not touched here:** §12 edge cases, §14 exclusions, and steps 6-11 of
 the build order are unchanged from the original spec — this lock only resolves
 the two named blockers and confirms sequencing around them.
+
+## 17. v2 pillar filters — operator's definition and this repo's scope (2026-09-30 10:47 UTC)
+
+Round 1 of v2 flagged "Pillars — click to isolate" as a real `/field`
+feature with no confirmed counterpart in this repo, and deliberately did
+not scope it in. Round 5's full gap analysis reversed that — pillars are
+back in scope (step 4 of the order of record). Asked the operator directly
+what `/field` means by a pillar rather than guess (build had independently
+quantified the available grouping dimensions and recommended
+`reports_to`-subtree, but that was a guess dressed as a recommendation,
+not a confirmed definition — correctly held rather than built).
+
+**Operator's answer, verbatim intent:** in `/field`, the bottom-right
+panel is titled "PILLARS, CLICK TO ISOLATE" and lists node **kinds** with
+counts as clickable chips — AGENTS (18), SERVICES, REPOS (28), CLIENTS
+(0), PROMPTS, OPS, MESSAGES, STATE. Clicking one isolates that kind
+(everything else fades). **A pillar is a node kind, not a team or tier** —
+this rules out build's `reports_to`-subtree/`tier` recommendation, which
+was the best guess available without the real definition, not a bad guess
+given what was known at the time.
+
+**2D scope, per the operator's own instruction — implement what's real,
+invent nothing:**
+- **AGENTS** — the real fleet, default on, count 13.
+- **EXTERNAL** — the rim nodes (telegram, operator, approval-loop,
+  message-router) from step (2)'s design.
+- **REPOS and PROMPTS** — implemented as isolate-highlights over agents,
+  reusing the SAME mechanism 2D's existing search already has for repo/
+  prompt hits (click a chip → agents using it stay bright, rest fade to
+  ~30%) — not a new interaction pattern. The REPOS chip may read 0 since
+  `/api/projects` is empty on this install — show it **disabled with that
+  reason**, not hidden, so the gap is honest rather than invisible.
+- Clicking the active pillar again clears isolation.
+
+**Deliberately NOT ported, and why — the operator asked this be listed
+explicitly:**
+- **SERVICES** — no counterpart concept exists in this repo's data model;
+  `/field`'s services are presumably its own external infra components,
+  not something `/api/agents` or the messages store represents.
+- **CLIENTS** — `/field` itself shows 0 for this on the current install;
+  no real grouping data to isolate against even if built.
+- **OPS** — no equivalent grouping in this repo's API surface.
+- **MESSAGES** — already a first-class filter dimension elsewhere in 2D
+  (the conversation panel's type filter, extended in step (2)/§6 above),
+  not a node-kind pillar; porting it here would duplicate an existing
+  control under a different name.
+- **STATE** — agent status (working/idle/down) is already shown via node
+  colour/glow throughout 2D, not gated behind a separate pillar toggle.
+
+Not blocking steps (1)-(3) on this, per the operator's explicit
+instruction — carry on, build this when the order of record reaches step
+(4).
