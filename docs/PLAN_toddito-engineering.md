@@ -715,6 +715,136 @@ Still unresolved: whether S3b/S4-text actually shipped (§9.2) — needs a
 direct repo check this pass didn't do, since it wasn't the assigned
 scope.
 
+## 10. Operator priority (2026-09-30 14:14 UTC, `msg_e90af3eb_77650903`):
+Pulse UX redesign — 4 JTBDs grounded in a real customer report (Vandana),
+folded together with §9's report-tone work
+
+Operator forwarded a JTBD (Jobs to be Done) analysis from a separate
+Claude cowork session, grounded in a real customer aggregate report
+("Vandana") and Todd's framework. North star quote, Todd's own words:
+*"Who needs to be doing what, with whom, by when."*
+
+**Grounding check, done before designing anything — checked the real
+group-report code (`src/app/group/[id]/page.tsx`, `brollistika/toddito`),
+not just trusted the analysis:**
+- JTBD 1 and 4's premise CONFIRMED exactly: `consensus_stage` renders
+  first as a single given value (no disagreement signal at that point);
+  `stage_distribution` (which WOULD show disagreement) is a separate,
+  later section; `critical_divergence` (the "so what") is the LAST scored
+  section before the re-synthesize trigger — genuinely buried at the
+  bottom, not a exaggeration.
+- JTBD 3's premise **NOT confirmed, flagging rather than assuming true:**
+  searched the entire repo for "agenda," "readout," "facilitator" —
+  zero hits anywhere. No content field or component literally matching
+  "the readout agenda" was found. Closest real candidate:
+  `group_observations` (a string array, rendered as a list) could
+  function as informal talking points, but isn't structured or labeled
+  as a facilitator sequence. Either the source Claude session was
+  looking at a different artifact (a PDF export, an admin-only view, a
+  mockup) or "the readout agenda" describes `group_observations`
+  loosely. **Worth a one-line confirmation from the operator before
+  building "pull the existing agenda into its own view" — there may be
+  nothing existing to pull, only something to build fresh.**
+
+### 10.1 Design proposal per JTBD, grounded in the confirmed code above
+
+**JTBD 1 — the founder who doesn't know what they don't know.** Lead the
+group report with the single highest-magnitude divergence (Vandana's
+case, per the operator's analysis: `No_influence`, 6 points) as its own
+callout, ABOVE `consensus_stage` — reordering existing sections, not
+inventing new content. The "so what" text already exists
+(`critical_divergence`); this is a layout change (move it first,
+visually distinct — the existing pulse-accent-border treatment already
+used for it is good, keep that styling) more than a content change.
+
+**JTBD 2 — the co-leader who needs permission to name reality.** Real new
+UX, not a reorder: a private, single-respondent reflection sentence shown
+BEFORE the group reveal — e.g. *"Your data suggests you're carrying more
+uncertainty than the person leading you knows."* No existing component
+found for this (checked the single-report page, `src/app/report/[id]/
+page.tsx` — no pre-group-reveal respondent-only view exists today).
+Needs: (a) a new scoring output — a short, individually-scoped reflection
+sentence, generated alongside the existing per-respondent report, not
+derived from the group aggregate; (b) a new UI step in the flow between
+"you finished your session" and "the group report is ready," gated so a
+respondent sees only their own sentence, never another's. **Directly
+overlaps §9's tone work** — this sentence needs the plain-language,
+non-clinical framing from day one; write it against §9.4's corrected
+rules, not a fresh guess.
+
+**JTBD 3 — the practitioner who needs to run the room.** Held pending the
+grounding gap above. IF `group_observations` is confirmed as the real
+source: restructure it from a flat list into a "Readout Mode" — one
+divergence per screen/card, one guiding question per card (question text
+not yet sourced — needs either Todd's own facilitation questions or a
+design pass, not invented here), a "mark as discussed" toggle (new,
+simple client-side state, no schema change needed for a single-session
+use). If `group_observations` is NOT the real source, this JTBD needs a
+fresh scope conversation with the operator before any design proceeds.
+
+**JTBD 4 — the founder who needs to know their real stage.** Confirmed
+buildable directly from `stage_distribution` (already computed, already
+fetched) — when the distribution shows real disagreement (not all
+respondents landing on `consensus_stage`), surface that explicitly
+BEFORE the stage/priority content, e.g. *"You and your co-leader placed
+this company at different stages."* Small: a conditional check against
+already-available data, not a new data source.
+
+### 10.2 Folding together with §9 (report-tone), per gm's instruction
+
+Real overlaps, not two independent redesigns landing on the same
+screens: JTBD 1's reordering and JTBD 4's new stage-disagreement copy
+both touch the SAME report page §9 is already changing the tone of —
+sequence as ONE pass over `src/app/report/[id]/page.tsx` and
+`src/app/group/[id]/page.tsx` together, not two separate diffs that both
+touch the same sections. JTBD 2's new reflection sentence should be
+written using §9.4's corrected tone rules from its first draft (same
+"write it right the first time, don't inherit the old TONE line"
+principle already applied to the consultant facet, §7a.3 point 4).
+
+### 10.3 CEO + design review — same self-directed process, same reason
+
+Same process note as §7a.5/7a.6: direct rigorous self-review against the
+skills' own Prime Directives, not the full interactive ceremony —
+unattended overnight execution.
+
+**CEO review — premise and failure modes:** premise holds for 3 of 4
+JTBDs (confirmed above); JTBD 3's premise is the one real gap, correctly
+held rather than built on an unconfirmed grounding. **Real failure mode
+not yet named:** JTBD 2's pre-reveal reflection sentence is generated
+per-respondent from their own individual data — if the scoring pipeline
+generating it fails or times out for one respondent, does the group
+report block entirely, or does it degrade gracefully (respondent sees
+their session as normal, just without the reflection sentence)? Not
+addressed in the JTBD analysis; should degrade gracefully — a missing
+nice-to-have sentence should never block a respondent completing their
+session. **Test requirement:** JTBD 2's gating logic (respondent sees
+only their own sentence) needs an explicit test — this is a real privacy
+boundary (one respondent's data reaching another's screen), not a
+cosmetic bug if it fails.
+
+**Design review:** JTBD 1's reorder and JTBD 4's new copy are low-risk,
+additive to an existing page — no new screens. JTBD 2 is genuinely new
+UI (a new step in the session-completion flow) — needs its own
+screens-level pass, same "greenfield UI" caveat as §7a.6. JTBD 3, if
+`group_observations` is confirmed as the source, is a real interaction
+design (card-by-card facilitator mode) also needing its own pass, not
+specified at the screens level here.
+
+### 10.4 What this section does not resolve
+
+JTBD 3's grounding (is `group_observations` really "the readout agenda"
+the operator meant, or something else) — needs a direct one-line
+confirmation before any design work starts on it. JTBD 3's actual
+per-divergence guiding questions — not sourced, needs Todd or a real
+content pass. JTBD 2's and JTBD 3's screens-level design — flagged as
+needing their own passes, not done in this text-only review. Sequencing
+with §9 and §7a.3 (three Toddito UI threads now touching overlapping
+report surfaces) — recommend one coordinated build pass across all
+three rather than three separate ones landing on the same files in
+sequence, but that's a scheduling call for whoever routes this to build,
+not decided here.
+
 ## GSTACK REVIEW REPORT
 
 **Mode: HOLD SCOPE.** This is improvement work on an existing, mature,
