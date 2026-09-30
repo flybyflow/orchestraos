@@ -505,20 +505,47 @@ export function TopologyDiagram({
       {/* T1: PMs row */}
       {pms.length > 0 && (
         <>
-          {/* Horizontal connector */}
-          <div className="relative flex items-start justify-center">
-            {/* Horizontal line spanning all PMs */}
-            {pms.length > 1 && (
-              <div
-                className="absolute top-0 h-px bg-neutral-700"
-                style={{
-                  left: `calc(50% - ${(pms.length - 1) * 80}px)`,
-                  width: `${(pms.length - 1) * 160}px`,
-                }}
-              />
-            )}
+          {/* The bus line over the lead row.
+              It used to be pure arithmetic — left: calc(50% - (n-1)*80px), width:
+              (n-1)*160px — which assumes every lead sits exactly 160px from the next.
+              Nothing enforces that, so the bar pointed at coordinates the leads were
+              not at, and the moment the row wrapped it was describing a layout that no
+              longer existed. Measured from the real lead boxes instead: first centre to
+              last centre, in the same overlay-local space the edges already use.
+              Falls back to the old arithmetic only before the first measurement. */}
+          <div className="relative flex items-start justify-center w-full">
+            {pms.length > 1 && (() => {
+              const first = positions.get(pms[0].id);
+              const last = positions.get(pms[pms.length - 1].id);
+              const container = containerRef.current;
+              if (first && last && container) {
+                return (
+                  <div
+                    className="absolute top-0 h-px bg-neutral-700"
+                    style={{ left: `${first.cx}px`, width: `${Math.max(0, last.cx - first.cx)}px` }}
+                  />
+                );
+              }
+              return (
+                <div
+                  className="absolute top-0 h-px bg-neutral-700"
+                  style={{
+                    left: `calc(50% - ${(pms.length - 1) * 80}px)`,
+                    width: `${(pms.length - 1) * 160}px`,
+                  }}
+                />
+              );
+            })()}
           </div>
-          <div className="flex items-start gap-8 flex-wrap justify-center">
+          {/* NO flex-wrap. Wrapping put `review` on a second row under `think` while its
+              stub still pointed up at a bus bar that was no longer above it, and left
+              `think` and `test` hanging off connectors that reached nothing — which is
+              what the operator meant by the hierarchy being off. The container is
+              already overflow-x-auto, so a fleet too wide to fit now scrolls, which
+              keeps every connector pointing at the thing it connects to. Scrolling is
+              honest about running out of room; wrapping silently lies about structure.
+              min-w-max stops the row being squashed instead of scrolling. */}
+          <div className="flex items-start gap-8 justify-center min-w-max">
             {pms.map((pm) => {
               const pmWorkers = workersByParent[pm.id] || [];
               return (
