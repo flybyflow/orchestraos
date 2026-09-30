@@ -53,7 +53,28 @@ and this defect. Nothing known is being withheld from the operator's merge decis
 
 ## 5. Open Loops — none from this task as of this amendment
 
-Whatever lands on `fix-arturo-mapfile-bash32` after `a33a808` (the shared checkout is still
+## 4b. Second amendment (2026-09-30T01:16:00Z) — `54da7bd` folded in too
+
+gm sent a hold ("two one-line fixes landing before your PR closes", `msg_1527e8ad_30571025`)
+that crossed with §4's amendment — by the time it arrived, only the first of the two fixes
+(`79cae92`) was in. The second, `54da7bd` (the down agent's message box is now a disabled
+`<input>` with a note beside it, `aria-describedby`'d, rather than swapped out for a plain
+sentence — review's browser-pass residual), was still sitting on `fix-arturo-mapfile-bash32`
+uncherry-picked.
+
+Cherry-picked it (dropping the accompanying `docs/HANDOFF_build-next.md` hunk — that file
+doesn't exist on this branch, and never should; only the code file, `AgentDetailPanel.tsx`,
+landed). Re-verified fresh in a third isolated worktree: api 236/236, `tsc -b --force` clean,
+dashboard tests pass, `build:check` clean. Pushed (`a33a808..631a1b9`), commented on the PR,
+replied to gm confirming no hold was actually needed on my end, ack'd `msg_1527e8ad_30571025`.
+
+**#137 as of `631a1b9` covers: steps 1-10, review's G1 fix, and both down-agent defects from
+review's browser pass** (invisible in the graph, and the message-box control swap). No known
+gaps against review's stated bar remain.
+
+## 5. Open Loops — none from this task as of this second amendment
+
+Whatever lands on `fix-arturo-mapfile-bash32` after `631a1b9` (the shared checkout is still
 live) is new work, not a continuation of anything named in this handoff — PR #137 is a
 point-in-time snapshot, not a tracking branch. Check `git log --oneline main..fix-arturo-mapfile-bash32`
 for anything newer before assuming #137 is still current.
@@ -61,13 +82,13 @@ for anything newer before assuming #137 is still current.
 ## 6. Declared First Effect (for whoever reads this next)
 
 If the operator has already merged #137: `git log --oneline -1 origin/main` should show a
-squash/merge commit whose message references #137, and `git merge-base --is-ancestor a33a808
+squash/merge commit whose message references #137, and `git merge-base --is-ancestor 631a1b9
 origin/main` should be true post-merge.
 
-## 6. Grounding Canary Questions (Questions Only — No Answers!)
+## 7. Grounding Canary Questions (Questions Only — No Answers!)
 
 1. **Q1:** Which two commits did this task add to gm's named 12, and what specific function call in `1cfdf9e`'s own diff proves they were a hard prerequisite rather than a nice-to-have (jsonl regarding the TopologyDiagram.tsx conflict investigation, §3.1)?
 2. **Q2:** Why did `git push origin 2d-agents-view` fail, and which remote succeeded instead (jsonl regarding the push step)?
 3. **Q3:** What two independent facts confirm `api/src/server.ts` was never at risk of a duplicate-copy conflict in this PR (jsonl regarding §1 item 3 and §2)?
 4. **Q4:** What single command distinguished "my own npm install churned the lockfile" from "one of the 14 commits touches package-lock.json" (jsonl regarding decision 5)?
-5. **Q5:** What is `79cae92`, why is it not in PR #137, and where was it flagged (jsonl regarding §4's first open loop)?
+5. **Q5:** Why did the cherry-pick of `54da7bd` conflict, and what was excluded from the resulting commit rather than force-resolved (jsonl regarding §4b)?
