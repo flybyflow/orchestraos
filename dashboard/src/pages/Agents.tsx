@@ -20,6 +20,7 @@ import { TierBadge } from '../components/TierBadge';
 import { AgentCard } from '../components/AgentCard';
 import { TopologyDiagram } from '../components/TopologyDiagram';
 import { isFleetMember, pairKey } from '../lib/topologyLines';
+import { externalEndpoints } from '../lib/rimNodes';
 import { getRecentAgents, loadAndMergeRecentAgents, type RecentAgent } from '../lib/user-actions';
 import { GenChip } from '../components/GenChip';
 import NewAgentModal from '../components/NewAgentModal';
@@ -317,6 +318,38 @@ export default function Agents() {
     [growing, replay.state.events, replay.state.idx],
   );
 
+  // Pillar filters (operator ask): AGENTS/EXTERNAL/REPOS/PROMPTS as highlight-isolate chips.
+  // Not a new selection concept — the SAME setHighlight() mechanism §8's search already uses
+  // ("picking a repo highlights the agents that use it"), just with a pre-computed set
+  // instead of a query match, so a pillar pick and a search pick can never disagree about
+  // what "highlighted" means. externalEndpoints() is the same pure function TopologyDiagram
+  // calls internally for the rim — calling it again here with the same (pairs, allAgents,
+  // agents) inputs is a second call to ONE deterministic function, not a second data source.
+  //
+  // DECLARED HERE, ABOVE THE isLoading EARLY RETURN — same rule as `born` above and the
+  // DECLARED HERE comment near the top of this component: a hook placed below the return
+  // runs on the loaded render and not the loading one, which is React error #310 (hook count
+  // changes between renders). This exact file shipped that bug once already; these three
+  // useMemo calls shipped it again in the same spot before this fix. `pairs` has to move up
+  // here with them since the hooks close over it.
+  const pairs = pairData?.pairs ?? [];
+  const externalIds = useMemo(
+    () => externalEndpoints(
+      pairs,
+      allAgents.map((a: { id: string }) => a.id),
+      agents.map((a: { id: string }) => a.id),
+    ).endpoints.map((e) => e.id),
+    [pairs, allAgents, agents],
+  );
+  const repoAgentIds = useMemo(
+    () => [...new Set((projects?.projects ?? []).flatMap((p) => (p.agents ?? []).map((a) => a.id)))],
+    [projects],
+  );
+  const promptAgentIds = useMemo(
+    () => agents.filter((a: { system_prompt?: string }) => !!a.system_prompt).map((a: { id: string }) => a.id),
+    [agents],
+  );
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -329,7 +362,6 @@ export default function Agents() {
   // Summary-strip numbers (spec §3). All of them derive from the two canonical sources —
   // /api/agents for liveness, /api/messages/pair-counts for traffic — so the strip cannot
   // disagree with the connection lines or with the status-filter counts below it.
-  const pairs = pairData?.pairs ?? [];
   const messagesInWindow = pairs.reduce((n, p) => n + p.count, 0);
   const activeConnections = pairs.filter((p) => p.count > 0).length;
   const busiest = pairs.length ? pairs[0] : null;   // endpoint already orders by count desc
@@ -358,6 +390,19 @@ export default function Agents() {
       .map((p) => { const other = p.a === id ? p.b : p.a; return { id: other, onGraph: graphIds.has(other) }; })
       .sort((x, y) => Number(y.onGraph) - Number(x.onGraph));
   const panelAgent = panelAgentId ? agents.find((a: { id: string }) => a.id === panelAgentId) : null;
+
+  const hasProjects = (projects?.projects ?? []).length > 0;
+  const pillars: { label: string; agentIds: string[]; disabledReason: string | null }[] = [
+    { label: `Agents (${agents.length})`, agentIds: agents.map((a: { id: string }) => a.id), disabledReason: null },
+    { label: `External (${externalIds.length})`, agentIds: externalIds,
+      disabledReason: externalIds.length === 0 ? 'no external traffic in this window' : null },
+    // REPOS chip disabled with a reason when /api/projects is empty (operator's explicit
+    // instruction) rather than just being unclickable with no explanation.
+    { label: `Repos (${repoAgentIds.length})`, agentIds: repoAgentIds,
+      disabledReason: !hasProjects ? 'no repos registered' : null },
+    { label: `Prompts (${promptAgentIds.length})`, agentIds: promptAgentIds,
+      disabledReason: promptAgentIds.length === 0 ? 'no prompts recorded' : null },
+  ];
 
   // Health summary
   const healthy = agents.filter((a: any) => a.alive).length;
@@ -701,6 +746,39 @@ export default function Agents() {
               >
                 {layers.showAllCross ? 'all' : 'top 12'}
               </button>
+            </div>
+            {/* Pillar filters (operator ask): click isolates the set, fading everything else
+                to 30% via the same `highlight` -> brightIds path search already uses. Click
+                the SAME pillar again to clear, rather than requiring the separate "clear"
+                link below — a toggle is the expected interaction for a pressed filter chip. */}
+            <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
+              <span className="text-neutral-600">Filter</span>
+              {pillars.map((p) => {
+                const active = highlight?.label === p.label;
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    aria-pressed={active}
+                    disabled={!!p.disabledReason}
+                    title={p.disabledReason ?? undefined}
+                    onClick={() => {
+                      if (active) { setHighlight(null); return; }
+                      closePanel();
+                      setHighlight({ label: p.label, agentIds: p.agentIds });
+                    }}
+                    className={clsx(
+                      'px-2 py-0.5 rounded border focus:outline-none focus:ring-1 focus:ring-sky-500',
+                      'disabled:opacity-40 disabled:cursor-not-allowed',
+                      active
+                        ? 'border-sky-600 bg-sky-950/50 text-sky-200'
+                        : 'border-neutral-800 text-neutral-500',
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
             <TopologyDiagram
               // `sorted`, NOT `agents`: Cards and Table got the filtered array and Topology
