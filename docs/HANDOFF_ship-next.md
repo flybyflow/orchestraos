@@ -34,14 +34,35 @@ Not merged — operator merges #137 themselves, per the standing hard-stop.
 5. **Discarded a `dashboard/package-lock.json` diff produced by my own `npm install`**, not by any of the 14 commits (confirmed via `git diff origin/main HEAD --stat` showing zero diff for that file across commits, vs. `git status` showing it modified in the worktree). Local npm-version lockfile churn, not real branch content — `git checkout --` before committing anything.
 6. **Pushed to `fork` (flybyflow/orchestraos), not `origin` (Tulum-DAO/orchestraos).** `git push origin` returned 403 — this account has no direct write access to Tulum-DAO/orchestraos, matching how #133 itself was structured (fork-headed PR). Opened the PR cross-repo: `gh pr create --repo Tulum-DAO/orchestraos --head flybyflow:2d-agents-view`.
 
-## 4. Open Loops — flagged, not actioned (outside this task's scope)
+## 4. Amendment (2026-09-30T01:12:00Z) — `79cae92` folded in, no longer an open loop
 
-- [ ] **`79cae92`** (as of this writing; the shared checkout kept advancing during this task — HEAD is `8dea822` now) — "the graph silently dropped agents, including the only DOWN one," found live by review, fixed on `fix-arturo-mapfile-bash32` **after** Gate 14's boundary (`e3efa77`/`39f5dd9`). Real bug, same feature, **not in PR #137** — outside my task's named range and unreviewed/ungated as of this report. Flagged to ea (§ digest) so it doesn't repeat #133's fate (real work stranded on a branch nobody ships).
-- [ ] Whatever else lands on `fix-arturo-mapfile-bash32` after this — that branch remains the live/shared working tree; PR #137 is a point-in-time snapshot, not a tracking branch.
+review escalated the exact defect this handoff had flagged as an open loop, directly to `ship`
+(`msg_068ec12c_30013118`, sent independently, crossing with the digest above): the only down
+agent on the fleet was invisible in Topology — breaks spec §15's own done-criterion ("find any
+down agent within two seconds") and §2 ("a down agent stays on screen, in red"). Fix (`79cae92`)
+had already landed on the shared checkout by the time the message arrived.
 
-## 5. Declared First Effect (for whoever reads this next)
+Cherry-picked `79cae92` onto `2d-agents-view` in a second isolated worktree, re-verified fresh
+(api 236/236, `dashboard` `tsc -b --force` clean, all dashboard tests pass including
+`topologyLines`' partition-invariant suite, `npm run build:check` clean), pushed to `fork`, PR
+#137 updated (`d51650f..a33a808`), commented on the PR, replied to review, ack'd
+`msg_068ec12c_30013118`, and told ea (`msg_0161ffca_30452277`).
 
-If the operator has already merged #137: `git log --oneline -1 origin/main` should show a squash/merge commit whose message references #137, and `git merge-base --is-ancestor <that-sha> origin/main` for `79cae92` should still be false (it isn't in #137). If gm wants `79cae92` shipped too: it needs its own review/gate first — it was never part of this task's mandate, and this handoff makes no claim about its correctness beyond quoting its own commit message.
+**#137 is now feature-complete against review's own stated bar** — steps 1-10, review's G1 fix,
+and this defect. Nothing known is being withheld from the operator's merge decision.
+
+## 5. Open Loops — none from this task as of this amendment
+
+Whatever lands on `fix-arturo-mapfile-bash32` after `a33a808` (the shared checkout is still
+live) is new work, not a continuation of anything named in this handoff — PR #137 is a
+point-in-time snapshot, not a tracking branch. Check `git log --oneline main..fix-arturo-mapfile-bash32`
+for anything newer before assuming #137 is still current.
+
+## 6. Declared First Effect (for whoever reads this next)
+
+If the operator has already merged #137: `git log --oneline -1 origin/main` should show a
+squash/merge commit whose message references #137, and `git merge-base --is-ancestor a33a808
+origin/main` should be true post-merge.
 
 ## 6. Grounding Canary Questions (Questions Only — No Answers!)
 
