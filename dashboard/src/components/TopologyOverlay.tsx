@@ -248,6 +248,16 @@ export function TopologyOverlay({
   if (width <= 0 || height <= 0) return null;
   const obstacles = [...positions.values()];
 
+  // Which pairs are actually drawn right now — GROW-gated edges are already filtered out of
+  // `edges` before it reaches this component (TopologyDiagram's drawnOverlayEdges), and the
+  // top-12 selection filters it too. A pulse for a pair that is not currently drawn as a line
+  // has nowhere real to ride: during GROW that would spoil an edge before its own reveal;
+  // outside GROW it would be a travelling dot with no line under it. Build asked for exactly
+  // this ("the pulse layer just needs to not draw a pulse on an edge that is hidden") —
+  // derived here from `edges` itself rather than a second born/unborn prop, since `edges`
+  // already carries the one true answer for "is this pair drawn".
+  const drawnPairs = new Set(edges.map((e) => pairKey(e.a, e.b)));
+
   // Trail weight per pair, for the seek-drag highlight — a Map so a repeated pair (should not
   // happen, but a malformed trail must not crash) keeps its LAST/strongest weight rather than
   // silently picking whichever entry happened to iterate last by accident.
@@ -348,6 +358,7 @@ export function TopologyOverlay({
           visually occluded by the line it rides. */}
       <g className="pointer-events-none">
         {pulses.map((p) => {
+          if (!drawnPairs.has(pairKey(p.a, p.b))) return null;
           const from = positions.get(p.a);
           const to = positions.get(p.b);
           // The pair may have scrolled out of `positions` (node unmounted/filtered) between
