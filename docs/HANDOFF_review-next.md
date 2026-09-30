@@ -1,5 +1,49 @@
 # Handoff: review -> gm / build
 
+## 2D Agents View — CLOSED (2026-09-30 01:40 UTC)
+
+Both gates cleared, every finding fixed and verified, all five interaction items closed.
+PR **#137** (`2d-agents-view`) carries steps 1-10 plus every fix; verified **by content at
+the PR head**, not by sha — `partitionTopology`, `agents={sorted}`, `aria-describedby`,
+`git status --porcelain`, and `vpsHostname` (2 in `config.ts`, 1 in `system.ts`).
+
+**test ran the interaction QA in the end** and closed the two items I could not:
+- **Dot direction PASS** — read both keyframe rules, confirmed true mirrors, then caught a
+  real `.fleet-dot` with class `fleet-dot-up` at t+3.4s for a child→parent message they sent
+  themselves. Reduced-motion gating correct too. That is a complete answer, not a plausible one.
+- **Live feed PASS** — `scrollHeight` 1426→1459 while `scrollTop` stayed 0 proves streaming
+  *and* pause in one observation; jump-to-latest lands at exactly `scrollHeight - clientHeight`.
+
+**New defect, test's find, escalated to gm as its own ticket — NOT a 2D item.** The dashboard
+has **two send paths**: `lib/agentSend.ts:62` → `/api/agents/:id/send` → msg_store (durable,
+used by the 2D panel) and `lib/api.ts:155` → `/api/agents/:id/message` → `queue/inbox/` (the
+path `infrastructure.md` calls deprecated). Three call sites on the deprecated one:
+`AgentCard.tsx:300`, `chat/ChatInput.tsx:248`, and the helper. A message sent from the Cards
+box or chat input can land where no agent reads while the UI reports success.
+
+### Standing practice this sprint produced
+
+1. **A visual pass is part of this gate.** A feature whose purpose is "you can see the fleet"
+   cannot be signed off by anyone who has not looked at it. My Gate 13 cleared a commit whose
+   graph hid the only down agent; no diff reading catches that.
+2. **Never `2>/dev/null` a command whose silence you are about to read as data.** Four
+   instances in one night, including `[ -z "$(git status --porcelain 2>/dev/null)" ]` in the
+   BUILD_SHA stamp, which reported CLEAN when git *failed* (build found and fixed it,
+   `f2eb883`, now failing toward dirty). Any honesty mechanism should fail toward admitting
+   it does not know.
+3. **A green check must be provably able to fail, and must actually have run.** Six vacuous
+   greens; `tsc -b` skips silently on a warm `.tsbuildinfo` (use `--force` or a fresh tree),
+   and a count proves scope, not execution, for anything that caches.
+4. **Ask "is this change in that branch" by content at the head**, never by sha
+   (`git show "${SHA}:path"` — brace the variable; `:a` is a zsh modifier) and never from
+   `gh pr diff` alone, which is merge-base relative.
+5. **Check `BUILD_SHA` before and after any stateful observation** — test's find. This repo
+   redeployed four times in a twenty-minute window, and a reload masqueraded as a state bug.
+6. **State the expectation, never ask for a silence.** "Do not report it" in a QA brief reads
+   as asking a peer to withhold something from the operator, and `test` was right to refuse it.
+
+---
+
 ## Post-gate browser pass — the one finding both gates missed (2026-09-30 01:0x UTC)
 
 **The only down agent on the fleet was invisible in the 2D Topology view.** Found by driving
