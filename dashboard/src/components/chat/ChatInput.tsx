@@ -301,6 +301,7 @@ export default function ChatInput({ agentId, disabled, placeholder, attachSuppor
           <span className="text-xs text-neutral-400 truncate flex-1">{pendingImage.name}</span>
           <button
             onClick={clearImage}
+            aria-label="Remove attached image"
             className="text-neutral-500 hover:text-red-400 transition-colors"
           >
             <X size={14} />
@@ -315,7 +316,7 @@ export default function ChatInput({ agentId, disabled, placeholder, attachSuppor
             <span key={p.id} className="inline-flex items-center gap-1.5 px-2 py-1 bg-neutral-800 rounded-lg border border-neutral-700 text-xs text-neutral-300">
               <ClipboardList size={13} className="text-neutral-400 shrink-0" />
               Pasted text · {p.lines} lines
-              <button onClick={() => removePaste(p.id)} className="text-neutral-500 hover:text-red-400 transition-colors">
+              <button onClick={() => removePaste(p.id)} aria-label="Remove pasted text" className="text-neutral-500 hover:text-red-400 transition-colors">
                 <X size={12} />
               </button>
             </span>
@@ -326,6 +327,7 @@ export default function ChatInput({ agentId, disabled, placeholder, attachSuppor
         <div className="flex-1 flex items-end gap-1">
           <button
             onClick={() => fileInputRef.current?.click()}
+            aria-label={attachSupported ? 'Attach a file' : 'Attachments not supported for this agent'}
             disabled={!attachSupported}
             className={clsx(
               'p-1.5 mb-1.5 rounded transition-colors',
@@ -367,6 +369,7 @@ export default function ChatInput({ agentId, disabled, placeholder, attachSuppor
         <div className="flex flex-col gap-1 self-end">
           <button
             onClick={() => handleSend()}
+            aria-label="Send message"
             disabled={!canSend}
             className={clsx(
               'flex items-center gap-1 px-4 py-2 min-h-[44px] rounded-lg text-sm font-medium transition-colors',
@@ -380,6 +383,7 @@ export default function ChatInput({ agentId, disabled, placeholder, attachSuppor
           </button>
           <button
             onClick={() => setInjectMode(!injectMode)}
+            aria-label="Toggle inject mode"
             className={clsx(
               'text-[10px] px-1.5 py-0.5 rounded transition-colors text-center',
               injectMode ? 'text-amber-400 bg-amber-500/10' : 'text-neutral-600 hover:text-neutral-400'
@@ -409,6 +413,7 @@ export default function ChatInput({ agentId, disabled, placeholder, attachSuppor
             {busy.activity !== 'Active turn' ? (
               <button
                 onClick={() => handleSend(true)}
+            aria-label="Send anyway"
                 disabled={sending}
                 className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 disabled:opacity-50"
               >
