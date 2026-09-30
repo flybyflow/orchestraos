@@ -603,13 +603,68 @@ total-spend estimate of ~$300-400 — this resolves this section's earlier
 monthly-vs-total-spend ambiguity: "hundreds of dollars" reads as a
 **total**, not a monthly run-rate.
 
-**Net, stated plainly because it reverses this section's own economics
-framing: at real measured volume, self-hosting would cost MORE per minute
-than ElevenLabs today, not less.** The cost-savings argument does not
-hold at current traffic. OD6 compliance remains a real, separate reason to
-pursue self-hosting — but it should not be sold on economics alone right
-now. This does not change the Dograh lead, the deploy-feasibility read, or
-the branch-archaeology findings above — only the economics conclusion.
+**Superseded by the marginal-cost correction below — that "net" was
+correct against a dedicated-GPU-box model, and the operator's own
+follow-up correctly challenged that model.**
+
+**Marginal cost on the actual shared VM, not a dedicated box (gm's
+challenge, bshr's follow-up, 2026-09-30 09:22 UTC).** The breakeven
+analysis above assumes a dedicated new RTX-4090-class box (~$360/month).
+That's the wrong model for what's actually planned: the team already
+runs (or will run) shared Coolify-hosted VMs for other infrastructure
+regardless of this project, so the real question is the *marginal* cost of
+adding voice self-hosting to infrastructure already justified for other
+reasons — not the cost of standing up a new dedicated box. `substrate`'s
+own `DEPLOY.md` states a documented **minimum of 4 vCPU / 8GB RAM**
+already, for the stack already running there today (Next.js, Postgres, a
+Synapse Matrix homeserver, mautrix-whatsapp bridge, LiveKit, the Pipecat
+orchestrator, a pg-boss worker, plus an unrelated Flask app also named
+`kokoro-svc` — astrology code, not the TTS model, flagging again so the
+two are never conflated). Real current Hostinger pricing: KVM2 (2vCPU/
+8GB) $8.99/mo, KVM4 (4vCPU/16GB) $12.99/mo, KVM8 (8vCPU/32GB) $25.99/mo —
+tier-up deltas are **+$4/month** (2→4) and **+$13/month** (4→8). Since
+substrate's stated minimum sits between KVM2 and KVM4, whatever's actually
+running is very likely KVM4 or higher already, meaning RAM headroom for
+the ~3-6GB voice-model footprint is probably fine — **CPU headroom is the
+real open question**, given how many CPU-bound services already share
+those cores. Honest range: **$0/month if headroom exists, $4-13/month if
+it doesn't** — not resolvable from research alone; needs the operator to
+check real utilization on the live box.
+
+**But this cost improvement is gated on a real, evidence-backed latency
+risk, not a free win.** Checked directly, not conceded: the natural-
+conversation latency budget is ~700-800ms total; real CPU numbers for
+STT+TTS alone (before LLM time) range 500ms-3.5s depending on CPU class,
+with a documented first-hand report on a shared/hyperthreaded 8-core box
+measuring 3.3 seconds to transcribe a 3.2-second clip — opened as a bug
+specifically because it blew the latency budget. Concurrency makes this
+worse, not neutral: CPU inference reportedly serializes rather than
+parallelizing under load. No first-hand report was found of anyone
+running this exact combination (generic x86 cloud vCPU, standard
+faster-whisper + Kokoro-TTS, no GPU anywhere) and calling the live
+conversational experience good — every positive result leaned on Apple
+Silicon's unified memory/ANE or offloaded inference to GPU somewhere in
+the pipeline (including Modal's own team, who needed GPU to hit sub-1s and
+used CPU only for Pipecat's orchestration layer, not inference).
+
+**Net, framed plainly, not softened in either direction: the cost
+argument is much stronger than the dedicated-GPU model implied — plausibly
+$0-13/month, not $360/month — but it's gated on a real latency risk nobody
+has measured on the actual target hardware.** These two questions turned
+out to share the same unknown (how loaded is the box's CPU right now):
+if there's real headroom, cost is near-zero and latency is more likely to
+land in the acceptable range; if the CPU is already tight, that's the same
+condition that produces the bad-latency outcome found above. **Recommended
+resolving step: a bounded spike — run faster-whisper-small (int8, not
+medium) + Kokoro-TTS on the real target box under simulated 1-3 concurrent
+load, and measure real end-to-end latency and CPU headroom directly** —
+the same shape as the deploy-feasibility spike already recommended above,
+and plausibly the same combined effort on the same box rather than two
+separate asks. Not run without an explicit go-ahead — this is real
+infra/build work, not research. This does not change the Dograh lead, the
+deploy-feasibility read, or the branch-archaeology findings above — only
+the economics conclusion, and only by making it conditional rather than
+settled in either direction.
 
 ## 4. What this document does not decide
 
@@ -637,14 +692,20 @@ the branch-archaeology findings above — only the economics conclusion.
   a SWOT, not a decision. Genuinely the operator's call; this seat's own
   read is that a hybrid (§5's closing paragraph) is the strongest option on
   the facts, but that is a recommendation, not what got decided here.
-- **Whether to pursue self-hosting AT ALL, economically (§6)** — **now
-  measured, not just modeled.** Real conversation history (gm, ElevenLabs
-  MCP connector) puts the highest-volume agent at ~272-791 min/month
-  (7.6%-22% of the ~3,600 min/month breakeven) — at current real traffic,
-  self-hosting costs MORE per minute than ElevenLabs, not less. OD6
-  compliance remains a real reason to pursue this; economics alone does not
-  justify it today. This could change if traffic grows — not a permanent
-  verdict, but not an open unknown anymore either.
+- **Whether to pursue self-hosting AT ALL, economically (§6)** — **measured
+  against a dedicated-box model, then corrected against the actual
+  shared-VM plan, and now genuinely conditional rather than settled either
+  way.** Real conversation history (gm, ElevenLabs MCP connector) puts the
+  highest-volume agent at ~272-791 min/month, well under a dedicated
+  ~$360/mo GPU box's ~3,600 min/month breakeven — but the real infra plan
+  is a shared VM, where the marginal cost is plausibly $0-13/month, not
+  $360. That cheaper number is itself gated on a real, evidence-backed
+  conversational-latency risk on CPU-only inference that hasn't been
+  measured on the actual target hardware. Net: cost argument is much
+  stronger than the dedicated-GPU model implied; whether it's actually
+  favorable depends on a latency/capacity spike that hasn't run yet. OD6
+  compliance remains a real reason to pursue this regardless of how the
+  economics resolve.
 - **Whether Dograh (§6) is the lead the operator meant** — not independently
   confirmable from repo research; needs a direct one-line check with the
   operator before anyone integrates against it.
