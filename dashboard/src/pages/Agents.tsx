@@ -23,117 +23,15 @@ import { isFleetMember, pairKey } from '../lib/topologyLines';
 import { getRecentAgents, loadAndMergeRecentAgents, type RecentAgent } from '../lib/user-actions';
 import { GenChip } from '../components/GenChip';
 import NewAgentModal from '../components/NewAgentModal';
-import {
-  initReplay, startPlay, advance, fraction,
-  pause as pauseState, seek as seekState, setLive as setLiveState, setGrowth as setGrowthState,
-  type ReplayEvent, type ReplayState,
-} from '../lib/replayEngine';
+import { fraction } from '../lib/replayEngine';
+import { useReplay } from '../lib/useReplay';
 import { growBorn } from '../lib/overlayGeometry';
 
-/**
- * PLAY / GROW / LIVE replay (operator's port of /field, 2026-09-30).
- *
- * Everything decidable without a browser is in lib/replayEngine.ts (pure: no clock, no rAF,
- * no DOM — advance() takes dt as an argument) and lib/overlayGeometry.ts's growBorn(). What
- * is left here is only what genuinely needs the runtime: the fetch, the rAF loop and the
- * clock that feeds dt into the engine.
- *
- * Lives in this file rather than lib/useReplay.ts on purpose: three agents are editing this
- * worktree tonight and a file neither of the other two can accidentally create is worth more
- * than the tidier import. Extract it once the page is verified.
- */
-const NO_EVENTS: ReplayEvent[] = [];
-const NO_TRAIL: Array<{ event: ReplayEvent; weight: number }> = [];
+// GROW bookkeeping lives in overlayGeometry.growBorn(); the replay hook itself is
+// lib/useReplay.ts. NO_BORN is the "not growing" sentinel: one shared object so the
+// not-growing branch of the fold below bails on identity instead of committing a new pair
+// of empty Sets on every frame.
 const NO_BORN = { nodes: new Set<string>() as ReadonlySet<string>, edges: new Set<string>() as ReadonlySet<string> };
-
-function useReplay(initialHours: number) {
-  const [hours, setHours] = useState(initialHours);
-  const [state, setState] = useState<ReplayState>(() => initReplay([]));
-  const [fired, setFired] = useState<ReplayEvent[]>(NO_EVENTS);
-  const [trail, setTrail] = useState(NO_TRAIL);
-  const [error, setError] = useState<string | null>(null);
-  const raf = useRef<number | null>(null);
-  // The rAF loop must read the CURRENT state without being torn down and rebuilt on every
-  // frame's setState — a loop that closed over `state` would animate one frame and stop.
-  const live = useRef(state);
-
-  const commit = (s: ReplayState) => { live.current = s; setState(s); };
-
-  const stop = () => {
-    if (raf.current != null) { cancelAnimationFrame(raf.current); raf.current = null; }
-  };
-
-  const run = () => {
-    stop();
-    let last = performance.now();
-    const step = (now: number) => {
-      raf.current = null;
-      const dt = now - last;
-      last = now;
-      if (!live.current.playing) return;
-      const { state: next, fired: f, ended } = advance(live.current, dt);
-      commit(ended ? setLiveState(next) : next);
-      // A stable empty array on quiet frames: `fired` is an effect dependency downstream, and
-      // a fresh [] every frame would re-run the GROW fold ~60 times a second to do nothing.
-      setFired(f.length ? f : NO_EVENTS);
-      if (ended) { setTrail(NO_TRAIL); return; }
-      raf.current = requestAnimationFrame(step);
-    };
-    raf.current = requestAnimationFrame(step);
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    fetch(`/api/messages/history?hours=${hours}`)
-      .then((r) => { if (!r.ok) throw new Error(`history API returned ${r.status}`); return r.json(); })
-      .then((d: { events?: Array<Record<string, unknown>> }) => {
-        if (cancelled) return;
-        const events = (d.events ?? [])
-          .map((e) => ({ ...e, t: Date.parse(String(e.t)) }) as ReplayEvent)
-          .filter((e) => Number.isFinite(e.t))
-          // Sort on the PARSED number, not the raw string. Spawn timestamps come back as
-          // ...068Z while message timestamps are ...068+00:00, and 'Z' (0x5A) sorts above
-          // '+' (0x2B) — a string sort silently misorders anything sharing a millisecond.
-          .sort((a, b) => a.t - b.t);
-        stop();
-        commit(initReplay(events));
-        setFired(NO_EVENTS);
-        setTrail(NO_TRAIL);
-      })
-      .catch((e: Error) => { if (!cancelled) setError(e.message || 'history unavailable'); });
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- stop/commit are stable by construction
-  }, [hours]);
-
-  useEffect(() => stop, []);
-
-  return {
-    state,
-    fired,
-    trail,
-    hours,
-    error,
-    play: () => { commit(startPlay(live.current, fraction(live.current))); setTrail(NO_TRAIL); run(); },
-    pause: () => { stop(); commit(pauseState(live.current)); },
-    seek: (f: number) => {
-      stop();
-      const { state: s, trail: tr } = seekState(live.current, f);
-      commit(s); setTrail(tr); setFired(NO_EVENTS);
-    },
-    goLive: () => { stop(); commit(setLiveState(live.current)); setTrail(NO_TRAIL); setFired(NO_EVENTS); },
-    // /field's enterGrowth: hide everything, slider to 0, play. The window reload it also
-    // does is unnecessary here — the selected window is already loaded.
-    setGrow: (g: boolean) => {
-      stop();
-      const base = setGrowthState(live.current, g);
-      commit(g ? startPlay(base, 0) : pauseState(base));
-      setTrail(NO_TRAIL); setFired(NO_EVENTS);
-      if (g) run();
-    },
-    setWindow: setHours,
-  };
-}
 
 const TIERS = ['For You', 'Recent', 'All', 'T0', 'T1', 'T2', 'T3'] as const;
 // Spec §3 names these All / Active / Down. 'Dead' was the pre-existing label; review's
@@ -841,10 +739,19 @@ export default function Agents() {
                     : new Date(replay.state.cursor).toLocaleString(undefined, {
                       month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
                     }),
-                  windowHours: replay.hours,
+                  windowHours: replay.windowHours,
                   onPlayPause: () => (replay.state.playing ? replay.pause() : replay.play()),
-                  onGrow: () => replay.setGrow(!growing),
-                  onLive: replay.goLive,
+                  // /field's GROW is one button doing four things; the hook keeps them
+                  // composable, so the composition lives here. Order matters: growth on,
+                  // cursor to the very start, then play. Each call writes the hook's state
+                  // ref synchronously, so they compose without waiting for a render.
+                  onGrow: () => {
+                    if (growing) { replay.setGrowth(false); replay.setLive(); return; }
+                    replay.setGrowth(true);
+                    replay.seek(0);
+                    replay.play();
+                  },
+                  onLive: replay.setLive,
                   onWindowChange: replay.setWindow,
                   onSeek: replay.seek,
                 }}

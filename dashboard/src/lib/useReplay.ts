@@ -30,8 +30,18 @@ function toReplayEvents(raw: HistoryApiEvent[]): ReplayEvent[] {
   }));
 }
 
+// Stable empty arrays. `fired` and `trail` are effect DEPENDENCIES downstream (the GROW fold
+// in Agents.tsx folds `fired` into the born sets), and a fresh [] on every quiet frame makes
+// that effect re-run ~60 times a second to do nothing. Most frames of a 45s replay are quiet.
+const NO_EVENTS: ReplayEvent[] = [];
+const NO_TRAIL: Array<{ event: ReplayEvent; weight: number }> = [];
+
 export interface UseReplayResult {
   state: ReplayState;
+  /** The window currently loaded. The replay window-select needs to render its own current
+   *  value, and the alternative — a second copy in the caller — is two sources of truth for
+   *  one fact, which is how a select ends up showing 6h while the data is 24h. */
+  windowHours: number;
   /** Events that fired on the LAST advance() only — not accumulated. Feed each into a pulse. */
   fired: ReplayEvent[];
   trail: Array<{ event: ReplayEvent; weight: number }>;
@@ -60,8 +70,8 @@ export interface UseReplayResult {
 export function useReplay(initialWindowHours = 24): UseReplayResult {
   const [windowHours, setWindowHoursState] = useState(initialWindowHours);
   const [state, setState] = useState<ReplayState>(() => initReplay([]));
-  const [fired, setFired] = useState<ReplayEvent[]>([]);
-  const [trail, setTrail] = useState<Array<{ event: ReplayEvent; weight: number }>>([]);
+  const [fired, setFired] = useState<ReplayEvent[]>(NO_EVENTS);
+  const [trail, setTrail] = useState(NO_TRAIL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -93,8 +103,8 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
       stateRef.current = empty;
       setState(empty);
     } finally {
-      setFired([]);
-      setTrail([]);
+      setFired(NO_EVENTS);
+      setTrail(NO_TRAIL);
       setLoading(false);
     }
   }, []);
@@ -115,13 +125,13 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
       const live = setLiveEngine(next);
       stateRef.current = live;
       setState(live);
-      setFired([]);
+      setFired(NO_EVENTS);
       stopLoop();
       return;
     }
     stateRef.current = next;
     setState(next);
-    setFired(justFired);
+    setFired(justFired.length ? justFired : NO_EVENTS);
     rafRef.current = requestAnimationFrame(loop);
   }, [stopLoop]);
 
@@ -130,7 +140,7 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     const next = startPlay(stateRef.current, fraction(stateRef.current));
     stateRef.current = next;
     setState(next);
-    setFired([]);
+    setFired(NO_EVENTS);
     lastRef.current = performance.now();
     stopLoop();
     rafRef.current = requestAnimationFrame(loop);
@@ -149,7 +159,7 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     stateRef.current = next;
     setState(next);
     setTrail(nextTrail);
-    setFired([]);
+    setFired(NO_EVENTS);
   }, [stopLoop]);
 
   const setLive = useCallback(() => {
@@ -157,8 +167,8 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     const next = setLiveEngine(stateRef.current);
     stateRef.current = next;
     setState(next);
-    setFired([]);
-    setTrail([]);
+    setFired(NO_EVENTS);
+    setTrail(NO_TRAIL);
   }, [stopLoop]);
 
   const setGrowth = useCallback((growth: boolean) => {
@@ -178,5 +188,5 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     setWindowHoursState(hours);
   }, [stopLoop]);
 
-  return { state, fired, trail, play, pause, seek, setLive, setGrowth, setSpeed, setWindow, loading, error };
+  return { state, windowHours, fired, trail, play, pause, seek, setLive, setGrowth, setSpeed, setWindow, loading, error };
 }
