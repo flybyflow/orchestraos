@@ -1,15 +1,15 @@
 # Handoff: bshr -> bshr (next generation)
 
 - **Lineage:** bshr (Gen N -> Gen N+1)
-- **Timestamp:** 2026-09-30T14:58Z (third soft-handoff trigger, refreshed from the 14:43Z version)
+- **Timestamp:** 2026-09-30T15:14Z (fourth soft-handoff trigger, refreshed from the 14:58Z version)
 - **Working Directory:** /Users/flybyflow/orchestraos
-- **Last Commit SHA:** 12639c8 (this seat's own commit, current with HEAD as of this refresh)
+- **Last Commit SHA:** 5af2176 (this seat's own commit; no new commits since, this task's output was msg_store-only)
 
 ## 1. Current Goal & Phase State
 
 - **Goal:** Act as the fleet's research specialist (bshr, T2) — respond to gm/plan task dispatches, run research/archaeology/BSHR-loop work, report findings via msg_store, never build/commit product code (docs and memory only).
 - **Plan Reference:** No single plan file owns this seat's work — it's a standing research role fielding a stream of dispatches from gm and plan across several parallel threads tonight (Koherent lineage archaeology, OD6 voice-agent economics, 2D dashboard bug root-causing, cross-venture synthesis, plain-language doc rewrites, product-roadmap matrix).
-- **Phase:** Idle / between dispatches. The most recent task (product roadmap impact/feasibility matrix, msg_0c83a385_78375884) was completed, sent to gm, and acked. No task currently in flight.
+- **Phase:** Idle / between dispatches. The most recent task (reverse-engineer remaining 1987 IP + nonprofit-variant hunt, msg_6268d2fc_80987289 -> reply msg_f10c431b_81341400) was completed, sent to gm, and acked. No task currently in flight.
 - **Current Step:** Awaiting the next inbox item. Nothing blocking, nothing half-done.
 
 ## 2. Open Loops & Active Callbacks
@@ -19,6 +19,7 @@
 - [ ] docs/PLAN_toddito-engineering.md, docs/PLAN_silicon-jungle-agentic-platform.md, and docs/PLAN_od6-voice-agent.md are all live, frequently-edited documents that other seats (plan, build) are actively writing to in parallel — always re-read the current section before citing or extending it; several sections changed multiple times across this single session without this seat's own edits.
 - [x] **RESOLVED since the 14:43Z handoff:** the Self/Other/Whole framing correction was already sent to both gm (msg_347eb17d_79525742) and plan (msg_f0b7d59c_79525797) before this refresh — both acked, gm confirmed relaying a one-line correction to the operator too (msg_9b18f1df_79871181). No longer an open loop.
 - [x] **RESOLVED, plan's own doc fix:** plan committed `2b1cf71` ("fix stale survey -- Executive Communicator and Investor Insight both have real decoded content"), closing the §7a.1 staleness this seat originally flagged in the roadmap matrix. No action needed.
+- [ ] **NEW:** gm has not yet replied to the 1987-IP-sweep findings (msg_f10c431b_81341400) — most notable finding, a fully decoded and immediately-usable "Congruence/Incongruence Analysis" narrative bank (Structure x Strategy, Culture x Structure, Culture x Strategy conflict rules, a per-stage ideal-profile narrative, a 32-item health bank, a Greiner-style stage-crisis framework) sitting in `GP*RISK.ASF`, unported to modern Toddito, needing zero new content and zero Todd input. No action pending on this seat until gm/plan respond — a real candidate worth remembering if this thread resumes.
 
 ## 3. Decisions Made & Rationale
 
@@ -44,7 +45,7 @@
 2. **Q2:** What specific bug pattern caused dollar-figure corruption in msg_store sends this session, and who else besides this seat hit the exact same bug later in the session? (source: the exchange starting at msg_9bbd73c4_55317673 and continuing through msg_a8c1f89a_60255987)
 3. **Q3:** Of the six unbuilt Application Suite modules for Toddito, which two did this seat's final roadmap matrix rank highest, and what real (not invented) 1987-era evidence backed each one? (source: msg_0c83a385_78375884)
 4. **Q4:** According to this seat's cross-venture synthesis, how many of the six originally-named ventures/initiatives turned out to be genuinely separate things, and what's the one real financial dependency found between them? (source: docs/BRIEF_cross-venture-synthesis.md and its authoring message thread, conv starting msg_da7fb5fe_55189408)
-5. **Q5:** Why was `docs/PLAN_silicon-jungle-agentic-platform.md` deliberately left un-rewritten during the plain-language pass, and what did gm say about that judgment call afterward? (source: msg_c4347ceb_75430121 and gm's reply msg_2896006c_75820191)
+5. **Q5:** In the 1987 THOR system, what single new narrative content bank did this seat find that is fully decoded, generic across variants, and immediately usable with no new invention or Todd input needed — and which files was it found in? (source: msg_f10c431b_81341400)
 
 ```json
 {
@@ -89,7 +90,7 @@
   ],
   "open_loops": [
     "gm/plan have not yet given a final build-dispatch decision on the roadmap impact/feasibility matrix (msg_0c83a385_78375884) -- their decision, not a pending action for this seat.",
-    "No other outstanding msg_store sends await a reply as of this handoff.",
+    "gm has not yet replied to the 1987-IP-sweep findings (msg_f10c431b_81341400) -- a real, immediately-usable, fully-decoded content gap was found (Congruence/Incongruence narrative bank), no action pending on this seat.",
     "RESOLVED (was open in the two prior handoff refreshes): the Self/Other/Whole framing correction and the §7a.1 stale-survey fix are both closed -- see decisions/hazards below for what to watch for if this recurs."
   ],
   "file_roots_touched": [
@@ -111,7 +112,7 @@
     {"id": "Q2", "question": "What specific bug pattern caused dollar-figure corruption in msg_store sends this session, and who else besides this seat hit the exact same bug later in the session?", "source_pointer": "msg_9bbd73c4_55317673..msg_a8c1f89a_60255987"},
     {"id": "Q3", "question": "Of the six unbuilt Application Suite modules for Toddito, which two did this seat's final roadmap matrix rank highest, and what real (not invented) 1987-era evidence backed each one?", "source_pointer": "msg_0c83a385_78375884"},
     {"id": "Q4", "question": "According to this seat's cross-venture synthesis, how many of the six originally-named ventures/initiatives turned out to be genuinely separate things, and what's the one real financial dependency found between them?", "source_pointer": "conv:msg_da7fb5fe_55189408"},
-    {"id": "Q5", "question": "Why was docs/PLAN_silicon-jungle-agentic-platform.md deliberately left un-rewritten during the plain-language pass, and what did gm say about that judgment call afterward?", "source_pointer": "msg_c4347ceb_75430121..msg_2896006c_75820191"}
+    {"id": "Q5", "question": "In the 1987 THOR system, what single new narrative content bank did this seat find that is fully decoded, generic across variants, and immediately usable with no new invention or Todd input needed -- and which files was it found in?", "source_pointer": "msg_f10c431b_81341400"}
   ]
 }
 ```
