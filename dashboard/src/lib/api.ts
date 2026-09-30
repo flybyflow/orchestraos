@@ -117,6 +117,21 @@ export interface RecentMessageRow {
 export const fetchRecentMessages = (limit = 50) =>
   get<{ messages: RecentMessageRow[] }>(`/messages/recent?limit=${limit}`);
 
+/** Escalations and held messages in the window — the only rows the alert badges need.
+ *  NOT /messages/recent: that is capped, and measured live the most recent 40 messages
+ *  contain ONE escalation while the last 24h contain thirty-five. A badge fed from
+ *  /recent is wrong by a factor of 35 and flickers as ordinary traffic pushes
+ *  escalations off the end. Feed the result to nodeAlerts() in lib/nodeAlerts.ts. */
+export interface AlertMessageRow {
+  id: string; from_agent: string; to_agent: string; type: string; created_at: string | null;
+}
+export const fetchAlerts = (hours = 24, asof?: string | null) => {
+  const q = new URLSearchParams({ hours: String(hours) });
+  if (asof) q.set('asof', asof);
+  return get<{ window_hours: number; asof: string | null; messages: AlertMessageRow[] }>(
+    `/messages/alerts?${q}`);
+};
+
 export const fetchProjects = () => get('/projects');
 export const fetchProject = (slug: string) => get(`/projects/${slug}`);
 
