@@ -25,7 +25,7 @@ import { GenChip } from '../components/GenChip';
 import NewAgentModal from '../components/NewAgentModal';
 import { fraction } from '../lib/replayEngine';
 import { useReplay } from '../lib/useReplay';
-import { growBorn } from '../lib/overlayGeometry';
+import { bornUpTo } from '../lib/overlayGeometry';
 
 // GROW bookkeeping lives in overlayGeometry.growBorn(); the replay hook itself is
 // lib/useReplay.ts. NO_BORN is the "not growing" sentinel: one shared object so the
@@ -298,18 +298,16 @@ export default function Agents() {
   // useState added below this line. Every hook goes above it.
   const replay = useReplay(windowHours);
   const growing = replay.state.growth;
-  const replayFired = replay.fired;
-  const [born, setBorn] = useState(NO_BORN);
-  useEffect(() => {
-    if (!growing) { setBorn((p) => (p === NO_BORN ? p : NO_BORN)); return; }
-    if (!replayFired.length) return;
-    setBorn((prev) => {
-      const next = growBorn(prev, replayFired, pairKey);
-      // growBorn hands back prev's own Sets when nothing new appeared, so this bails on
-      // identity and the tree does not re-render on the majority of a 45s replay's frames.
-      return next.changed ? { nodes: next.nodes, edges: next.edges } : prev;
-    });
-  }, [growing, replayFired]);
+  // GROW: what has appeared so far is DERIVED from the replay's own cursor index, not
+  // accumulated in state. The accumulating version needed a useEffect that called setState
+  // synchronously every frame, which is the cascading-render pattern
+  // react-hooks/set-state-in-effect exists to stop -- and a 60fps replay is exactly where
+  // that costs something. A memo off one monotonic number is pure and cannot drift out of
+  // sync with the cursor the way a separate accumulator can.
+  const born = useMemo(
+    () => (growing ? bornUpTo(replay.state.events, replay.state.idx, pairKey) : NO_BORN),
+    [growing, replay.state.events, replay.state.idx],
+  );
 
   if (isLoading) {
     return (

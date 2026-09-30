@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef } from 'react';
 import { clsx } from 'clsx';
 import { StatusDot } from './StatusDot';
 import { TierBadge } from './TierBadge';
@@ -212,23 +212,11 @@ function AgentNode({
   nodeRef?: (el: HTMLElement | null) => void;
   /** Escalations and held messages landing ON this agent, already windowed. */
   alerts?: { escalate: number; held: number };
-  /** GROW mode: this seat has not been touched by a replayed event yet. */
+  /** GROW mode. `undefined` outside growth; `true` = not yet revealed; `false` = revealed
+   *  during this growth run, which is what triggers the one-shot reveal flash. */
   unborn?: boolean;
 }) {
   const working = isWorking(agent);
-  // GROW reveal flash. Local state rather than a set held by the parent: the parent would
-  // have to own one independent 700ms timer per seat and re-render the whole tree to clear
-  // each one, when the only thing that changes is a ring on a single box.
-  const [flash, setFlash] = useState(false);
-  const wasUnborn = useRef(unborn);
-  useEffect(() => {
-    const was = wasUnborn.current;
-    wasUnborn.current = unborn;
-    if (!was || unborn) return;                 // only fire on unborn -> born
-    setFlash(true);
-    const t = setTimeout(() => setFlash(false), 700);
-    return () => clearTimeout(t);
-  }, [unborn]);
   // Agent-level only. The operator explicitly did NOT want skill/prompt execution detail,
   // so this shows the task a seat is on, never which tool or skill is running.
   const subtitle = working ? (agent.current_task || 'working').trim() : '';
@@ -266,7 +254,11 @@ function AgentNode({
         // the edges would jump on every reveal. visibility:hidden keeps the geometry frozen
         // so a reveal is a box fading in at the coordinates the overlay already knows.
         unborn && 'invisible',
-        flash && 'ring-2 ring-sky-300',
+        // unborn === false means GROW is running AND this seat has been revealed (outside
+        // growth the prop is undefined, not false). The class appears on the frame the seat
+        // arrives, so the one-shot animation in index.css fires exactly then and never
+        // again — no timer, no state, no effect.
+        unborn === false && 'grow-reveal',
         getNodeOpacity(agent)
       )}
       title={working ? (agent.activity || 'working') : (agent.status || (agent.alive ? 'idle' : 'stopped'))}
@@ -407,8 +399,10 @@ export function TopologyDiagram({
 }: TopologyDiagramProps) {
   // GROW predicates. Both collapse to `false` when the sets are absent, so every call site
   // below is a no-op outside growth rather than a branch each one has to remember.
-  const unbornNode = (id: string) => bornIds != null && !bornIds.has(id);
-  const unbornEdge = (a: string, b: string) => bornEdges != null && !bornEdges.has(pairKey(a, b));
+  // undefined outside growth, so a call site can tell "not growing" from "growing and this
+  // one has arrived" — the second is what earns the reveal flash, the first must be silent.
+  const unbornNode = (id: string) => (bornIds == null ? undefined : !bornIds.has(id));
+  const unbornEdge = (a: string, b: string) => (bornEdges == null ? undefined : !bornEdges.has(pairKey(a, b)));
   const containerRef = useRef<HTMLDivElement>(null);
   const { positions, register, size: overlaySize } = useNodePositions(containerRef);
   const showCross = layers?.cross ?? true;

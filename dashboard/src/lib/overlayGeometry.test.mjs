@@ -5,7 +5,7 @@
 import assert from 'node:assert';
 import {
   toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions, edgeDirection,
-  growBorn,
+  bornUpTo,
 } from './overlayGeometry.ts';
 
 // ── samePositions: the guard that stops an infinite render loop ─────────────
@@ -183,55 +183,43 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   console.log('PASS: edgeDirection — null on even/noisy pairs, arrows only when earned');
 }
 
-// ── growBorn: the GROW fold, and the reason it returns `changed` ───────────
+// ── bornUpTo: the GROW fold ────────────────────────────────────────────────
 {
   const pk = (a, b) => [a, b].sort().join('|');
-  const empty = { nodes: new Set(), edges: new Set() };
 
   // A message births both ends AND the edge. Three facts from one event.
-  const r1 = growBorn(empty, [{ from: 'gm', to: 'build', type: 'task' }], pk);
-  assert.strictEqual(r1.changed, true);
+  const evs = [{ from: 'gm', to: 'build', type: 'task' }];
+  const r1 = bornUpTo(evs, 1, pk);
   assert.deepStrictEqual([...r1.nodes].sort(), ['build', 'gm']);
   assert.deepStrictEqual([...r1.edges], ['build|gm']);
-  console.log('PASS: growBorn — one message births both ends and the edge');
+  console.log('PASS: bornUpTo — one message births both ends and the edge');
 
-  // THE ONE THAT MATTERS. Re-firing an event that reveals nothing must report
-  // changed=false AND hand back the SAME set objects. Without this the caller
-  // commits two fresh Sets on the majority of a 45s replay's frames and
-  // re-renders the whole tree at 60fps to reveal nothing.
-  const r2 = growBorn(r1, [{ from: 'gm', to: 'build', type: 'reply' }], pk);
-  assert.strictEqual(r2.changed, false, 'a fully-known event changes nothing');
-  assert.strictEqual(r2.nodes, r1.nodes, 'and returns the same Set, not a copy');
-  assert.strictEqual(r2.edges, r1.edges);
+  // THE ONE THAT MATTERS: idx is a PREFIX length, not "all events". An event the cursor has
+  // not reached yet must not reveal anything, or GROW shows the whole chart on frame one.
+  const three = [{ from: 'a', to: 'b' }, { from: 'c', to: 'd' }, { from: 'e', to: 'f' }];
+  assert.deepStrictEqual([...bornUpTo(three, 0, pk).nodes], [], 'idx 0 reveals nothing');
+  assert.deepStrictEqual([...bornUpTo(three, 2, pk).nodes].sort(), ['a', 'b', 'c', 'd'],
+    'idx 2 reveals the first two events and NOT the third');
+  assert.strictEqual(bornUpTo(three, 2, pk).edges.has('e|f'), false, 'and not the third edge');
+  console.log('PASS: bornUpTo — idx is a prefix, the unreached tail stays hidden');
 
-  // Partially-known still counts as changed: the edge is new even though gm is not.
-  const r3 = growBorn(r1, [{ from: 'gm', to: 'plan' }], pk);
-  assert.strictEqual(r3.changed, true);
-  assert.ok(r3.edges.has('gm|plan'));
-  assert.strictEqual(r3.nodes.has('build'), true, 'prior births survive the fold');
+  // idx past the end is the natural state at end-of-replay; it must clamp, not read undefined.
+  assert.deepStrictEqual([...bornUpTo(three, 999, pk).nodes].sort(), ['a', 'b', 'c', 'd', 'e', 'f']);
 
   // A spawn births a node with no edge — the asymmetry the two sets exist for.
-  const r4 = growBorn(empty, [{ kind: 'spawn', id: 'ea' }], pk);
+  const r4 = bornUpTo([{ kind: 'spawn', id: 'ea' }], 1, pk);
   assert.deepStrictEqual([...r4.nodes], ['ea']);
   assert.strictEqual(r4.edges.size, 0, 'a spawn must not invent an edge');
-  console.log('PASS: growBorn — a spawn births a node and no edge');
+  console.log('PASS: bornUpTo — a spawn births a node and no edge');
 
-  // Two NEW events in the same frame both land; the second must not be lost to the
-  // `nodes?.has` short-circuit that exists only to avoid re-copying the set.
-  const r5 = growBorn(empty, [{ from: 'a', to: 'b' }, { from: 'c', to: 'd' }], pk);
-  assert.deepStrictEqual([...r5.nodes].sort(), ['a', 'b', 'c', 'd']);
-  assert.deepStrictEqual([...r5.edges].sort(), ['a|b', 'c|d']);
+  // A half-event names no edge and must not birth an undefined node.
+  const r6 = bornUpTo([{ from: 'gm' }], 1, pk);
+  assert.strictEqual(r6.nodes.size, 0, 'a message with no recipient reveals nothing');
+  assert.strictEqual(r6.edges.size, 0);
 
-  // A half-event names no edge and must not crash or birth an undefined node.
-  const r6 = growBorn(empty, [{ from: 'gm' }], pk);
-  assert.strictEqual(r6.changed, false, 'a message with no recipient reveals nothing');
-  assert.strictEqual(r6.nodes.size, 0);
-
-  // Empty frame: the common case, and it must be free.
-  const r7 = growBorn(r1, [], pk);
-  assert.strictEqual(r7.changed, false);
-  assert.strictEqual(r7.nodes, r1.nodes);
-  console.log('PASS: growBorn — an empty or half frame is a no-op with stable identity');
+  // A spawn with no id must not add the empty string as a node.
+  assert.strictEqual(bornUpTo([{ kind: 'spawn' }], 1, pk).nodes.size, 0);
+  console.log('PASS: bornUpTo — half events and id-less spawns reveal nothing');
 }
 
 console.log('\nAll overlayGeometry tests passed.');

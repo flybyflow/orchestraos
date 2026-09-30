@@ -213,9 +213,9 @@ export function edgeLiveness(
   return nowMs - lastAtMs <= quietWindowMs ? 'quiet' : 'dead';
 }
 
-/** Minimal shape growBorn needs off a replayed event. Deliberately not ReplayEvent:
+/** Minimal shape the GROW fold needs off a replayed event. Deliberately not ReplayEvent:
  *  this file must not import the replay engine, or the pure geometry layer starts
- *  depending on the playback layer for a fold that is just two set insertions. */
+ *  depending on the playback layer for what is two set insertions. */
 export interface GrowEvent {
   from?: string;
   to?: string;
@@ -230,39 +230,38 @@ export interface GrowBorn {
 }
 
 /**
- * GROW bookkeeping: fold the events that fired this frame into the sets of things that
- * have appeared. A node is born by any event that touches it; an edge is born by a
- * message between its two ends.
+ * GROW bookkeeping: everything revealed by the first `idx` events. A node is born by any
+ * event that touches it; an edge is born by a message between its two ends. Two sets rather
+ * than one derived from the other, because an edge needs both ends but a spawn births a
+ * node with no edge, so neither implies the other.
  *
- * `changed` is the load-bearing return value, not a convenience. advance() fires events
- * on most frames of a 45s replay, and a caller that unconditionally committed two fresh
- * Sets would re-render the entire tree at 60fps for the majority of frames that reveal
- * nothing new. When changed is false the caller keeps its existing state object and React
- * does nothing. The returned sets are also the SAME objects as `prev`'s in that case, so
- * a caller that ignores the flag and does setState(next.nodes) still bails out on identity.
+ * Takes the replay's own `idx` (the count of events already fired) rather than accumulating
+ * frame by frame. The incremental version was faster per frame but had to live in a
+ * useEffect that called setState synchronously, which is the cascading-render pattern
+ * react-hooks/set-state-in-effect exists to stop — and stopping cascading renders during a
+ * 60fps replay is precisely the thing we care about here. A recompute off a single monotonic
+ * number is pure, memoisable and cannot desynchronise from the cursor.
+ *
+ * ponytail: O(idx) per recompute, and the memo recomputes on every frame that fires an
+ * event. Real windows are ~1k events so this is nothing; the API's ceiling is 20000, where
+ * it would be worth folding incrementally inside the replay hook's own rAF callback (a
+ * callback, not an effect, so the lint rule does not apply).
  */
-export function growBorn(
-  prev: GrowBorn,
-  fired: readonly GrowEvent[],
+export function bornUpTo(
+  events: readonly GrowEvent[],
+  idx: number,
   pairKeyFn: (a: string, b: string) => string,
-): { nodes: ReadonlySet<string>; edges: ReadonlySet<string>; changed: boolean } {
-  let nodes: Set<string> | null = null;
-  let edges: Set<string> | null = null;
-  const addNode = (id: string | undefined) => {
-    if (!id || prev.nodes.has(id)) return;
-    (nodes ??= new Set(prev.nodes)).add(id);   // Set.add is idempotent; no second guard needed
-  };
-  for (const e of fired) {
-    if (e.kind === 'spawn') { addNode(e.id); continue; }
+): GrowBorn {
+  const nodes = new Set<string>();
+  const edges = new Set<string>();
+  const end = Math.min(idx, events.length);
+  for (let i = 0; i < end; i++) {
+    const e = events[i];
+    if (e.kind === 'spawn') { if (e.id) nodes.add(e.id); continue; }
     if (!e.from || !e.to) continue;   // a half-event reveals nothing; it cannot name an edge
-    addNode(e.from);
-    addNode(e.to);
-    const k = pairKeyFn(e.from, e.to);
-    if (!prev.edges.has(k)) (edges ??= new Set(prev.edges)).add(k);
+    nodes.add(e.from);
+    nodes.add(e.to);
+    edges.add(pairKeyFn(e.from, e.to));
   }
-  return {
-    nodes: nodes ?? prev.nodes,
-    edges: edges ?? prev.edges,
-    changed: nodes !== null || edges !== null,
-  };
+  return { nodes, edges };
 }
