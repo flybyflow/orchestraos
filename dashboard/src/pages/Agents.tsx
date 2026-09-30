@@ -669,7 +669,7 @@ export default function Agents() {
               // (telegram). Handed the filtered list it would invent a rim node for
               // every retired seat.
               allAgentIds={allAgents.map((a: { id: string }) => String(a.id))}
-              deadPairs={(pairData as { dead_pairs?: typeof pairs } | undefined)?.dead_pairs ?? []}
+              deadPairs={pairData?.dead_pairs ?? []}
               layers={layers}
               crossTopN={layers.showAllCross ? null : 12}
             />
@@ -709,6 +709,14 @@ export default function Agents() {
                   onClose={closePanel}
                   windowHours={windowHours}
                   asof={asof}
+                  // The authoritative breakdown for the whole window, from the same
+                  // pair-counts row the connection line is drawn from — so the panel
+                  // and the line can never disagree about what they are counting.
+                  byType={pairs.find(
+                    (p: { a: string; b: string }) =>
+                      (p.a === selectedConnection[0] && p.b === selectedConnection[1])
+                      || (p.a === selectedConnection[1] && p.b === selectedConnection[0]),
+                  )?.by_type ?? null}
                 />
               ) : panelAgent ? (
                 <AgentDetailPanel

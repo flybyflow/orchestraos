@@ -15,6 +15,10 @@ export interface ConversationPanelProps {
    *  bar is scrubbed — a panel pinned to 24h/live beside a scrubbed line is the 49-vs-40 bug
    *  wearing a different hat. */
   windowHours?: number;
+  /** Per-type counts for this pair, from pair-counts' by_type. Passed in rather than
+   *  derived here: the message list is paginated, so counting it would under-report on
+   *  any busy pair and drift as the reader scrolls. */
+  byType?: Record<string, number> | null;
   asof?: string | null;
 }
 
@@ -26,7 +30,7 @@ const TYPE_BADGE: Record<string, string> = {
 const typeBadgeClass = (t: string | null) => (t && TYPE_BADGE[t]) || 'bg-neutral-700/40 text-neutral-400';
 
 export function ConversationPanel({
-  a, b, onOpenAgent, onClose, windowHours: windowHoursProp = 24, asof = null,
+  a, b, onOpenAgent, onClose, windowHours: windowHoursProp = 24, asof = null, byType = null,
 }: ConversationPanelProps) {
   const [typeFilter, setTypeFilter] = useState<MessageTypeFilter>('All');
   const [newestFirst, setNewestFirst] = useState(true);
@@ -74,6 +78,27 @@ export function ConversationPanel({
           <p className="text-[11px] text-neutral-500 mt-0.5">
             {totalInWindow} message{totalInWindow === 1 ? '' : 's'} in the last {windowHours}h{totalAllTime > totalInWindow ? ` · ${totalAllTime} total` : ''}
           </p>
+          {/* Per-type breakdown (spec step 2: counts in hover AND in the panel), so
+              "17 replies" reads differently from "17 tasks".
+
+              It comes from the pair-counts by_type map, NOT from counting the loaded
+              messages: this list is paginated at 40 and gm<->build alone is 168 in the
+              window, so counting what is on screen would under-report and then CHANGE
+              as you scroll. A number that moves while you read it is worse than no
+              number. Summing by_type equals total_in_window by construction, which is
+              asserted on the API side. */}
+          {byType && Object.keys(byType).length > 0 && (
+            <p className="text-[11px] text-neutral-600 mt-0.5 flex flex-wrap gap-x-2">
+              {Object.entries(byType)
+                .sort((x, y) => y[1] - x[1])
+                .map(([t, n]) => (
+                  <span key={t} className="whitespace-nowrap">
+                    <span className={clsx('px-1 rounded', typeBadgeClass(t))}>{n}</span>
+                    {' '}{t.replace(/_/g, ' ')}
+                  </span>
+                ))}
+            </p>
+          )}
         </div>
         <button onClick={onClose} className="p-1.5 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-800 rounded-lg transition-colors shrink-0" aria-label="Close panel">
           <X size={16} />

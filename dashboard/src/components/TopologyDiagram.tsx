@@ -374,7 +374,7 @@ export function TopologyDiagram({
     const now = Date.now();
     const denom = busiestDrawn(crossSelection.drawn, lookup.busiest);
     return crossSelection.drawn.map((p) => {
-      const byType = (p as PairCountRow & { by_type?: Record<string, number> }).by_type ?? {};
+      const byType = p.by_type ?? {};
       const top = Object.entries(byType).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
       const lastAt = p.last_at ? Date.parse(p.last_at) : null;
       return {

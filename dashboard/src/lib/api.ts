@@ -51,7 +51,13 @@ export const deleteTask = (project: string, phaseIdx: number, taskIdx: number): 
 // via the `before` cursor. Do not reach for /messages/thread/:conversationId or
 // /messages/conversations/:agentId from this view — they read JSONL, and disagreeing with
 // this table is exactly the "49 vs 40" bug the spec exists to kill.
-export interface PairCountRow { a: string; b: string; count: number; last_at: string | null }
+export interface PairCountRow {
+  a: string; b: string; count: number; last_at: string | null;
+  /** Per-message-type breakdown for this pair, summing to `count` (asserted API-side).
+   *  Not computable on the client: pairMessages carries type but is paginated at 40,
+   *  and a busy pair runs to several hundred in-window. Absent on an older API. */
+  by_type?: Record<string, number>;
+}
 export const fetchPairCounts = (hours = 24, asof?: string | null) => {
   const q = new URLSearchParams({ hours: String(hours) });
   if (asof) q.set('asof', asof);   // omitted entirely means live
@@ -63,6 +69,11 @@ export const fetchPairCounts = (hours = 24, asof?: string | null) => {
      *  the oldest message was 254h old while the largest window was 72h. */
     oldest_at: string | null;
     pairs: PairCountRow[];
+    /** Pairs with real history but NOTHING in the window. A separate field, not count-0
+     *  rows folded into `pairs`: the summary strip's connection count and the thickness
+     *  denominator both read `pairs`, so adding rows there would silently turn 32 active
+     *  connections into 51. Opt-in by construction. */
+    dead_pairs?: PairCountRow[];
   }>(`/messages/pair-counts?${q}`);
 };
 
