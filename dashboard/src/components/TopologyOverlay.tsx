@@ -203,10 +203,21 @@ export interface TopologyOverlayProps {
    *  newest weight ~1.0 down to ~0.18, lighting their edges instead of a travelling shape —
    *  ported from /field's applySnapshotAt. */
   trail?: { event: { from?: string; to?: string }; weight: number }[];
+  /** pairKey(a, b) for every hierarchy (parent/child) connector the tree draws — the same
+   *  `drawnKeys` TopologyDiagram already computes for itself. The hierarchy skeleton is drawn
+   *  as plain CSS connectors (a `w-px`/`h-px` div), never an SVG path, so it has no `route` of
+   *  its own the way a cross edge does — this is what lets a pulse for a hierarchy-pair event
+   *  find a route to ride at all instead of being silently dropped (build QA: 49% of events —
+   *  every hierarchy-pair one — had no pulse, because `drawnPairs` only ever held cross-edge
+   *  pairs). For a directly-connected, unobstructed pair `routeEdge` resolves to the straight
+   *  box-edge-to-box-edge chord on its first attempt, which is the same line the CSS connector
+   *  already draws — so the pulse rides visually the same line, just computed independently
+   *  rather than by reading the connector's own DOM rect. */
+  hierarchyPairs?: Set<string>;
 }
 
 export function TopologyOverlay({
-  width, height, edges, positions, windowHours, onSelectConnection, fired, trail,
+  width, height, edges, positions, windowHours, onSelectConnection, fired, trail, hierarchyPairs,
 }: TopologyOverlayProps) {
   // Active pulses: `fired` is a NEW batch each hook tick (not a running list), so each tick
   // adds fresh pulses without disturbing ones already in flight. A ref holds the true current
@@ -255,8 +266,11 @@ export function TopologyOverlay({
   // outside GROW it would be a travelling dot with no line under it. Build asked for exactly
   // this ("the pulse layer just needs to not draw a pulse on an edge that is hidden") —
   // derived here from `edges` itself rather than a second born/unborn prop, since `edges`
-  // already carries the one true answer for "is this pair drawn".
-  const drawnPairs = new Set(edges.map((e) => pairKey(e.a, e.b)));
+  // already carries the one true answer for "is this pair drawn". Hierarchy pairs are drawn
+  // too (as a plain CSS connector, not an SVG path) so their pulses belong here as well — a
+  // pulse riding a hierarchy line is not "on an edge that is hidden", the line is just drawn a
+  // different way.
+  const drawnPairs = new Set([...edges.map((e) => pairKey(e.a, e.b)), ...(hierarchyPairs ?? [])]);
 
   // Routed ONCE per pair, in the edge's own canonical (a, b) order — the static line below and
   // every pulse riding this pair both read from THIS entry rather than each calling routeEdge
@@ -272,6 +286,19 @@ export function TopologyOverlay({
     const to = positions.get(e.b);
     if (!from || !to) continue;
     routesByPair.set(pairKey(e.a, e.b), { route: routeEdge(from, to, obstacles), a: e.a, b: e.b });
+  }
+  // Hierarchy pairs get no <path> of their own (the CSS connector already draws the line), but
+  // a pulse for one still needs somewhere to sample — route it the same way, keyed under the
+  // same pairKey so pulsePositionOnRoute cannot tell the two kinds of pair apart. Skipped if a
+  // cross-edge route already claimed this key (should not happen — a pair is either hierarchy
+  // or cross, never both — but a route already present wins rather than being overwritten).
+  for (const key of hierarchyPairs ?? []) {
+    if (routesByPair.has(key)) continue;
+    const [a, b] = key.split('|');
+    const from = positions.get(a);
+    const to = positions.get(b);
+    if (!from || !to) continue;
+    routesByPair.set(key, { route: routeEdge(from, to, obstacles), a, b });
   }
 
   // Trail weight per pair, for the seek-drag highlight — a Map so a repeated pair (should not

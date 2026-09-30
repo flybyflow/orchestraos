@@ -509,6 +509,14 @@ export function TopologyDiagram({
     ? overlayEdges
     : overlayEdges.filter((e) => bornEdges.has(pairKey(e.a, e.b)));
 
+  // Same GROW gate as drawnOverlayEdges above, applied to the hierarchy skeleton: a hierarchy
+  // connector that has not been revealed yet is `invisible` (unbornEdge, below), so a pulse
+  // must not ride it either — a travelling dot on a line that is not there yet is the same
+  // "spoil the reveal" bug the cross-edge gate already exists to prevent.
+  const hierarchyPairsForOverlay = bornEdges == null
+    ? drawnKeys
+    : new Set([...drawnKeys].filter((k) => bornEdges.has(k)));
+
   const isDim = (id: string) => bright !== null && !bright.has(id);
   // A line stays bright only if the selected agent is one of its two ends.
   const lineDim = (a: string, b: string) =>
@@ -528,19 +536,23 @@ export function TopologyDiagram({
       {/* Edges first in document order so node boxes paint OVER them: an opaque
           bg-neutral-900 node then covers any line passing near it, which is the
           cheap half of "no lines through boxes" (routeEdge does the real half).
-          No double-render of nodes, one fewer thing to keep in sync. */}
-      {drawnOverlayEdges.length > 0 && (
-        <TopologyOverlay
-          width={overlaySize.w}
-          height={overlaySize.h}
-          edges={drawnOverlayEdges}
-          fired={fired}
-          trail={trail}
-          positions={positions}
-          windowHours={windowHours}
-          onSelectConnection={onSelectConnection}
-        />
-      )}
+          No double-render of nodes, one fewer thing to keep in sync.
+          Unconditional now, not gated on drawnOverlayEdges.length: the hierarchy skeleton
+          (drawnKeys, passed below) always has pairs to route pulses for even when there is
+          not a single CROSS edge on screen — gating on cross-edge count is what silently
+          dropped every hierarchy-pair pulse before (build QA: 49% of replayed events, every
+          hierarchy one). An empty overlay with no edges and no pulses costs one <svg><defs>. */}
+      <TopologyOverlay
+        width={overlaySize.w}
+        height={overlaySize.h}
+        edges={drawnOverlayEdges}
+        fired={fired}
+        trail={trail}
+        positions={positions}
+        windowHours={windowHours}
+        onSelectConnection={onSelectConnection}
+        hierarchyPairs={hierarchyPairsForOverlay}
+      />
       {/* T0: GM */}
       {gm && (
         <>
