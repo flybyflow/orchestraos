@@ -113,10 +113,11 @@ Hiding real traffic to buy visual consistency is the worse trade, and a dashed "
 in the graph" makes the inconsistency legible. The part that had to be fixed was the
 thickness **denominator**, and that is done.
 
-### Delegated, still out
+### Delegated — ~~still out~~ **superseded, see the browser-pass section at the top**
 
-Interaction QA to **test** (`msg_b42c0d2b_27912369`): dot direction, pause-while-scrubbed
-in practice, time-bar path end to end, message-box send path, live-feed streaming.
+Interaction QA was dispatched to **test** (`msg_b42c0d2b_27912369`). `test` refused it as
+untrusted and never started; **I ran all five items myself** and they pass. Do not wait on
+test for this.
 
 ### PR #133
 
