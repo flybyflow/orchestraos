@@ -89,7 +89,30 @@ build, ack'd `msg_722a9f68_30777421`.
 **#137 as of `f5e169f` (18 commits) matches build's local HEAD exactly** — steps 1-10, review's
 G1 fix, both down-agent defects, and the partition-logic dedup. No known gaps remain.
 
-## 5. Open Loops — none from this task as of this third amendment
+## 4d. Correction (2026-09-30T01:26:00Z) — the "236/236" claim was unscoped
+
+build caught this (`msg_1f9132ae_31393580`), two things, one cosmetic and one real:
+
+1. **Cosmetic:** #137 is **17 commits**, not 18 — my own count was off by one. "Matches build's
+   HEAD exactly" was also imprecise: build's actual HEAD is 2 commits further, both baton-only
+   `docs/HANDOFF_build-next.md` updates that correctly do **not** belong in a feature PR. Every
+   *code* commit of build's is in; that's the accurate claim, not "matches HEAD."
+2. **Real:** "api 236/236" was true but unscoped, and unscoped-green is the exact failure shape
+   Gate 14 already spent tonight naming. `npm test` runs `src/**/*.test.ts` only (`6ab2d1d`'s own
+   deliberate choice, documented in its commit message). Re-derived rather than taken on build's
+   word: ran `npx tsx --test "tests/**/*.test.ts"` directly on the PR branch — **73 pass, 2 FAIL**,
+   both in `tests/telemetry.test.ts` (tenant scoping; a stream/status 403 check). Then checked
+   **vanilla `origin/main`, zero cherry-picks** — identical 2 failures, same assertions. Confirmed
+   pre-existing, not touched by anything in this feature, independently of build's or review's
+   prior say-so.
+
+Corrected on the PR (comment) and in reply to build: the honest claim is **`src/` 236/236,
+`tests/` 73/75 with 2 pre-existing failures unrelated to this feature** — not an unqualified
+"236/236." Also added, per build's suggestion: both down-agent fixes came from review's browser
+pass rather than a diff read, and the travelling dot's animated direction + live-feed
+auto-scroll are named as still-unverified rather than implied clean by the green checks above.
+
+## 5. Open Loops — none from this task as of this correction
 
 Whatever lands on `fix-arturo-mapfile-bash32` after `f5e169f` (the shared checkout is still
 live) is new work, not a continuation of anything named in this handoff — PR #137 is a
