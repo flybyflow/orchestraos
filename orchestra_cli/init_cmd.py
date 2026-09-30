@@ -432,7 +432,16 @@ def run_init(repo_root: Path, data_dir: Optional[Path] = None, *, run: Callable 
         report.append(Step(f"npm:{label}", rc == 0, "npm install" if rc == 0 else f"npm install failed rc={rc}"))
 
     # 8. builds (api tsc -> dist/server.js, dashboard vite -> dist/index.html)
-    for label, sub, artifact in (("api", "api", "dist/server.js"), ("dashboard", "dashboard", "dist/index.html")):
+    # `build_script` is per-package on purpose. dashboard's plain `build` is the SAFE,
+    # non-deploying variant (it bundles to a temp dir) because dashboard/dist is served live
+    # and an accidental `npm run build` there is a production deploy — that happened tonight
+    # via a shell-substitution bug. Provisioning genuinely needs the deploying build, so it
+    # asks for it by name. If this is ever flipped back to "build", a fresh install produces
+    # no dashboard/dist and serves nothing, silently.
+    for label, sub, artifact, build_script in (
+        ("api", "api", "dist/server.js", "build"),
+        ("dashboard", "dashboard", "dist/index.html", "build:live"),
+    ):
         d = repo_root / sub
         if not (d / "package.json").exists():
             report.append(Step(f"build:{label}", False, "no package.json"))
@@ -443,8 +452,9 @@ def run_init(repo_root: Path, data_dir: Optional[Path] = None, *, run: Callable 
         if (d / artifact).exists():
             report.append(Step(f"build:{label}", False, f"{artifact} present (delete it to rebuild)"))
             continue
-        rc = run(["npm", "run", "build"], cwd=d)
-        report.append(Step(f"build:{label}", rc == 0, "built" if rc == 0 else f"npm run build failed rc={rc}"))
+        rc = run(["npm", "run", build_script], cwd=d)
+        report.append(Step(f"build:{label}", rc == 0,
+                           "built" if rc == 0 else f"npm run {build_script} failed rc={rc}"))
 
     # 9. Claude Code hooks -> the user's settings.json (merge, never clobber; idempotent).
     # Without them a seat only acts on mail when someone presses Enter: the idle-inbox

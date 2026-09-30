@@ -428,13 +428,18 @@ def run_doctor(st: Settings, probes: DoctorProbes) -> list:
                                 f"native addon does not load: {str(e)[:80]} — the web terminal is dead on this host",
                                 f"sudo apt install -y build-essential python3 && cd {root} && npm rebuild node-pty  "
                                 f"(or delete node_modules and run npm install)"))
-    for label, sub, artifact in (("api", "api", "dist/server.js"), ("dashboard", "dashboard", "dist/index.html")):
+    # dashboard's plain `build` is the safe non-deploying variant, so it would NOT create the
+    # artifact checked here — the remedy has to name the script that actually produces it.
+    for label, sub, artifact, build_script in (
+        ("api", "api", "dist/server.js", "build"),
+        ("dashboard", "dashboard", "dist/index.html", "build:live"),
+    ):
         d = root / sub
         if not (d / "package.json").exists():
             continue
         built = (d / artifact).exists()
         checks.append(Check(f"{label}:build", OK if built else MISSING, str(d / artifact),
-                            f"Run `orchestra init` or `cd {d} && npm run build`"))
+                            f"Run `orchestra init` or `cd {d} && npm run {build_script}`"))
 
     # -- rotation beat (default ON) + eligible seats
     kill = st.runtime_dir / "FLEET_BEAT_DISABLED"

@@ -46,12 +46,15 @@ class Runner:
             (venv / "bin" / "python").write_text("")
         elif argv[:2] == ["npm", "install"] or argv[:2] == ["npm", "ci"]:
             (cwd / "node_modules").mkdir(exist_ok=True)
-        elif argv[:3] == ["npm", "run", "build"]:
+        elif argv[:2] == ["npm", "run"] and argv[2] in ("build", "build:live"):
+            # The dashboard's plain `build` is the SAFE non-deploying variant (bundles to a
+            # temp dir), so it must NOT be what provisioning calls — it would leave no
+            # dist/index.html and a fresh install would serve nothing. Mirror that here: only
+            # the explicitly-named deploy target produces the dashboard artifact.
+            (cwd / "dist").mkdir(exist_ok=True)
             if cwd.name == "api":
-                (cwd / "dist").mkdir(exist_ok=True)
                 (cwd / "dist" / "server.js").write_text("")
-            else:
-                (cwd / "dist").mkdir(exist_ok=True)
+            elif argv[2] == "build:live":
                 (cwd / "dist" / "index.html").write_text("")
         return 0
 
@@ -80,6 +83,14 @@ def test_init_creates_everything_and_reports(tmp_path):
     assert any("venv" in c for c in cmds)
     assert any(c[:2] == ("npm", "install") for c in cmds)
     assert any(c[:3] == ("npm", "run", "build") for c in cmds)
+    # Regression guard for the safe-by-default flip: provisioning must ask the dashboard for
+    # its DEPLOYING build by name. If this is ever reverted to plain `build`, a fresh install
+    # silently produces no dashboard/dist — which is exactly the failure this asserts against,
+    # and the stub above is built so that the test cannot pass without it.
+    # runner.calls records cwd as a STRING, so match on the path's last segment.
+    dash_builds = [c for c in runner.calls
+                   if c[0][:2] == ("npm", "run") and c[1].rstrip("/").endswith("dashboard")]
+    assert any(c[0][2] == "build:live" for c in dash_builds), dash_builds
 
 
 def test_init_is_idempotent_and_never_overwrites_config(tmp_path):
