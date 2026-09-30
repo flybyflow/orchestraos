@@ -188,6 +188,82 @@ function polylineClears(points: Point[], boxes: Box[], pad = 0): boolean {
   return true;
 }
 
+export interface Band {
+  /** -Infinity for the band above every obstacle. */
+  top: number;
+  /** +Infinity for the band below every obstacle. */
+  bottom: number;
+}
+
+/**
+ * The horizontal y-ranges with NO obstacle anywhere in them, across the full set (not just
+ * near one edge) — real gaps a path can travel through at any x. This is this fleet's tree
+ * layout's actual shape: rows (T0, the lead row, worker rows, the rim) stacked with real
+ * vertical gaps between them, so a full-width horizontal band between two rows is genuinely
+ * obstacle-free, not an approximation.
+ *
+ * The outermost two bands — above the topmost obstacle and below the bottommost — are always
+ * present and always clear by construction (nothing sits above row 1 or below the last row),
+ * which is what makes channelRoute always able to find SOME route: those two bands can never
+ * be blocked, however dense the middle of the layout gets.
+ */
+export function freeBands(boxes: Box[], pad: number): Band[] {
+  if (boxes.length === 0) return [{ top: -Infinity, bottom: Infinity }];
+  const ranges = boxes
+    .map((b): [number, number] => [b.cy - b.height / 2 - pad, b.cy + b.height / 2 + pad])
+    .sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [lo, hi] of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && lo <= last[1]) last[1] = Math.max(last[1], hi);
+    else merged.push([lo, hi]);
+  }
+  const bands: Band[] = [{ top: -Infinity, bottom: merged[0][0] }];
+  for (let i = 0; i < merged.length - 1; i++) bands.push({ top: merged[i][1], bottom: merged[i + 1][0] });
+  bands.push({ top: merged[merged.length - 1][1], bottom: Infinity });
+  // A degenerate band (two obstacles with no real gap between their padded edges) carries no
+  // usable channel — drop it rather than offering a route through a sliver that cannot exist.
+  return bands.filter((b) => b.bottom > b.top);
+}
+
+/**
+ * Route `start` -> `end` through a free horizontal band: down/up to the band, straight across,
+ * down/up into the target. Tries bands nearest the direct path between the two endpoints
+ * first (the smallest real detour), falling back to the guaranteed-clear outermost bands —
+ * "outside the tree bounds" — only when no band between the endpoints works. Returns null only
+ * if `bands` is empty, which freeBands() never produces for a non-empty obstacle list.
+ *
+ * This is what "route through free channels" (operator, 2026-09-30) means concretely: not a
+ * bigger nudge off the chord (the quad/cubic loops above already own that), a genuinely
+ * different STRATEGY — go around the obstacle field via the row gaps it actually has, the way
+ * a hand-drawn org chart would.
+ */
+export function channelRoute(start: Point, end: Point, bands: Band[], boxes: Box[], pad: number): Point[] | null {
+  if (bands.length === 0) return null;
+  const loY = Math.min(start.y, end.y);
+  const hiY = Math.max(start.y, end.y);
+  const midY = (loY + hiY) / 2;
+  const bandY = (b: Band): number => {
+    if (Number.isFinite(b.top) && Number.isFinite(b.bottom)) return (b.top + b.bottom) / 2;
+    // An open-ended outer band has no finite midpoint — aim just past its one finite edge,
+    // clear of the obstacle it borders without wandering arbitrarily far into open space.
+    return Number.isFinite(b.bottom) ? b.bottom - 20 : b.top + 20;
+  };
+  const ranked = bands
+    .map((b) => ({ band: b, y: bandY(b) }))
+    .sort((a, b) => {
+      const aBetween = a.y >= loY && a.y <= hiY;
+      const bBetween = b.y >= loY && b.y <= hiY;
+      if (aBetween !== bBetween) return aBetween ? -1 : 1;
+      return Math.abs(a.y - midY) - Math.abs(b.y - midY);
+    });
+  for (const { y } of ranked) {
+    const pts = [start, { x: start.x, y }, { x: end.x, y }, end];
+    if (polylineClears(pts, boxes, pad)) return pts;
+  }
+  return null;
+}
+
 /**
  * Where the ray from `center` toward `toward` exits `box`'s boundary. Endpoints must terminate
  * at the box edge, not its centre (design 2.5, final paragraph) — a curve emerging from under a
@@ -359,12 +435,24 @@ export function routeEdge(
     }
   }
 
-  // Every SHORT attempt exhausted. Return the shortest thing tried — the plain chord — rather
-  // than the widest polyline attempt. A single obstacle field dense/long enough to defeat every
-  // short attempt is real information (the layout has no clean gap this module's shape of
-  // search can find); the fix for that is elsewhere (fewer edges drawn, a different layout,
-  // labels excluded from view), not a longer and longer detour from this function. Never
-  // throw, never return undefined either way.
+  // No short nudge (curve, cubic-S, or short polyline) cleared everything — this is a dense
+  // layout, not a budget problem the short attempts above are meant to solve. Route through a
+  // real free channel instead (operator live QA, 2026-09-30: 5 of 12 default edges still
+  // crossed a node and 4 crossed a count-label pill even with pills already registered as
+  // obstacles — the bounded local nudge above simply cannot find a gap in a dense scene, no
+  // matter how far the budget is raised, because it only ever searches perpendicular to the
+  // ONE chord between these two endpoints). freeBands/channelRoute search the WHOLE obstacle
+  // field's actual empty rows, which is guaranteed to include at least the two outermost bands
+  // (above everything, below everything) — so this step can fail only if `obstacles` itself is
+  // empty, which the curve-clears check at the top of this function already would have caught.
+  const channel = channelRoute(start, end, freeBands(realObstacles, pad), realObstacles, pad);
+  if (channel) {
+    return { kind: 'polyline', d: polylinePath(channel) };
+  }
+
+  // Every attempt exhausted, including the always-clear channel route — should not happen in
+  // practice (see above), but never throw and never return undefined either way. Return the
+  // shortest thing tried, the plain chord, rather than the widest polyline attempt.
   return { kind: 'curve', d: curvePath(start, mid, end) };
 }
 

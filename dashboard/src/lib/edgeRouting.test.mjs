@@ -17,6 +17,8 @@ import {
   clipToBoxEdge,
   routeEdge,
   pointAtFraction,
+  freeBands,
+  channelRoute,
 } from './edgeRouting.ts';
 
 /** Parse an SVG "M x,y Q cx,cy ex,ey" or "M x,y L x,y L x,y" path back into points, in order.
@@ -488,6 +490,132 @@ function parsePathPoints(d) {
   }
   assert.deepEqual(pointAtFraction(route, 0), pts[0], 't=0 is the polyline start');
   assert.deepEqual(pointAtFraction(route, 1), pts[pts.length - 1], 't=1 is the polyline end');
+}
+
+// ── freeBands ───────────────────────────────────────────────────────────────────────────
+{
+  // Three rows with real gaps between them, like the actual tree layout (T0, leads, workers).
+  const rows = [
+    { id: 'r1', cx: 0, cy: 50, width: 100, height: 40 },  // y: 30..70
+    { id: 'r2', cx: 0, cy: 200, width: 100, height: 40 }, // y: 180..220
+  ];
+  const bands = freeBands(rows, 0);
+  assert.deepEqual(bands, [
+    { top: -Infinity, bottom: 30 },
+    { top: 70, bottom: 180 },
+    { top: 220, bottom: Infinity },
+  ], 'three bands: above everything, the real gap between the rows, below everything');
+
+  // pad widens each obstacle's claimed range, so it must shrink the gap either side.
+  const padded = freeBands(rows, 10);
+  assert.deepEqual(padded[1], { top: 80, bottom: 170 }, 'pad eats into the middle gap from both sides');
+
+  // Overlapping (or touching) obstacles merge into ONE claimed span, not two overlapping bands.
+  const overlapping = [
+    { id: 'a', cx: 0, cy: 50, width: 100, height: 40 }, // 30..70
+    { id: 'b', cx: 0, cy: 60, width: 100, height: 40 }, // 40..80 -- overlaps a
+  ];
+  assert.deepEqual(freeBands(overlapping, 0), [{ top: -Infinity, bottom: 30 }, { top: 80, bottom: Infinity }],
+    'overlapping obstacles merge into one claimed span, producing two bands not three');
+
+  // A gap too small to survive padding must not be offered as a route-able channel.
+  const tight = [
+    { id: 'a', cx: 0, cy: 0, width: 100, height: 20 },  // -10..10
+    { id: 'b', cx: 0, cy: 25, width: 100, height: 20 }, // 15..35, gap is 10..15
+  ];
+  assert.deepEqual(freeBands(tight, 3), [{ top: -Infinity, bottom: -13 }, { top: 38, bottom: Infinity }],
+    'pad=3 shrinks the 5px gap (10..15) to nothing (13..12 inverted) -- dropped, not offered as a sliver channel');
+
+  assert.deepEqual(freeBands([], 5), [{ top: -Infinity, bottom: Infinity }], 'no obstacles -> the whole plane is one free band');
+  console.log('PASS: freeBands — merges overlapping spans, drops gaps too small to survive padding, always has the two outer bands');
+}
+
+// ── channelRoute ────────────────────────────────────────────────────────────────────────
+{
+  const bands = [{ top: -Infinity, bottom: 0 }, { top: 40, bottom: 60 }, { top: 100, bottom: Infinity }];
+  const start = { x: 0, y: 20 };
+  const end = { x: 100, y: 20 };
+
+  // No obstacles to actually clear -- picks the band nearest the direct start/end path
+  // (here, both non-outer... only one middle band exists, at y 40..60, midpoint 50).
+  const pts = channelRoute(start, end, bands, [], 0);
+  assert.deepEqual(pts, [start, { x: 0, y: 50 }, { x: 100, y: 50 }, end],
+    'routes through the one available band at its midpoint');
+
+  // When the nearest band is blocked by a REAL obstacle, falls through to the next-best band
+  // rather than returning null -- this is what makes it "guaranteed", not "best-effort".
+  const blocker = { id: 'block', cx: 50, cy: 50, width: 200, height: 40 }; // sits across the y:40..60 band
+  const pts2 = channelRoute(start, end, bands, [blocker], 0);
+  assert.notDeepEqual(pts2, pts, 'the blocked band is skipped');
+  assert.ok(pts2 !== null, 'falls through to a different band instead of giving up');
+
+  // Re-verify independently: every segment of whatever it returned actually clears the blocker.
+  for (let i = 0; i < pts2.length - 1; i++) {
+    assert.equal(segmentIntersectsBox(pts2[i], pts2[i + 1], blocker, 0), false,
+      `segment ${i} of the fallback route must not cross the blocker`);
+  }
+
+  assert.equal(channelRoute(start, end, [], [], 0), null, 'no bands at all -> null, never throws');
+  console.log('PASS: channelRoute — nearest usable band first, falls through real blockers, re-verified segment by segment');
+}
+
+// ── routeEdge: a dense wall no quad/cubic/polyline nudge can get around -> channel route ──
+{
+  // A single obstacle, tall and wide enough that NO perpendicular offset within maxOffset
+  // (180px either side of the y=100 chord) can clear it at any point between the endpoints --
+  // every one-hump curve, every cubic-S bulge, and the short polyline's parallel run all stay
+  // well inside the wall's y:-200..400 span. Gaps at x<40 and x>560 (the wall spans 40..560)
+  // are deliberate: they are what a channel route's vertical jogs at the endpoints' own x can
+  // use, while nothing else in this module's search can reach outside +-180 of the chord.
+  const from = { id: 'a', cx: 0, cy: 100, width: 20, height: 20 };
+  const to = { id: 'b', cx: 600, cy: 100, width: 20, height: 20 };
+  const wall = { id: 'wall', cx: 300, cy: 100, width: 520, height: 600 }; // x:40..560, y:-200..400
+  const obstacles = [from, to, wall];
+
+  const withoutPad = routeEdge(from, to, obstacles); // pad defaults to 0
+  assert.equal(withoutPad.kind, 'polyline', 'the channel route is a polyline shape');
+  const pts = parsePathPoints(withoutPad.d);
+  // Re-verify from the RETURNED path only, the same discipline every other case in this file
+  // uses -- parse it back and re-test with the exported primitive, not trust the algorithm.
+  for (let i = 0; i < pts.length - 1; i++) {
+    assert.equal(segmentIntersectsBox(pts[i], pts[i + 1], wall, 0), false,
+      `segment ${i} of the channel route must clear the wall that defeated every shorter attempt`);
+  }
+  // THE OLD BUG, reproduced directly: without a channel-routing fallback, every attempt in
+  // routeEdge's quad/cubic/polyline loops fails this fixture, and the function fell through
+  // to `return curvePath(start, mid, end)` -- the straight chord, which visibly cuts through
+  // the wall. Confirm that chord really would overlap (this is what QA was measuring on the
+  // real page): the straight chord from clipped start to clipped end passes dead through it.
+  const straightChordHitsWall = segmentIntersectsBox({ x: 10, y: 100 }, { x: 590, y: 100 }, wall, 0);
+  assert.equal(straightChordHitsWall, true,
+    'sanity: the fixture is real -- the straight chord this would have fallen back to does overlap the wall');
+
+  console.log('PASS: routeEdge — a wall no short nudge can clear routes through a real channel instead of falling back to an overlap');
+}
+
+// ── routeEdge: pad actually changes the clearance decision, not just cosmetic ────────────
+{
+  // A box positioned to graze the straight chord's OUTER edge: at pad=0 the chord clears it
+  // (misses by a few px), at pad=6 the inflated box reaches far enough to force a detour.
+  const from = { id: 'a', cx: 0, cy: 0, width: 20, height: 20 };
+  const to = { id: 'b', cx: 200, cy: 0, width: 20, height: 20 };
+  // Chord runs along y=0. Box spans y: 4..24 (4px clear of the chord at pad=0).
+  const grazer = { id: 'g', cx: 100, cy: 14, width: 40, height: 20 };
+
+  const unpadded = routeEdge(from, to, [from, to, grazer]);
+  assert.equal(unpadded.kind, 'curve', 'at pad=0 the straight chord already clears -- no detour needed');
+  const unpaddedPts = parsePathPoints(unpadded.d);
+  assert.deepEqual(unpaddedPts[1], { x: 100, y: 0 }, 'the control point sits ON the chord (offset-0 attempt), confirming no detour was needed');
+
+  const padded = routeEdge(from, to, [from, to, grazer], { pad: 6 });
+  assert.notEqual(padded.kind === 'curve' && parsePathPoints(padded.d)[1].y === 0, true,
+    'at pad=6 the same box now forces SOME detour -- the straight chord no longer clears');
+  // Re-verify the padded route actually respects the padding, independently.
+  const paddedPts = parsePathPoints(padded.d);
+  if (padded.kind === 'curve') {
+    assert.equal(curveClears(paddedPts[0], paddedPts[1], paddedPts[2], [grazer], 16, 6), true);
+  }
+  console.log('PASS: routeEdge — pad is wired through and actually changes whether a near-miss counts as clear');
 }
 
 console.log('edgeRouting: all assertions passed');

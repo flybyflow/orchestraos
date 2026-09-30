@@ -13,10 +13,18 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
-import { routeEdge, type Box, type EdgeRoute } from '../lib/edgeRouting';
+import { routeEdge, type Box, type EdgeRoute, type RouteEdgeOptions } from '../lib/edgeRouting';
 import { toLocalBox, samePositions, overlayContentSize, type RectLike } from '../lib/overlayGeometry';
 import { pairKey } from '../lib/topologyLines';
 import { pulseId, pulseProgress, pulsePositionOnRoute, pruneDeadPulses, layoutPulseLabels, type ReplayPulse } from '../lib/replayPulses';
+
+/** 6px clearance margin on every obstacle box (operator live QA, 2026-09-30: routeEdge was
+ *  called with no pad at all, so a curve or line grazing a box's EXACT boundary counted as
+ *  clear — a route that just touches a node reads as an overlap on the real page just as much
+ *  as one that cuts through the middle). Module-level constant, not inline at each call site:
+ *  one number to tune, and both routeEdge calls below (cross edges, hierarchy pulses) share it
+ *  so a pulse's route can never clear a box the edge it rides did not. */
+const ROUTE_OPTS: RouteEdgeOptions = { pad: 6 };
 
 export interface OverlayEdge {
   a: string;
@@ -314,7 +322,7 @@ export function TopologyOverlay({
     const from = positions.get(e.a);
     const to = positions.get(e.b);
     if (!from || !to) continue;
-    routesByPair.set(pairKey(e.a, e.b), { route: routeEdge(from, to, obstacles), a: e.a, b: e.b });
+    routesByPair.set(pairKey(e.a, e.b), { route: routeEdge(from, to, obstacles, ROUTE_OPTS), a: e.a, b: e.b });
   }
   // Hierarchy pairs get no <path> of their own (the CSS connector already draws the line), but
   // a pulse for one still needs somewhere to sample — route it the same way, keyed under the
@@ -327,7 +335,7 @@ export function TopologyOverlay({
     const from = positions.get(a);
     const to = positions.get(b);
     if (!from || !to) continue;
-    routesByPair.set(key, { route: routeEdge(from, to, obstacles), a, b });
+    routesByPair.set(key, { route: routeEdge(from, to, obstacles, ROUTE_OPTS), a, b });
   }
 
   // Trail weight per pair, for the seek-drag highlight — a Map so a repeated pair (should not
