@@ -387,15 +387,21 @@ function polylineLength(points: Point[]): number {
 }
 
 function polylinePointAt(points: Point[], t: number): Point {
-  // MUTATION: equal SEGMENT-COUNT speed instead of equal arc-length speed.
-  const n = points.length - 1;
-  const scaled = Math.min(1, Math.max(0, t)) * n;
-  const i = Math.min(n - 1, Math.floor(scaled));
-  const segT = scaled - i;
-  return {
-    x: points[i].x + (points[i + 1].x - points[i].x) * segT,
-    y: points[i].y + (points[i + 1].y - points[i].y) * segT,
-  };
+  const total = polylineLength(points);
+  if (total === 0) return points[0];
+  let target = Math.min(1, Math.max(0, t)) * total;
+  for (let i = 0; i < points.length - 1; i++) {
+    const segLen = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+    if (target <= segLen || i === points.length - 2) {
+      const segT = segLen === 0 ? 0 : target / segLen;
+      return {
+        x: points[i].x + (points[i + 1].x - points[i].x) * segT,
+        y: points[i].y + (points[i + 1].y - points[i].y) * segT,
+      };
+    }
+    target -= segLen;
+  }
+  return points[points.length - 1];
 }
 
 /**

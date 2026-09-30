@@ -455,27 +455,37 @@ function parsePathPoints(d) {
   const route = routeEdge(from, to, [from, to, nearEndBlock]);
   assert.equal(route.kind, 'polyline', 'sanity: this near-endpoint fixture genuinely needs the polyline shape');
   const pts = parsePathPoints(route.d);
-  // A short first/last segment and a long middle segment is exactly this shape (start ->
-  // straight up -> straight across -> straight down -> end): fraction 0.5 must sit near the
-  // MIDDLE of total arc length, not at the midpoint of the point ARRAY (which would be biased
-  // toward whichever segment happens to be second).
   let total = 0;
   for (let i = 0; i < pts.length - 1; i++) total += Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
-  const half = pointAtFraction(route, 0.5);
-  // Walk the same arc-length accumulation independently (re-derived, not copied from the
-  // implementation) to find where the TRUE half-length point should be, then compare.
-  let acc = 0, expected = pts[0];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const segLen = Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
-    if (acc + segLen >= total / 2) {
-      const segT = segLen === 0 ? 0 : (total / 2 - acc) / segLen;
-      expected = { x: pts[i].x + (pts[i+1].x - pts[i].x) * segT, y: pts[i].y + (pts[i+1].y - pts[i].y) * segT };
-      break;
+  // Walk the arc-length accumulation independently (re-derived, not copied from the
+  // implementation) to find the TRUE point at fraction `f` of the total ARC LENGTH.
+  function expectedAt(f) {
+    let target = f * total, acc = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const segLen = Math.hypot(pts[i+1].x - pts[i].x, pts[i+1].y - pts[i].y);
+      if (acc + segLen >= target || i === pts.length - 2) {
+        const segT = segLen === 0 ? 0 : (target - acc) / segLen;
+        return { x: pts[i].x + (pts[i+1].x - pts[i].x) * segT, y: pts[i].y + (pts[i+1].y - pts[i].y) * segT };
+      }
+      acc += segLen;
     }
-    acc += segLen;
+    return pts[pts.length - 1];
   }
-  assert.ok(Math.abs(half.x - expected.x) < 0.01 && Math.abs(half.y - expected.y) < 0.01,
-    `t=0.5 sits at the true half-ARC-LENGTH point (${expected.x},${expected.y}), got (${half.x},${half.y})`);
+  // This fixture's shape is start -> SHORT jump -> LONG middle run -> SHORT jump -> end. The
+  // short jump segments are a small fraction of the total (checked: well under 10%), so t=0.1
+  // of the TRUE arc length is already well into the long middle segment — a segment-COUNT
+  // based interpolation (naively treating "3 segments" as "3 equal thirds") would instead
+  // place t=0.1 still inside the first short segment. Checking several t values, not just
+  // 0.5, catches this: a 3-segment shape can coincidentally agree at t=0.5 between the two
+  // schemes while clearly disagreeing everywhere else.
+  const jumpLen = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+  assert.ok(jumpLen / total < 0.1, 'sanity: the short jump segment really is a small fraction of the total arc length');
+  for (const f of [0, 0.1, 0.25, 0.5, 0.75, 0.9, 1]) {
+    const got = pointAtFraction(route, f);
+    const exp = expectedAt(f);
+    assert.ok(Math.abs(got.x - exp.x) < 0.01 && Math.abs(got.y - exp.y) < 0.01,
+      `t=${f} sits at the true arc-length point (${exp.x},${exp.y}), got (${got.x},${got.y})`);
+  }
   assert.deepEqual(pointAtFraction(route, 0), pts[0], 't=0 is the polyline start');
   assert.deepEqual(pointAtFraction(route, 1), pts[pts.length - 1], 't=1 is the polyline end');
 }
