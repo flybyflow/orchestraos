@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { execFileSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import Database from 'better-sqlite3';
@@ -419,6 +419,98 @@ router.get('/alerts', (req: Request, res: Response) => {
   }
   res.json({ window_hours: hours, asof: asofMs == null ? null : new Date(asofMs).toISOString(),
              messages: alertMessages(ORCHESTRA, hours, asofMs) });
+});
+
+/**
+ * PLAY/GROW/LIVE replay timeline (ported from /Users/flybyflow/second-brain-3d, read-only
+ * reference, not shared code). Every message in the window, ascending, for dashboard/src/lib/
+ * replayEngine.ts to play back.
+ *
+ * Deliberately reuses THIS file's own julianday()-safe window predicate rather than /field's
+ * `datetime(created_at) > datetime('now', ?)` — both dodge the same 'T' vs ' ' trap this file
+ * has hit before (see the block comment above pairCounts), so there is no reason to carry a
+ * second way of doing it.
+ *
+ * "Skip muted messages the same way the rest of this file skips them": this file's existing
+ * skip mechanism everywhere else is `archived_at is null` — there is no separate "muted" concept
+ * in this schema. /field's own MUTED_FLOWS is a single hardcoded rule for one agent
+ * (`lineage_soft_handoff` -> `codex-dev-1`) that does not exist in this fleet, so there is
+ * nothing there to literally port; `archived_at is null` is this codebase's real equivalent and
+ * is applied below like every other query in this file.
+ */
+export interface HistoryEvent {
+  t: string; from: string; to: string; type: string; subject: string;
+}
+
+export function historyEvents(dataDir: string, windowHours = 24): HistoryEvent[] {
+  const db = openMessagesDb(dataDir);
+  if (!db) return [];
+  try {
+    const { from, to } = windowBounds(windowHours, null);
+    const rows = db.prepare(
+      `select created_at, from_agent, to_agent, type, subject
+         from messages
+        where archived_at is null
+          and to_agent is not null
+          and julianday(created_at) >= julianday(?)
+          and julianday(created_at) <= julianday(?)
+        order by julianday(created_at) asc
+        limit 20000`).all(from, to) as
+      { created_at: string; from_agent: string; to_agent: string; type: string | null; subject: string | null }[];
+    return rows.map((r) => ({
+      t: r.created_at, from: r.from_agent, to: r.to_agent,
+      type: r.type ?? '', subject: (r.subject ?? '').slice(0, 80),
+    }));
+  } catch { return []; } finally { db.close(); }
+}
+
+export interface SpawnEvent { t: string; kind: 'spawn'; id: string; name: string }
+
+/**
+ * Agent spawn times for GROW's node-reveal, ported from /field's /api/spawns. This install's
+ * <data>/state/agent-sessions.json (same path /field reads) DOES exist but, checked directly:
+ * none of its 21 entries carry spawned_at/created_at/launched_at — so the primary signal /field
+ * prefers is absent here. What IS present on every entry is `conversation_path`, so this falls
+ * back to that file's filesystem birthtime exactly the way /field's own code does (ctimeMs if
+ * birthtimeMs is unavailable). This is a real signal, not a fabricated one — it is when the
+ * session's transcript file was first created, not a guess — but it is a proxy for "spawned",
+ * not a stored application fact, and worth knowing if GROW's spawn flashes look mistimed.
+ */
+export function spawnEvents(orchestraDir: string, windowHours = 24): SpawnEvent[] {
+  const sessionsPath = join(orchestraDir, 'state', 'agent-sessions.json');
+  if (!existsSync(sessionsPath)) return [];
+  const cutoff = Date.now() - windowHours * 3600_000;
+  try {
+    const sessions = JSON.parse(readFileSync(sessionsPath, 'utf-8')) as Record<string, Record<string, unknown>>;
+    const events: SpawnEvent[] = [];
+    for (const [id, entry] of Object.entries(sessions)) {
+      let tMs: number | null = null;
+      const raw = (entry.spawned_at ?? entry.created_at ?? entry.launched_at) as string | undefined;
+      if (raw) { const parsed = Date.parse(raw); if (Number.isFinite(parsed)) tMs = parsed; }
+      if (tMs === null && typeof entry.conversation_path === 'string') {
+        try {
+          const st = statSync(entry.conversation_path);
+          tMs = st.birthtimeMs || st.ctimeMs;
+        } catch { /* file gone — no signal for this agent */ }
+      }
+      if (tMs === null || tMs < cutoff) continue;
+      const name = typeof entry.name === 'string' && entry.name ? entry.name : id;
+      events.push({ t: new Date(tMs).toISOString(), kind: 'spawn', id, name });
+    }
+    events.sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
+    return events;
+  } catch { return []; }
+}
+
+// GET /api/messages/history?hours=N — the PLAY/GROW/LIVE replay timeline: every message plus
+// every spawn in the window, merged and sorted ascending by t. Parsed via Date.parse() rather
+// than a raw string compare for the same reason every other time comparison in this file avoids
+// one — see the block comment above pairCounts.
+router.get('/history', (req: Request, res: Response) => {
+  const hours = windowHoursFrom(req.query.hours);
+  const events = [...historyEvents(ORCHESTRA, hours), ...spawnEvents(ORCHESTRA, hours)]
+    .sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
+  res.json({ hours, count: events.length, events });
 });
 
 router.get('/pair-counts', (req: Request, res: Response) => {
