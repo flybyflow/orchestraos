@@ -625,14 +625,15 @@ export default function Agents() {
                 onWindowChange={setWindowHours}
                 asof={asof}
                 onAsofChange={setAsof}
+                oldestAt={pairData?.oldest_at ?? null}
               />
               {asof ? (
-                // §12: never show stale as fresh. The ticker is a live feed by definition, so
-                // while a past moment is being viewed it says what it is instead of quietly
-                // rendering now's traffic under a scrubbed graph.
-                <div className="text-xs text-amber-300/80 py-2">
-                  Viewing a past moment — live ticker paused. Press Live to resume.
-                </div>
+                // §12: never show stale as fresh — the ticker is a live feed by definition, so
+                // it is withheld rather than left rendering now's traffic under a scrubbed
+                // graph. The EXPLANATION lives in TimeBar's banner now, which owns the time
+                // control and can dismiss the state; two banners saying the same thing is the
+                // kind of duplication that drifts.
+                <div className="text-xs text-neutral-600 py-2">Live ticker withheld.</div>
               ) : (
                 <FleetTicker
                   messages={recentMessages}

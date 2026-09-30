@@ -18,7 +18,7 @@ import { mkdtempSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import Database from 'better-sqlite3';
-import { pairCounts, pairMessages, parseAsof } from './messages.js';
+import { pairCounts, pairMessages, parseAsof, oldestMessageAt } from './messages.js';
 
 function hoursAgo(h: number): string {
   return new Date(Date.now() - h * 3600_000).toISOString();
@@ -245,4 +245,54 @@ test('G1: the row list never contains a message sent after the moment being view
     assert.ok(new Date(String(m.created_at)).getTime() <= fourHoursAgo,
       `paged row ${m.id} at ${m.created_at} is AFTER the viewed moment`);
   }
+});
+
+test('oldestMessageAt finds the true oldest, not the lexicographic one', () => {
+  // The scrubber clamps its range to this. On the real install the oldest message is 254h old
+  // while the largest window option was 72h, so the control was concealing 182h of real
+  // traffic — that is the operator's complaint this exists to fix.
+  const data = mkdtempSync(join(tmpdir(), 'orch-oldest-'));
+  mkdirSync(join(data, 'state'));
+  const db = new Database(join(data, 'state', 'tasks.db'));
+  db.exec(`create table messages (id text primary key, conversation_id text, from_agent text,
+           to_agent text, type text, subject text, body text, priority text, status text,
+           created_at text, delivered_at text, acknowledged_at text, archived_at text)`);
+  const ins = db.prepare(`insert into messages
+    (id,from_agent,to_agent,type,subject,body,priority,status,created_at,archived_at)
+    values (?,?,?,?,'s','b','medium','pending',?,?)`);
+  ins.run('m2', 'gm', 'build', 'task', '2026-06-10T12:00:00+00:00', null);   // the true oldest
+  ins.run('m3', 'gm', 'build', 'task', '2026-06-15T12:00:00+00:00', null);
+  // A DEFAULT-format row (space separator, no offset) that must be on the SAME DATE as the
+  // true oldest for this to bite. My first version of this fixture put it on 06-20: the date
+  // digits then decide the comparison before the separator is ever consulted, so a plain
+  // min(created_at) returned the right answer anyway and the mutation survived. Third time
+  // this exact trap has appeared tonight. Same day, later in real time, sorts EARLIER because
+  // ' ' (0x20) < 'T' (0x54) — so a string min returns THIS row, which is not the oldest.
+  ins.run('m4', 'gm', 'build', 'task', '2026-06-10 23:00:00', null);
+  db.close();
+
+  assert.equal(oldestMessageAt(data), '2026-06-10T12:00:00+00:00',
+    'must be the true oldest by time; a string min() returns the same-day 23:00 DEFAULT-format row');
+
+  // Archived rows are not history the scrubber should reach for.
+  const d2 = mkdtempSync(join(tmpdir(), 'orch-oldest2-'));
+  mkdirSync(join(d2, 'state'));
+  const db2 = new Database(join(d2, 'state', 'tasks.db'));
+  db2.exec(`create table messages (id text primary key, created_at text, archived_at text,
+            from_agent text, to_agent text, type text, subject text, body text, priority text,
+            status text, conversation_id text, delivered_at text, acknowledged_at text)`);
+  db2.prepare(`insert into messages (id,created_at,archived_at) values (?,?,?)`)
+     .run('a1', '2026-01-01T00:00:00+00:00', '2026-02-01T00:00:00+00:00');
+  db2.prepare(`insert into messages (id,created_at,archived_at) values (?,?,?)`)
+     .run('a2', '2026-05-05T00:00:00+00:00', null);
+  db2.close();
+  assert.equal(oldestMessageAt(d2), '2026-05-05T00:00:00+00:00', 'archived rows are excluded');
+
+  // Empty store and missing db are null, NOT a fabricated date — null means "no history",
+  // which the UI must render differently from a real old timestamp.
+  const d3 = mkdtempSync(join(tmpdir(), 'orch-oldest3-'));
+  mkdirSync(join(d3, 'state'));
+  new Database(join(d3, 'state', 'tasks.db')).exec(`create table messages (id text primary key, created_at text, archived_at text)`);
+  assert.equal(oldestMessageAt(d3), null, 'empty store -> null');
+  assert.equal(oldestMessageAt(join(d3, 'nowhere')), null, 'missing db -> null, never throws');
 });

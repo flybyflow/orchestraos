@@ -130,6 +130,31 @@ export function pairCounts(dataDir: string, windowHours = 24, asofMs?: number | 
   } catch { return []; } finally { db.close(); }
 }
 
+/**
+ * The oldest unarchived message in the store, or null if there are none.
+ *
+ * The time scrubber clamps its range to this so the bar cannot imply history that does not
+ * exist, and — the operator's actual complaint — cannot hide history that does. Measured on
+ * this install: the oldest message is 254h old while the largest window option was 72h, so the
+ * control was silently concealing 182h of real traffic.
+ *
+ * Ordered by julianday() rather than taking a plain min(created_at), for the same reason every
+ * other comparison in this file does: the column DEFAULT writes 'YYYY-MM-DD HH:MM:SS', which
+ * sorts BEFORE every ISO row lexicographically (space < 'T'), so a string min could return a
+ * row that is not actually the oldest. Returns the value in its stored format.
+ */
+export function oldestMessageAt(dataDir: string): string | null {
+  const db = openMessagesDb(dataDir);
+  if (!db) return null;
+  try {
+    const row = db.prepare(
+      `select created_at from messages
+        where archived_at is null and created_at is not null
+        order by julianday(created_at) asc limit 1`).get() as { created_at: string } | undefined;
+    return row?.created_at ?? null;
+  } catch { return null; } finally { db.close(); }
+}
+
 export interface PairPage {
   a: string; b: string;
   /** Matches the connection-line label exactly — same table, same window. */
@@ -280,6 +305,9 @@ router.get('/pair-counts', (req: Request, res: Response) => {
   res.json({
     window_hours: hours,
     asof: asofMs === null ? null : new Date(asofMs).toISOString(),
+    // How far back history actually goes, so the scrubber can clamp to it instead of to
+    // window arithmetic. null means an empty store, which is distinct from "unknown".
+    oldest_at: oldestMessageAt(ORCHESTRA),
     pairs: pairCounts(ORCHESTRA, hours, asofMs),
   });
 });

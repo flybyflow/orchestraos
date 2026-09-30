@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { clsx } from 'clsx';
 import { Radio } from 'lucide-react';
-import { WINDOW_OPTIONS, minutesAgo as minutesAgoFrom, asofFromSlider } from '../lib/timeBar';
+import { WINDOW_OPTIONS, minutesAgo as minutesAgoFrom, asofFromSlider, windowLabel, scrubSpanHours } from '../lib/timeBar';
 
 export interface TimeBarProps {
   windowHours: number;
@@ -9,8 +9,9 @@ export interface TimeBarProps {
   /** ISO moment being viewed, or null for live. */
   asof: string | null;
   onAsofChange: (iso: string | null) => void;
-  /** How far back the scrubber can reach, in hours. */
-  scrubSpanHours?: number;
+  /** Oldest real message in the store (from /pair-counts). The track clamps to it, so the bar
+   *  cannot imply history that does not exist nor hide history that does. */
+  oldestAt?: string | null;
 }
 
 /**
@@ -31,10 +32,9 @@ export interface TimeBarProps {
  * nothing verifies that today.
  */
 export function TimeBar({
-  windowHours, onWindowChange, asof, onAsofChange, scrubSpanHours = 72,
+  windowHours, onWindowChange, asof, onAsofChange, oldestAt,
 }: TimeBarProps) {
   const live = asof === null;
-  const spanMinutes = scrubSpanHours * 60;
   // `now` is state on a slow tick rather than a Date.now() read during render. Two reasons,
   // and the lint rule is only the second: a render-time clock read means a scrubbed label
   // silently drifts (it only updates when something else re-renders), and eslint's
@@ -45,6 +45,11 @@ export function TimeBar({
     return () => clearInterval(t);
   }, []);
 
+  // Track length comes from real data, not arithmetic — declared after `now` because it reads
+  // it. See scrubSpanHours(): clamps to the oldest real message, floored at the selected
+  // window, capped at the 90d server limit.
+  const spanMinutes = scrubSpanHours(oldestAt, windowHours, now) * 60;
+
   // Inverted so the right-hand end is "now" — the direction people expect from a timeline,
   // and where the Live button sits.
   const minsAgo = minutesAgoFrom(asof, now, spanMinutes);
@@ -54,6 +59,26 @@ export function TimeBar({
     : new Date(asof).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
+    <div className="space-y-1.5">
+      {/* Scrubbed-state banner (plan's (a), part 3 of the operator's ask): say the moment, say
+          that live is paused, and offer one click back. Rendered only when scrubbed — a banner
+          that is always present is furniture, and the operator's complaint was not knowing
+          whether the view was live. The Live button is duplicated here on purpose: the one in
+          the row below is a control among controls, this one is the way out of a state the
+          operator may not have realised they were in. */}
+      {!live && (
+        <div className="flex items-center gap-2 rounded-lg border border-amber-900/60 bg-amber-950/30 px-2.5 py-1.5">
+          <span className="text-amber-300">Showing {label}</span>
+          <span className="text-neutral-500">· live updates paused</span>
+          <button
+            type="button"
+            onClick={() => onAsofChange(null)}
+            className="ml-auto px-2 py-0.5 rounded border border-green-800 bg-green-950/40 text-green-300 hover:bg-green-900/40"
+          >
+            Back to live
+          </button>
+        </div>
+      )}
     <div className="flex flex-wrap items-center gap-3 py-2 text-xs">
       <div className="flex rounded-lg border border-neutral-700 overflow-hidden shrink-0">
         {WINDOW_OPTIONS.map((h) => (
@@ -69,7 +94,7 @@ export function TimeBar({
                 : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800',
             )}
           >
-            {h}h
+            {windowLabel(h)}
           </button>
         ))}
       </div>
@@ -106,6 +131,7 @@ export function TimeBar({
         <Radio size={12} />
         Live
       </button>
+    </div>
     </div>
   );
 }

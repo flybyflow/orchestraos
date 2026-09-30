@@ -55,8 +55,15 @@ export interface PairCountRow { a: string; b: string; count: number; last_at: st
 export const fetchPairCounts = (hours = 24, asof?: string | null) => {
   const q = new URLSearchParams({ hours: String(hours) });
   if (asof) q.set('asof', asof);   // omitted entirely means live
-  return get<{ window_hours: number; asof: string | null; pairs: PairCountRow[] }>(
-    `/messages/pair-counts?${q}`);
+  return get<{
+    window_hours: number;
+    asof: string | null;
+    /** Oldest unarchived message in the store, or null for an empty store. The time scrubber
+     *  clamps its track to this so the bar cannot hide real history — measured on this install,
+     *  the oldest message was 254h old while the largest window was 72h. */
+    oldest_at: string | null;
+    pairs: PairCountRow[];
+  }>(`/messages/pair-counts?${q}`);
 };
 
 export interface PairMessage {
