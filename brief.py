@@ -3,26 +3,14 @@
 import json
 import os
 import sys
-try:
-    import requests
-except ImportError:  # the seat's python3 may not be the .venv; fail soft with the fix
-    requests = None
 from pathlib import Path
 from datetime import datetime
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from plugins.telegram.tg_send import send_text  # noqa: E402
+
 ORCHESTRA_DIR = Path(os.environ.get("ORCHESTRA_DIR") or Path(__file__).resolve().parent)
-ENV_FILE = ORCHESTRA_DIR / ".env"
 ACTIVITY_FILE = ORCHESTRA_DIR / "activity.jsonl"
-
-
-def load_env():
-    env = {}
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text().splitlines():
-            if "=" in line and not line.startswith("#"):
-                k, v = line.split("=", 1)
-                env[k.strip()] = v.strip()
-    return env
 
 
 def send_brief(agent_id: str, stage: str, message: str):
@@ -30,50 +18,36 @@ def send_brief(agent_id: str, stage: str, message: str):
 
     stage: 'ack' | 'checkpoint' | 'result' | 'blocker'
     """
-    env = load_env()
-    token = env.get("TELEGRAM_BOT_TOKEN", "")
-    chat_id = env.get("SHAW_TELEGRAM_ID", "")
-
-    # Also try the persisted chat ID file
-    if not chat_id:
-        chat_id_file = ORCHESTRA_DIR / ".shaw_chat_id"
-        if chat_id_file.exists():
-            chat_id = chat_id_file.read_text().strip()
-
-    if not token or not chat_id:
-        return False
-
-    icons = {"ack": "\U0001f4cb", "checkpoint": "\U0001f504", "result": "\u2705", "blocker": "\U0001f6ab"}
+    icons = {"ack": "\U0001f4cb", "checkpoint": "\U0001f504", "result": "✅", "blocker": "\U0001f6ab"}
     icon = icons.get(stage, "\U0001f4cc")
 
-    text = f"{icon} *{agent_id}* \u2014 {stage}\n{message}"
+    text = f"{icon} *{agent_id}* — {stage}\n{message}"
 
-    try:
-        if requests is None:
-            print("brief.py: python 'requests' missing — run `orchestra init` (pip step) or `.venv/bin/python3 brief.py ...`", file=sys.stderr)
-            return False
-        requests.post(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
-            timeout=5,
-        )
-    except Exception:
-        pass
+    # tg_send resolves the remembered operator chat itself (the same path gm's Telegram
+    # replies already use successfully) instead of a separate, unconfigured env-var
+    # scheme. It prints its own reason to stderr on failure.
+    ok = send_text(text)
 
-    # Also log to activity
+    # Log to activity BEFORE returning, always -- a brief that delivered nothing must
+    # never look identical to one that succeeded (2026-09-30, gm/build finding: this
+    # used to return False before writing here at all, so failures left zero trace).
     try:
         entry = json.dumps({
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "agent": agent_id,
             "event": f"brief_{stage}",
             "detail": message[:200],
+            "delivered": ok,
         })
         with open(ACTIVITY_FILE, "a") as f:
             f.write(entry + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"brief.py: activity log write failed: {e}", file=sys.stderr)
 
-    return True
+    if not ok:
+        print(f"brief.py: delivery FAILED for {agent_id}/{stage} -- see tg_send error above", file=sys.stderr)
+
+    return ok
 
 
 if __name__ == "__main__":
@@ -81,4 +55,5 @@ if __name__ == "__main__":
         print("Usage: python3 brief.py <agent-id> <stage> <message>")
         print("  stage: ack | checkpoint | result | blocker")
         sys.exit(1)
-    send_brief(sys.argv[1], sys.argv[2], " ".join(sys.argv[3:]))
+    ok = send_brief(sys.argv[1], sys.argv[2], " ".join(sys.argv[3:]))
+    sys.exit(0 if ok else 1)

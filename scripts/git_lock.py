@@ -27,9 +27,13 @@ import time
 TIMEOUT_S = 30
 
 
-def repo_root():
+def git_dir():
+    # --absolute-git-dir, not --show-toplevel + ".git": in a worktree, <toplevel>/.git
+    # is a FILE (a gitdir pointer), not a directory, so joining onto it crashes. This
+    # resolves to the real per-worktree git dir (e.g. <repo>/.git/worktrees/<name>),
+    # which is always a directory. Found live by build 2026-09-30 in /tmp/pr137-fix.
     out = subprocess.run(
-        ["git", "rev-parse", "--show-toplevel"],
+        ["git", "rev-parse", "--absolute-git-dir"],
         capture_output=True, text=True, check=True)
     return out.stdout.strip()
 
@@ -42,7 +46,7 @@ def main(argv):
         print("usage: git_lock.py -- <command...>", file=sys.stderr)
         return 2
 
-    lock_path = os.path.join(repo_root(), ".git", "seat-write.lock")
+    lock_path = os.path.join(git_dir(), "seat-write.lock")
     fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o644)
     deadline = time.monotonic() + TIMEOUT_S
     while True:
