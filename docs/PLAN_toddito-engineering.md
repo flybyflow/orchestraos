@@ -1080,6 +1080,167 @@ mechanism needs its own pass. Neither is build-ready — same multi-PR,
 preview-deploy, QA-before-ship discipline as the other three threads,
 per gm's instruction, once each clears its own open question.
 
+## 13. Operator instruction (2026-09-30 17:06 UTC, `msg_4793e1d7_87969247`):
+take all three Toddito design threads to build-ready in parallel with
+build's Play/GROW/LIVE work — Congruence/Incongruence, new
+
+### 13.1 Congruence/Incongruence Analysis — real content, spike cleared, first full design
+
+**Source, confirmed real (bshr's research + spike, `msg_f10c431b_81341400`,
+`msg_579a3773b7e4`):** `GP*RISK.ASF` (generic across all 8 industry
+variants, byte-identical between A and B) contains a large, professionally-
+written, fully-decoded cross-dimensional fit-checking library: ~35
+Structure×Strategy conflict rules, ~14 Culture×Structure rules, ~20
+Culture×Strategy rules, a per-stage "ideal profile" narrative, a 32-item
+organizational-health bank (board involvement, one-man-rule, CFO
+competency, environmental scanning, morale — each 3-tier healthy/
+moderate/severe), a Greiner-style stage-crisis framework, and a
+meta-synthesis layer. **Confirmed absent from modern Toddito** — direct
+grep across the live repo for congruen/incongruen/crisis-of-leadership/
+one-man-rule: zero hits. **Every input it needs is already computed by
+the modern engine today** (structure/strategy/culture/leadership scores,
+dev stage) — this is new report LOGIC on existing outputs, not new data
+capture, no Todd input needed to build the base version.
+
+**The spike, real and verified, not simulated (bshr, `msg_579a3773b7e4`,
+gm's own verdict: "clears the gate"):** reimplemented `thor-score.ts`'s
+actual scoring math standalone, ran it against a real ground-truth
+fixture (`thor-legacy-case-a.json`, the same one already used for F8),
+hand-applied ~8-10 of the ~70+ real decoded rules against this org's real
+computed scores. Real findings: the `OVERALL_RISK` output matched the
+legacy program's own printed "Moderate Risk" verdict exactly — an
+independent sanity check the underlying scoring is sound, not just that
+the rule text reads well. Rules fired conditionally, not indiscriminately
+— several culture/strategy conflict rules correctly stayed silent when
+this org's own risk-acceptance score didn't meet their trigger condition,
+which is the actual test of "coherent decoded logic" vs. "plausible-
+sounding garbage." One genuinely useful finding fell out un-forced: the
+org's structure evidence fit its #3-ranked lifecycle stage (Acceleration)
+better than its nominal #1 pick (Stall) — exactly the kind of insight a
+consultant would want flagged, not invented to sound clever.
+
+**Design proposal — a new report section, not a new data pipeline:**
+1. **Rule engine**: port the decoded conflict rules as conditional logic
+   (`if structure.dominant === X && culture.dominant === Y → fire rule
+   text Z`) reading the SAME scored dimension outputs the report already
+   computes — `leadership`, `strategy`, `culture` objects from
+   `src/lib/scoring/prompt.ts`'s existing output. No new LLM call needed
+   for the rule-firing itself; the rules are deterministic conditionals
+   on numbers already in hand, same shape as F8's weight-matrix work.
+2. **Narrative synthesis**: the fired rules' text needs the SAME
+   plain-language treatment as §9 — write a synthesis pass (could reuse
+   the existing scoring LLM call, appending fired-rule context to the
+   prompt, or a dedicated cheap follow-up call) that turns "these N rules
+   fired" into readable prose, not a bullet list of decoded 1987 text
+   verbatim (which itself needs the §9 tone treatment — the source text
+   is 1987-era professional writing, not clinical, but also not written
+   for this product's voice).
+3. **Report placement**: a new section, likely adjacent to `critical_risk`
+   (§10's own "lead with the load-bearing gap" principle applies here
+   too — if a real Structure×Culture conflict is found, it's exactly the
+   kind of thing §10's JTBD 1 wants surfaced prominently, not buried).
+4. **Stage-ambiguity handling**: the spike's own best finding (structure
+   evidence favoring a different stage than the nominal pick) suggests
+   this feature should explicitly surface stage disagreement between the
+   dimension's own top-2/3 scores when they're close — connects directly
+   to §10 JTBD 4's "contested stage" pattern, same principle applied at
+   the individual-report level instead of the group-report level.
+
+**CEO + design review, same self-directed process, same reason
+(unattended execution):**
+- **Premise**: holds, strongly — this is the rare case where "real
+  decoded 1987 content" is ALSO genuinely novel report value or existing
+  product (no `Congruence`/`Incongruence` feature exists today at all,
+  confirmed by the same grep that found the content missing).
+- **Real risk not yet named**: firing ~70 conditional rules against
+  every report risks noise — not every org will have many real conflicts,
+  and a section that's usually empty or usually fires 1-2 generic-
+  sounding rules will read as filler. Needs a real threshold/ranking
+  decision (top-N most significant fires, not all fires) — not decided
+  here, a real design question for whoever builds this.
+- **Test requirement**: the spike's own hand-check (8-10 of 70+ rules,
+  one case) is NOT sufficient verification for a shipped feature — needs
+  the full rule set actually coded and run automatically against BOTH
+  ground-truth fixtures (case A here, case B not yet run — bshr offered,
+  not done), same ground-truth-case discipline as `thor-score.test.ts`.
+- **Scope check**: the 32-item health bank and the Greiner stage-crisis
+  framework are real additional content NOT covered by the spike (which
+  only exercised the conflict-rule subset) — flag clearly that "the
+  spike cleared the gate" means the conflict-rules mechanism is sound,
+  not that all four content types (conflict rules, health bank, ideal
+  profiles, stage-crisis) have been verified working. Recommend building
+  conflict rules first (spiked, verified) before the other three.
+
+**What this section does not resolve:** the narrative-synthesis prompt
+itself isn't written (needs §9's tone treatment applied to new content,
+not just existing fields); the top-N firing-threshold design isn't
+decided; case B verification hasn't run; the health-bank and stage-crisis
+content are real but unspiked. Not build-ready for the FULL feature —
+build-ready for the conflict-rules mechanism specifically, which is what
+the spike actually verified.
+
+### 13.2 Client Relationship / Consulting Communicator — remaining gap to build-ready
+
+Per §7a, two items were open: OD6-the-gate and a screens-level design
+pass (narrowed after the console-layout correction, §7a.4 update). OD6
+is a standing operator-level privacy/consent gate on biometric voice
+capture — **not resolvable by a design pass**, stays open regardless of
+how complete this design gets; flagging plainly rather than designing
+around it. The screens-level piece, now designed:
+
+1. **Entry point**: a new nav item inside the existing `ConsoleLayout`
+   (§7a.4's correction — real layout confirmed, `src/app/admin/
+   engagements/page.tsx`'s pattern), e.g. `/admin/self-coaching`, styled
+   consistently with the existing `Engagements` page (same h1/intro-
+   paragraph/CTA pattern already there).
+2. **Session flow**: reuses the existing voice-session mechanism (same
+   as a client engagement) but with the consultant as respondent,
+   `respondent_role` set to identify this as self-assessment, question
+   set derived from CPCSP's Client Relationship item family (§7a.2).
+3. **Results view**: a new report variant (NOT reusing the org-report's
+   `Leadership`/`Strategy` section labels, per §7a.3's corrected scope —
+   distinct content, own section names grounded in the real trust/
+   influence-style dimension).
+4. **Sequencing, unchanged from §7a.3**: write this facet's copy against
+   §9's corrected tone rules (language-only, no Self/Other/Whole
+   structure) from the first draft.
+
+**Build-ready for the mechanism and layout; still gated on OD6 for wide
+distribution, and on Todd's OD4 confirmation for the specific
+16-question expansion (§7a.4) — ship with the 6 real known items if that
+expansion hasn't landed by build time, honestly labeled as a partial
+set, not a fabricated full one (§7a.5's original caution, still the
+right call).**
+
+### 13.3 Executive Communicator — multi-rater intake design
+
+Per §12, the report format is confirmed (reuses the group-report
+divergence pattern) but the intake mechanism was flagged as needing its
+own pass — the existing group report aggregates multiple RESPONDENTS
+answering the SAME session type; Executive Communicator needs multiple
+NAMED EXECUTIVES each rating the same org from their own seat, a real
+but structurally similar shape.
+
+**Design proposal:** reuses the existing `engagements` → multiple
+`sessions` pattern (§13.2 point 1's same admin console) with one real
+addition: each session in the engagement needs a `rater_role` or
+similar tag identifying WHICH named executive/seat is rating (vs. the
+existing group-report flow, which doesn't need to distinguish
+respondents by name/role for its aggregate). Scoring/report reuses the
+existing group-synthesis pipeline (`GROUP_SYNTHESIS_SYSTEM_PROMPT`,
+already fixed for tone per §9.1a) with the addition of per-rater identity
+in the divergence narrative ("the CEO and the COO see this differently"
+instead of an anonymous aggregate) — a real, scoped prompt change, not a
+new pipeline.
+
+**Build-ready**, with one open question flagged, not decided: does
+distinguishing raters by name/role in the narrative create a
+confidentiality concern (an exec seeing that their specific rating
+diverged from a named colleague's) that the anonymous group report
+doesn't have? Real product-policy question, not a technical one — flag
+to the operator before shipping the named-divergence framing, technical
+build can proceed with role-tagging either way.
+
 ## GSTACK REVIEW REPORT
 
 **Mode: HOLD SCOPE.** This is improvement work on an existing, mature,
