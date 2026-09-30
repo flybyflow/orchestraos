@@ -1,58 +1,52 @@
-# Handoff: ship -> reflect
+# Handoff: ship -> gm/ea
 
-- **Lineage:** build -> review -> test -> ship (Gen 1) — COMPLETE
-- **Timestamp:** 2026-09-20T21:45:00Z
-- **Working Directory:** /Users/flybyflow/orchestraos (task target repo: /Users/flybyflow/duelo-de-dibujo)
-- **Branch (target repo, now merged & deleted):** `build/arabic-letter-tracing-vertical`
+- **Lineage:** ship (Gen 1, this task)
+- **Timestamp:** 2026-09-30T01:05:00Z
+- **Working Directory:** /Users/flybyflow/orchestraos (shared checkout — did all git surgery in an isolated `git worktree` at `/tmp/ship-2d-agents-view`, now removed; never switched the shared checkout's own branch)
+- **Task:** gm's msg_429b757d_29412116 — "Ship: 2D Agents View — fresh branch off main, new PR, close #133"
 
-## 1. Current Goal & Phase State
-- **Goal:** ship `skill-duel-engine-v3` (config-driven CHALLENGES engine + Arabic letter-tracing).
-- **Plan Reference:** `/Users/flybyflow/duelo-de-dibujo/DOCS/designs/skill-duel-engine-v3.md`
-- **Phase:** DONE. Merged, deployed, canary-verified, post-deploy verification closed the one gap Test left open.
-- **Current Step:** None — handing off to `reflect`.
+## 1. Result
 
-## 2. Result
+**DONE**, per gm's 6-step instruction:
+1. Fresh branch `2d-agents-view`, off `origin/main` (013e05a) — not off `fix-arturo-mapfile-bash32`, and not off the local `main` ref (which was 99 commits stale vs origin).
+2. Cherry-picked 14 commits total: gm's 12 (`47a3314`, `1cfdf9e`, `2240141`, `b300e73`, `6ab2d1d`, `b9ebbe0`, `a41d08c`, `0c46874`, `adf6838`, `e3efa77`, `996752f`, `9071d7b`) + 2 undiscovered prerequisites (`3383805`, `c9bc63b` — see §3.1).
+3. `api/src/server.ts`: verified untouched by any of the 14 commits (`git diff origin/main --stat`) — no duplicate-copy conflict existed to resolve.
+4. New PR: **#137** — https://github.com/Tulum-DAO/orchestraos/pull/137 (head `flybyflow:2d-agents-view`, base `Tulum-DAO/orchestraos:main`).
+5. **#133 closed**, comment references #137 and #134.
+6. Reported to `ea` (`msg_5e6a12f0_30176689`) per gm's routing instruction, not directly to gm; brief reply also sent to gm (`msg_f7b2f926_30183834`).
 
-**DEPLOYED AND VERIFIED.** PR #3 merged (squash) into `main` at `93fbe29fa4fa4245b61adaf7e086e262a234025a`, deployed to production via Vercel auto-deploy, live at https://duelo-de-dibujo.vercel.app. Deploy report: `/Users/flybyflow/duelo-de-dibujo/.gstack/deploy-reports/2026-09-20-pr3-deploy.md` (screenshot alongside it).
+Not merged — operator merges #137 themselves, per the standing hard-stop.
 
-Operator approved merge+deploy via approval card `apr_4a0cd4ab_39734783` (resolution: APPROVE).
+## 2. Verified on the fresh branch (not inherited from any prior gate)
 
-## 3. What shipped (full commit list, squashed into `93fbe29`)
-- Config-driven `public/challenges.json` replacing the hardcoded `ANIMALS` array and inline server rubric text — one source of truth for both client and `api/judge.js`.
-- New `trace` challenge type (vs `draw`), with the first entry: Arabic أَلِف (Alif) letter-tracing.
-- `5faeba1` — fix: real regression found by ship-stage's own coverage audit — `public/index.html` flashed a false "couldn't load" error on every page load before `challenges.json` finished fetching. Fixed with a `challengesFailed` flag.
-- First-ever `VERSION` (`0.2.0.0`) + `CHANGELOG.md` for this repo; `README.md` synced to the new schema.
+- `api`: `npm test` — **236/236 pass**
+- `dashboard`: `npx tsc -b --force` — clean (used `--force`, not plain `-b`: Gate 14's own finding was that incremental `tsc -b` can pass a commit that doesn't compile)
+- `dashboard`: `npm test` — all suites pass (checked log for FAIL, none)
+- `dashboard`: `npm run build:check` — clean production build (used the safe/non-deploying build path per the new `e5d0576` convention)
+- `npx eslint` on the touched files: same pre-existing `no-explicit-any` pattern the original commits already disclosed (Agents.tsx's 26, etc.) — no new class of finding introduced by the reassembly.
 
-## 4. Post-merge verification (closes Test's one open gap)
+## 3. Decisions Made & Rationale
 
-Test's handoff (`docs/HANDOFF_test-next.md`) flagged `qa-judge.mjs` cases 1-2 (real Claude calls) as unverifiable locally — `.env.local`'s `ANTHROPIC_API_KEY` is a Vercel Sensitive var, write-only, unrecoverable via any local `vercel env pull`. Re-running `qa-judge.mjs` locally post-merge doesn't help — it always reads `.env.local`, never the live deployment. Instead, curled the live Production endpoint (`https://duelo-de-dibujo.vercel.app/api/judge`) directly with real payloads:
+1. **Used a `git worktree`, never switched the shared checkout's branch.** This repo is a live shared checkout (plan/build/review commit here concurrently) — review's own escalation (msg_7968ad56_26796370) named "cutting or rebasing branches in this shared checkout mid-sprint" as a failure class that already bit twice. A worktree gets an isolated directory off the same repo without touching anyone else's HEAD.
+2. **Cherry-picked rather than rebased/merged the range.** `main..fix-arturo-mapfile-bash32` is 258 commits deep, almost all unrelated (arturo, telegram, toddito, venture-plan docs). A range-based rebase would have replayed all of it. Picked exactly gm's named 12, in original chronological order, plus §3.1's two.
+3. **3.1 — Added `3383805` and `c9bc63b` as prerequisites, outside gm's named range.** `1cfdf9e`'s own diff calls `isWorking()` and reads a `working` boolean as pre-existing context — that function is defined in `3383805` ("make the org chart show who is actually working"), which was **never merged to main** (confirmed: `git merge-base --is-ancestor 3383805 origin/main` fails, and origin/main's TopologyDiagram.tsx has zero occurrences of `prefers-reduced-motion`/`isWorking`). Cherry-picking `1cfdf9e` alone onto vanilla main produced a real conflict (not cosmetic) — the code would not have compiled without `isWorking` defined. Included both commits (`c9bc63b` is a one-line a11y follow-up on the same feature) rather than hand-stripping the `working`-glow code out of `1cfdf9e`'s diff, which would have silently deleted a shipped, reviewed feature. This is the same "dead branch buries real work" failure class #133 was, on a different feature — flagged to ea, not silently absorbed as scope creep.
+4. **Two package.json conflicts resolved by union, not by picking a side.** `main` had independently evolved both test scripts since this branch forked (`api`: added an `ORCHESTRA_CONFIG` env default; `dashboard`: added a `.test.ts`-only glob that misses the ~16 pre-existing `.test.mjs` suites, including 4 of this feature's own). Kept main's env var AND broadened the glob to cover both file types — verified by checking `find api/src -name '*.test.ts'` includes the new `services/transcript-activity.test.ts`, which main's narrower pattern would have silently skipped.
+5. **Discarded a `dashboard/package-lock.json` diff produced by my own `npm install`**, not by any of the 14 commits (confirmed via `git diff origin/main HEAD --stat` showing zero diff for that file across commits, vs. `git status` showing it modified in the worktree). Local npm-version lockfile churn, not real branch content — `git checkout --` before committing anything.
+6. **Pushed to `fork` (flybyflow/orchestraos), not `origin` (Tulum-DAO/orchestraos).** `git push origin` returned 403 — this account has no direct write access to Tulum-DAO/orchestraos, matching how #133 itself was structured (fork-headed PR). Opened the PR cross-repo: `gh pr create --repo Tulum-DAO/orchestraos --head flybyflow:2d-agents-view`.
 
-- **alif (the previously-unverified case):** `challengeId: "alif"`, exact-copy vs wrong-drawing → **HTTP 200**, `precision_winner: "player1"`, `vibe_winner: "player1"`, correct ar/fr/en narration. **PASS.**
-- **frog (regression case):** same shape → **HTTP 200**, `precision_winner: "player1"`. **PASS.**
-- **unknown challengeId:** → **HTTP 400**. **PASS.**
+## 4. Open Loops — flagged, not actioned (outside this task's scope)
 
-Canary (full — console, perf, screenshot, both `draw`/`trace` tabs clicked and screenshotted): page loads 200 in 1077ms, no new console errors, Arabic RTL renders correctly by default, the `5faeba1` fix confirmed live (no false-error flash), the new Alif challenge card renders correctly with the ا glyph.
+- [ ] **`79cae92`** (as of this writing; the shared checkout kept advancing during this task — HEAD is `8dea822` now) — "the graph silently dropped agents, including the only DOWN one," found live by review, fixed on `fix-arturo-mapfile-bash32` **after** Gate 14's boundary (`e3efa77`/`39f5dd9`). Real bug, same feature, **not in PR #137** — outside my task's named range and unreviewed/ungated as of this report. Flagged to ea (§ digest) so it doesn't repeat #133's fate (real work stranded on a branch nobody ships).
+- [ ] Whatever else lands on `fix-arturo-mapfile-bash32` after this — that branch remains the live/shared working tree; PR #137 is a point-in-time snapshot, not a tracking branch.
 
-## 5. Open items — all pre-existing or explicitly out of this ship's scope
-- [ ] **Human-only, unchanged from Test's handoff (non-blocking):** real-kid playtest of `rubric.vibe` wording; RTL visual + Arabic TTS pronunciation listen, ar/fr/en; watch video `fKwOMa3r1_c` for content accuracy.
-- [ ] **Pre-existing, NOT a regression from this PR:** `public/img/qr.png` 404s in production — generated by `scripts/make-qr.mjs`, never committed to git. Confirmed present on the prior production deployment too (curled directly). Flagged per repo-ownership norms, not fixed — out of scope for `skill-duel-engine-v3`.
-- [ ] AI-assessed coverage on this diff: 39%, below the skill's 60% minimum gate — shipped anyway (disclosed in PR body); the regression the audit exists to catch was found and fixed, remaining gap is architectural (no client-side test harness in this repo).
-- [ ] Notification infra still broken, unrelated to this task but worth someone fixing: `approval.py`'s ntfy push (missing token at `~/.config/jarvis/ntfy-token`), `./scripts/tg-notify.sh` (empty token/id in `/Users/flybyflow/.orchestra/.env.telegram`). Neither reached the operator during this run; the approval card + msg_store are the durable record instead.
+## 5. Declared First Effect (for whoever reads this next)
 
-## 6. Decisions Made & Rationale
-1. **Waited for the operator's explicit approval card before merging/deploying** — per Review's and Test's handoffs, both citing an operator hard-stop requiring a fresh gate. Did not proceed on the prior "branch + PR only" turn; resumed only after `apr_4a0cd4ab_39734783` resolved APPROVE.
-2. **Verified the alif Claude-judgment gap by curling live Production directly**, rather than re-running `qa-judge.mjs` locally (which would hit the same missing-key wall regardless of merge state) — this was the correct way to "test for real" per Test's own handoff recommendation.
-3. **Did not fix the pre-existing `qr.png` 404** — confirmed via direct comparison against the prior production deployment that it predates this branch; fixing it would be scope creep on an unrelated bug.
-4. **Skipped a full `/document-release` subagent dispatch** — README/CHANGELOG were already synced during the ship-stage PR run; verified no other doc files reference the old schema. Nothing left to sync.
+If the operator has already merged #137: `git log --oneline -1 origin/main` should show a squash/merge commit whose message references #137, and `git merge-base --is-ancestor <that-sha> origin/main` for `79cae92` should still be false (it isn't in #137). If gm wants `79cae92` shipped too: it needs its own review/gate first — it was never part of this task's mandate, and this handoff makes no claim about its correctness beyond quoting its own commit message.
 
-## 7. Next Actions (for `reflect` / whoever reads this next)
-1. Nothing blocking. Task complete.
-2. Consider: fix the `ntfy`/Telegram notification gap so future approval gates actually reach the operator's phone — this was the second task in a row where it silently failed.
-3. Consider: someone should either commit a real `qr.png` or remove the QR feature/script if it's meant to be a build artifact — currently 404s in production on every deploy.
+## 6. Grounding Canary Questions (Questions Only — No Answers!)
 
-## 8. Grounding Canary Questions (Questions Only — No Answers!)
-1. **Q1:** What HTTP status and `precision_winner` did the live Production endpoint return for the alif challenge when curled directly post-deploy (jsonl regarding this handoff's §4, first bullet)?
-2. **Q2:** Why couldn't re-running `qa-judge.mjs` locally after the merge close Test's open gap, and what was done instead (jsonl regarding this handoff's §4, opening paragraph)?
-3. **Q3:** What evidence confirmed the `qr.png` 404 predates this branch rather than being a regression (jsonl regarding this handoff's §5, second bullet)?
-4. **Q4:** What merge method was used for PR #3, and what is the resulting merge commit SHA (jsonl regarding this handoff's §2)?
-5. **Q5:** Which two notification channels are still broken, and where are their missing credentials expected to live (jsonl regarding this handoff's §5, fourth bullet)?
+1. **Q1:** Which two commits did this task add to gm's named 12, and what specific function call in `1cfdf9e`'s own diff proves they were a hard prerequisite rather than a nice-to-have (jsonl regarding the TopologyDiagram.tsx conflict investigation, §3.1)?
+2. **Q2:** Why did `git push origin 2d-agents-view` fail, and which remote succeeded instead (jsonl regarding the push step)?
+3. **Q3:** What two independent facts confirm `api/src/server.ts` was never at risk of a duplicate-copy conflict in this PR (jsonl regarding §1 item 3 and §2)?
+4. **Q4:** What single command distinguished "my own npm install churned the lockfile" from "one of the 14 commits touches package-lock.json" (jsonl regarding decision 5)?
+5. **Q5:** What is `79cae92`, why is it not in PR #137, and where was it flagged (jsonl regarding §4's first open loop)?
