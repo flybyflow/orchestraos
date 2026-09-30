@@ -119,6 +119,12 @@ test('ended is true exactly when idx reaches the end, not one frame early or lat
 
   const r2 = advance(state, toDt(3000)); // cursor -> 4500: fires t=2000, nothing left
   assert.strictEqual(r2.ended, true, 'must be ended once the last event has fired');
+  // The contract useReplay.ts's loop() depends on: the SAME call that reports ended:true must
+  // still return whatever fired on that frame -- advance() does not silently drop the final
+  // batch. (A caller discarding fired on the ended branch is a real bug this pins the engine's
+  // half of: QA found the tail of a replay losing events -- 24h lost 3 of 1165, "all" lost 47
+  // -- and this is the guarantee the fix in useReplay.ts relies on.)
+  assert.deepStrictEqual(r2.fired.map((e) => e.t), [2000], 'the ending call must still report its own fired events, not an empty list');
 });
 
 test('pause/setLive/setSpeed/setGrowth are pure, minimal state transitions', () => {

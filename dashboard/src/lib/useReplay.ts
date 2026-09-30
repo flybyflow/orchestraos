@@ -113,10 +113,16 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     lastRef.current = now;
     const { state: next, fired: justFired, ended } = advance(stateRef.current, dt);
     if (ended) {
+      // advance() already correctly returns whatever fired on THIS frame even when it is also
+      // the frame that ends the replay -- publish it before going live, not instead of it.
+      // QA (operator-reported, live): 24h lost 3 of 1165 events, "all" lost 47, always at the
+      // tail -- the final frame's batch was computed and then discarded here unconditionally.
+      // Batch size varies with tail density, so the loss count was never a fixed number; that
+      // is also why the regression test below pins a real fixture rather than a literal count.
+      setFired(justFired.length ? justFired : NO_EVENTS);
       const live = setLiveEngine(next);
       stateRef.current = live;
       setState(live);
-      setFired(NO_EVENTS);
       stopLoop();
       return;
     }
