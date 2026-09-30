@@ -70,15 +70,16 @@ by **class** — the leftover bucket is computed by subtraction, so anything the
 claim is drawn regardless of why — which surfaced a **second** invisible agent, `test-g2`, a
 parentless worker nobody had reported.
 
-**Open residual, not release-blocking, with build:** spec §5 wants the message box "disabled
-with a note when the agent is down". It is **absent** entirely. Probed both panels with one
-selector — `reflect` (live) gives a box, `gm-g2` (down) gives none.
+**~~Open residual~~ FIXED in `54da7bd`, verified:** spec §5 wants the message box "disabled
+with a note when the agent is down"; it was absent entirely. Now one input always rendered,
+`disabled: true` for a down agent, placeholder `"<agent> is down"`, and `aria-describedby`
+wired to the note's id. (My first probe missed the note because it only matched `input`
+elements — see the top section.)
 
-**Still unverified by anyone:** the travelling dot's *animated* render direction (clicks can
-be driven; an animation cannot be read from the DOM — needs an eye or a frame capture), and
-live-feed auto-scroll pause + jump-to-latest.
+**~~Still unverified~~ BOTH CLOSED by `test`** — animated dot direction and live-feed
+auto-scroll/jump-to-latest. Evidence in the top section; nothing on the 2D view is unverified.
 
-### Interaction QA — I ran it; `test` refused the work
+### Interaction QA — I ran it when `test` refused; `test` later ran it too and closed the rest
 
 All five items pass: ticker direction (checked against a message whose direction I knew
 because I sent it), polling-pauses-while-scrubbed (**two-sided**: counts byte-identical for
