@@ -31,6 +31,7 @@ Two workstreams, both at a clean stopping point. Nothing half-applied in either 
 - **dashboard:** `npm run build` is now the SAFE path (bundles to `/tmp`, never touches `dist`). The deploying build is **`npm run build:live`** — it writes `dist`, stamps `dist/BUILD_SHA`, and says so. `orchestra init` and `doctor`'s remedy name `build:live`; CI deliberately still calls `build` and gets the safe path. Consequence to remember: if you want your dashboard change live, plain `build` will leave you wondering why nothing changed.
 - **api:** `npm run build` is unchanged and IS the real one — the live API serves `api/dist/server.js`. Build, then restart the recorded child pid from `./bin/orchestra status`.
 - Both paths use `tsc -b --force`; plain `-b` skips when `.tsbuildinfo` looks current.
+- **Verify the stamp by comparing the BODY, not the status.** A wiped `BUILD_SHA` is served by the SPA fallback as HTTP **200** with `index.html` (`bytes=916 ctype=text/html`, vs `bytes=8 ctype=application/octet-stream` for the real file), so `curl -sf .../BUILD_SHA && echo deployed` **passes on a missing stamp**. Use `S=$(curl -s localhost:8891/BUILD_SHA); [ "$S" = "$(git rev-parse --short HEAD)" ]`. Qualification from review — the absence announces itself to a content check and hides from a status check.
 
 ## 3. Decisions Made & Rationale
 1. **Both new message endpoints read only `<data>/state/tasks.db`'s `messages` table.** Rationale: spec §16, and three other stores in this repo already disagree with each other. "49 vs 40" is what picking two of them looks like.
