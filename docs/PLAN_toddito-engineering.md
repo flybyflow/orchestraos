@@ -772,6 +772,21 @@ scope.
 Pulse UX redesign — 4 JTBDs grounded in a real customer report (Vandana),
 folded together with §9's report-tone work
 
+**RECALIBRATED (gm relaying the operator directly, `msg_657e31a3_78889076`,
+2026-09-30 14:34 UTC) — read this before anything else in this section.**
+This whole section is **exploratory synthesis from founder interviews,
+NOT committed/planned scope** — unlike §9 (report tone), which is real,
+confirmed, concrete work grounded in the recovered relationalOS content.
+Don't let "small diff" (JTBD 1/4 especially) read as "confirmed wanted" —
+the grounding discipline already applied to JTBD 3 and 5 (flagging
+unconfirmed premises rather than building on them) applies to the
+"easy" ones too, just in a different sense: technically buildable is not
+the same as operator-confirmed. **JTBD 1/2/4 ship as experimental work in
+a preview deploy for the operator's own review and decision when they're
+back — not treated as already-decided.** JTBD 3 stays held regardless,
+unchanged. Section 9 is the one thread here that's fully confirmed;
+proceed on it with full confidence, it's the real thing.
+
 Operator forwarded a JTBD (Jobs to be Done) analysis from a separate
 Claude cowork session, grounded in a real customer aggregate report
 ("Vandana") and Todd's framework. North star quote, Todd's own words:
