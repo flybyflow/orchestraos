@@ -163,19 +163,48 @@ whether they make sense in combination. Concretely, we found:
   leadership, delegation, coordination, control, and so on) tied to each
   stage.
 
-We didn't just find this text — we tested it. We took a real, historical
-answer set from your own system (already used earlier tonight to check our
-scoring math against a real legacy printout) and ran a sample of these
-written rules against the real scores that answer set produces. The rules
-behaved sensibly: they picked up on real, specific tensions in that
-particular organization's actual profile (for example, a strong Matrix
-structure paired with a real Political-culture trait, which the original
-text explicitly warns is a problem), and — just as importantly — rules that
-shouldn't have applied to that organization's actual situation correctly
-stayed quiet instead of firing indiscriminately. One of the rules even
-pointed toward a more accurate read of which lifecycle stage the
-organization was really in than our scoring engine's own top pick. We're
-treating this as a real, working signal, not proof the whole thing is
+We didn't just find this text — we tested it, and want to walk you through
+that test specifically, because we think the result is worth your attention
+on its own.
+
+We took one real, historical answer set from your own system — an actual
+anonymized client's real 171 answers, already on file and already used
+earlier tonight to check that our modern scoring math reproduces your
+original program's own printed numbers — and ran a sample of the decoded
+fit-check rules against the real scores that answer set produces.
+
+Two things stood out. First, an independent sanity check on the scoring
+itself, not the new rules: this same client's real answers produce an
+overall risk score that lands in the middle band of the scale — and your
+original program's own printed output for this exact client also said
+"Moderate Risk." That match, found independently, is real evidence that our
+modern reimplementation of your scoring math is faithful to the original,
+not just plausible-looking.
+
+Second, on the fit-check rules themselves: this client's own scores put
+three lifecycle stages (Stall, Projectile, Acceleration) in a near-tie for
+first place — your system's own confidence measure correctly flagged this
+as ambiguous rather than picking one falsely. When we applied your decoded
+"ideal structure per stage" text to this same client's real structure
+scores, something useful happened: this client's actual profile fits the
+ideal structure you describe for the Acceleration stage (a Functional
+Hierarchy) far better than it fits the ideal structure for the Stall stage
+(which calls for a Simple structure — the one dimension this client scores
+lowest on of all ten). In other words, the fit-check logic, run on real
+numbers, pointed toward a more precise answer than the raw scores alone
+gave us. We also found three specific, real conflicts between this client's
+actual dominant culture and its actual structure and strategy scores (for
+example: this client's culture leans heavily Paternalistic, and your own
+decoded text says a Paternalistic culture works against exactly what makes
+a Divisional or Organic structure function well — and this client scores
+real, meaningful signal on both of those structures). Just as important:
+several adjacent rules that describe conflicts with a risk-taking strategy
+correctly did NOT fire, because this same client's real strategy profile
+is risk-averse, not risk-seeking — the logic responded to what was actually
+true about this specific case rather than firing on every organization
+regardless of its actual profile.
+
+We're treating this as a real, working signal, not proof the whole thing is
 perfect — we only hand-checked a portion of the full rule set against one
 example.
 
