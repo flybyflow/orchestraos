@@ -71,13 +71,25 @@ export interface UseReplayResult {
   error: string | null;
 }
 
+// `state` and `fired` change together on every rAF tick (advance() always produces both in one
+// call), so they live in ONE useState instead of two. Two independent setState calls in the
+// same rAF callback already coalesce into a single render under React 19's automatic batching,
+// but a single state slot makes that a structural fact (one object, one update) rather than an
+// optimization the scheduler happens to apply — and it is literally what "one state update per
+// animation frame" (operator's replay-lag ask, 2026-09-30) means at the code level.
+interface ReplayFrame {
+  state: ReplayState;
+  fired: ReplayEvent[];
+}
+
 export function useReplay(initialWindowHours = 24): UseReplayResult {
   const [windowHours, setWindowHoursState] = useState(initialWindowHours);
-  const [state, setState] = useState<ReplayState>(() => initReplay([]));
-  const [fired, setFired] = useState<ReplayEvent[]>(NO_EVENTS);
+  const [frame, setFrame] = useState<ReplayFrame>(() => ({ state: initReplay([]), fired: NO_EVENTS }));
   const [trail, setTrail] = useState(NO_TRAIL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const state = frame.state;
+  const fired = frame.fired;
 
   // The rAF loop runs outside React's render cycle and needs the LATEST state synchronously on
   // every frame, not whatever was captured in a stale closure from when play() was called.
@@ -119,16 +131,14 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
       // tail -- the final frame's batch was computed and then discarded here unconditionally.
       // Batch size varies with tail density, so the loss count was never a fixed number; that
       // is also why the regression test below pins a real fixture rather than a literal count.
-      setFired(justFired.length ? justFired : NO_EVENTS);
       const live = setLiveEngine(next);
       stateRef.current = live;
-      setState(live);
+      setFrame({ state: live, fired: justFired.length ? justFired : NO_EVENTS });
       stopLoop();
       return;
     }
     stateRef.current = next;
-    setState(next);
-    setFired(justFired.length ? justFired : NO_EVENTS);
+    setFrame({ state: next, fired: justFired.length ? justFired : NO_EVENTS });
     rafRef.current = requestAnimationFrame(loop);
   }, [stopLoop]);
 
@@ -145,7 +155,7 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
         ? startPlay(loaded, 0)   // the new window from its own beginning, not the old cursor
         : loaded;
       stateRef.current = next;
-      setState(next);
+      setFrame({ state: next, fired: NO_EVENTS });
       if (next.playing) {
         lastRef.current = performance.now();
         stopLoop();                                  // never two loops
@@ -156,9 +166,8 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
       resumeAfterLoadRef.current = false;
       const empty = initReplay([]);
       stateRef.current = empty;
-      setState(empty);
+      setFrame({ state: empty, fired: NO_EVENTS });
     } finally {
-      setFired(NO_EVENTS);
       setTrail(NO_TRAIL);
       setLoading(false);
     }
@@ -171,7 +180,7 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     // after a play() has already scheduled a frame, the button reads "pause replay" forever
     // with nothing advancing. The new window's events land as a not-playing state anyway, so
     // this only closes the gap between the two.
-    setState((s) => (s.playing ? pauseEngine(s) : s));
+    setFrame((f) => (f.state.playing ? { ...f, state: pauseEngine(f.state) } : f));
     loadHistory(windowHours);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowHours]);
@@ -183,8 +192,7 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     if (error || stateRef.current.events.length === 0) return; // API down, or nothing to play
     const next = startPlay(stateRef.current, fraction(stateRef.current));
     stateRef.current = next;
-    setState(next);
-    setFired(NO_EVENTS);
+    setFrame({ state: next, fired: NO_EVENTS });
     lastRef.current = performance.now();
     stopLoop();
     rafRef.current = requestAnimationFrame(loop);
@@ -196,16 +204,15 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     stopLoop();
     const next = pauseEngine(stateRef.current);
     stateRef.current = next;
-    setState(next);
+    setFrame((f) => ({ ...f, state: next }));
   }, [stopLoop]);
 
   const seek = useCallback((f: number) => {
     stopLoop();
     const { state: next, trail: nextTrail } = seekEngine(stateRef.current, f);
     stateRef.current = next;
-    setState(next);
+    setFrame({ state: next, fired: NO_EVENTS });
     setTrail(nextTrail);
-    setFired(NO_EVENTS);
   }, [stopLoop]);
 
   const setLive = useCallback(() => {
@@ -213,21 +220,20 @@ export function useReplay(initialWindowHours = 24): UseReplayResult {
     stopLoop();
     const next = setLiveEngine(stateRef.current);
     stateRef.current = next;
-    setState(next);
-    setFired(NO_EVENTS);
+    setFrame({ state: next, fired: NO_EVENTS });
     setTrail(NO_TRAIL);
   }, [stopLoop]);
 
   const setGrowth = useCallback((growth: boolean) => {
     const next = setGrowthEngine(stateRef.current, growth);
     stateRef.current = next;
-    setState(next);
+    setFrame((f) => ({ ...f, state: next }));
   }, []);
 
   const setSpeed = useCallback((speed: 1 | 4 | 16) => {
     const next = setSpeedEngine(stateRef.current, speed);
     stateRef.current = next;
-    setState(next);
+    setFrame((f) => ({ ...f, state: next }));
   }, []);
 
   const setWindow = useCallback((hours: number) => {
