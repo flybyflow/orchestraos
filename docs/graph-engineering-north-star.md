@@ -143,6 +143,33 @@ advisor's "don't over-invest ahead of evidence," and the live 2D sprint already 
 elegance (§8); (b) the true ceiling may be single-account quota, not topology — if H1/H3 show
 quota-bound, horizontal scale (accounts/machines) jumps ahead of P2/P3.
 
+## 11. Sprint findings: 2D Agents View (2026-09-29 23:02 to 2026-09-30 01:01)
+The sprint is the evidence test §9 called for. Result: one PR (#137, 33 files, +3044/-75, 16
+commits) from dispatch to open PR in ~2h, review-gated twice, api 236/236 and dashboard
+build green. Product throughput (§8): met. The graph hypotheses: mixed, mostly not shown.
+
+- **H1 (serial hub): inconclusive.** No per-stage idle/busy split was captured, so we cannot
+  say coordination dominated. Observed: plan lock ~24 min, build turns 20-35 min (work, not
+  waiting); GM inbox chatter spiked only AFTER the build finished (process-refinement threads).
+- **H2 (diamond): partial.** builder-1/builder-2 ran parallel chunks on the first fan-out (steps
+  2, 4+5) and joined at build. Later steps (10, fixes) were effectively one worker. Join wait
+  and handoff payload size were not measured.
+- **H3 (refs cut GM load): NOT shown.** gm inbound 6h window: 11.5/hr baseline -> 16.8/hr (101
+  msgs: telegram 32, ea 24, plan 15, build 15, review 8, ship 3). ea absorbed a layer (24) but
+  plan and build still reported straight to gm (30), so the fan-in got a new hop, not a cut.
+  Caveat: uncontrolled, the two windows differ in operator load and sprint intensity.
+- **What the sprint DID support (P3, verification on edges):** review found F1-F4, G1 (blocking),
+  and a Gate 13 miss (a down agent hidden under the Down filter, visible only by driving the
+  rendered page). Six "green" checks were vacuous (incremental `tsc -b` skip, `| tail` hiding
+  exit codes). Reading diffs would not have caught these; independent re-derivation did.
+- **Non-topology limiters seen:** the `test` seat came up ungrounded and refused all work
+  (pod capacity); the shared checkout needed git-lock discipline; the live dashboard served
+  code matching no commit until `BUILD_SHA` stamping. Quota was NOT measured, so §10's
+  quota-vs-topology watch item is still open.
+- **Implication:** do not start gbrain/P1 yet on this evidence. First enforce fan-in in code,
+  not prose (default the report recipient of plan/build/review to ea; escalate-only to gm),
+  ground every seat at spawn, then re-measure H3 over a clean window.
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
