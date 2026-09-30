@@ -11,7 +11,7 @@
  * is only what genuinely needs the DOM: refs, getBoundingClientRect,
  * ResizeObserver, rAF batching and the scroll listener.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { routeEdge, type Box, type EdgeRoute, type RouteEdgeOptions } from '../lib/edgeRouting';
 import { toLocalBox, samePositions, overlayContentSize, spriteAnimation, type RectLike } from '../lib/overlayGeometry';
@@ -293,22 +293,6 @@ export function TopologyOverlay({
     return () => clearInterval(id);
   }, [pulseCount]);
 
-  if (width <= 0 || height <= 0) return null;
-  const obstacles = [...positions.values()];
-
-  // Which pairs are actually drawn right now — GROW-gated edges are already filtered out of
-  // `edges` before it reaches this component (TopologyDiagram's drawnOverlayEdges), and the
-  // top-12 selection filters it too. A pulse for a pair that is not currently drawn as a line
-  // has nowhere real to ride: during GROW that would spoil an edge before its own reveal;
-  // outside GROW it would be a travelling dot with no line under it. Build asked for exactly
-  // this ("the pulse layer just needs to not draw a pulse on an edge that is hidden") —
-  // derived here from `edges` itself rather than a second born/unborn prop, since `edges`
-  // already carries the one true answer for "is this pair drawn". Hierarchy pairs are drawn
-  // too (as a plain CSS connector, not an SVG path) so their pulses belong here as well — a
-  // pulse riding a hierarchy line is not "on an edge that is hidden", the line is just drawn a
-  // different way.
-  const drawnPairs = new Set([...edges.map((e) => pairKey(e.a, e.b)), ...(hierarchyPairs ?? [])]);
-
   // Routed ONCE per pair, in the edge's own canonical (a, b) order — the static line below and
   // every pulse riding this pair both read from THIS entry rather than each calling routeEdge
   // for themselves. routeEdge is not symmetric under swapping its two args (the perpendicular
@@ -317,26 +301,56 @@ export function TopologyOverlay({
   // measured live 10-62px off the line, on 239 of 301 reverse-direction pulses (build QA,
   // 2026-09-30). One route per pair; a pulse only ever samples WHERE on it to sit
   // (lib/replayPulses.ts's pulsePositionOnRoute).
-  const routesByPair = new Map<string, { route: EdgeRoute; a: string; b: string }>();
-  for (const e of edges) {
-    const from = positions.get(e.a);
-    const to = positions.get(e.b);
-    if (!from || !to) continue;
-    routesByPair.set(pairKey(e.a, e.b), { route: routeEdge(from, to, obstacles, ROUTE_OPTS), a: e.a, b: e.b });
-  }
-  // Hierarchy pairs get no <path> of their own (the CSS connector already draws the line), but
-  // a pulse for one still needs somewhere to sample — route it the same way, keyed under the
-  // same pairKey so pulsePositionOnRoute cannot tell the two kinds of pair apart. Skipped if a
-  // cross-edge route already claimed this key (should not happen — a pair is either hierarchy
-  // or cross, never both — but a route already present wins rather than being overwritten).
-  for (const key of hierarchyPairs ?? []) {
-    if (routesByPair.has(key)) continue;
-    const [a, b] = key.split('|');
-    const from = positions.get(a);
-    const to = positions.get(b);
-    if (!from || !to) continue;
-    routesByPair.set(key, { route: routeEdge(from, to, obstacles, ROUTE_OPTS), a, b });
-  }
+  //
+  // MEMOIZED (operator perf QA, 2026-09-30, "replay feels laggy"): this used to be a plain
+  // const recomputed on every render, and this component re-renders every pulse tick (the
+  // 50ms prune interval above, `now`/`pulses` state) as well as every replay frame — routeEdge
+  // does real work per edge (curve-clearance sampling now scaled with chord length, up to
+  // ~150 samples), so a live 24h Play was re-routing all 12+ edges roughly 20x/second for
+  // geometry that had not moved at all. `positions` only changes reference when a node box
+  // actually moved (useNodePositions' own samePositions guard), and `edges`/`hierarchyPairs`
+  // are memoized upstream in TopologyDiagram and stable across a non-GROW replay tick — so in
+  // the common case (Play, not GROW) this now runs once per real layout change, not once per
+  // frame. Hook called unconditionally, before the width/height early return below, per the
+  // Rules of Hooks this codebase has already been burned by once (see samePositions' own
+  // comment on the identical class of bug).
+  const { drawnPairs, routesByPair } = useMemo(() => {
+    const obstacles = [...positions.values()];
+    // Which pairs are actually drawn right now — GROW-gated edges are already filtered out of
+    // `edges` before it reaches this component (TopologyDiagram's drawnOverlayEdges), and the
+    // top-12 selection filters it too. A pulse for a pair that is not currently drawn as a
+    // line has nowhere real to ride: during GROW that would spoil an edge before its own
+    // reveal; outside GROW it would be a travelling dot with no line under it. Hierarchy pairs
+    // are drawn too (as a plain CSS connector, not an SVG path) so their pulses belong here as
+    // well — a pulse riding a hierarchy line is not "on an edge that is hidden", the line is
+    // just drawn a different way.
+    const pairs = new Set([...edges.map((e) => pairKey(e.a, e.b)), ...(hierarchyPairs ?? [])]);
+
+    const routes = new Map<string, { route: EdgeRoute; a: string; b: string }>();
+    for (const e of edges) {
+      const from = positions.get(e.a);
+      const to = positions.get(e.b);
+      if (!from || !to) continue;
+      routes.set(pairKey(e.a, e.b), { route: routeEdge(from, to, obstacles, ROUTE_OPTS), a: e.a, b: e.b });
+    }
+    // Hierarchy pairs get no <path> of their own (the CSS connector already draws the line),
+    // but a pulse for one still needs somewhere to sample — route it the same way, keyed under
+    // the same pairKey so pulsePositionOnRoute cannot tell the two kinds of pair apart. Skipped
+    // if a cross-edge route already claimed this key (should not happen — a pair is either
+    // hierarchy or cross, never both — but a route already present wins rather than being
+    // overwritten).
+    for (const key of hierarchyPairs ?? []) {
+      if (routes.has(key)) continue;
+      const [a, b] = key.split('|');
+      const from = positions.get(a);
+      const to = positions.get(b);
+      if (!from || !to) continue;
+      routes.set(key, { route: routeEdge(from, to, obstacles, ROUTE_OPTS), a, b });
+    }
+    return { drawnPairs: pairs, routesByPair: routes };
+  }, [edges, positions, hierarchyPairs]);
+
+  if (width <= 0 || height <= 0) return null;
 
   // Trail weight per pair, for the seek-drag highlight — a Map so a repeated pair (should not
   // happen, but a malformed trail must not crash) keeps its LAST/strongest weight rather than
