@@ -226,40 +226,123 @@ export function freeBands(boxes: Box[], pad: number): Band[] {
   return bands.filter((b) => b.bottom > b.top);
 }
 
+/** The x-analogue of a Band: a vertical strip with no obstacle anywhere in it, across the
+ *  FULL height (not just between two specific endpoints) — a genuine clear corridor a path
+ *  can run straight through regardless of how far apart the two rows it connects are. */
+export interface Column {
+  left: number;
+  right: number;
+}
+
+/** Exactly freeBands, transposed onto x/width instead of y/height. See freeBands' own comment
+ *  for why the two outermost strips (left of everything, right of everything) always exist. */
+export function freeColumns(boxes: Box[], pad: number): Column[] {
+  if (boxes.length === 0) return [{ left: -Infinity, right: Infinity }];
+  const ranges = boxes
+    .map((b): [number, number] => [b.cx - b.width / 2 - pad, b.cx + b.width / 2 + pad])
+    .sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [lo, hi] of ranges) {
+    const last = merged[merged.length - 1];
+    if (last && lo <= last[1]) last[1] = Math.max(last[1], hi);
+    else merged.push([lo, hi]);
+  }
+  const cols: Column[] = [{ left: -Infinity, right: merged[0][0] }];
+  for (let i = 0; i < merged.length - 1; i++) cols.push({ left: merged[i][1], right: merged[i + 1][0] });
+  cols.push({ left: merged[merged.length - 1][1], right: Infinity });
+  return cols.filter((c) => c.right > c.left);
+}
+
+function rankedByMidpoint(mids: number[], lo: number, hi: number): number[] {
+  const mid = (lo + hi) / 2;
+  return mids
+    .map((m, i) => ({ i, m }))
+    .sort((a, b) => {
+      const aBetween = a.m >= lo && a.m <= hi;
+      const bBetween = b.m >= lo && b.m <= hi;
+      if (aBetween !== bBetween) return aBetween ? -1 : 1;
+      return Math.abs(a.m - mid) - Math.abs(b.m - mid);
+    })
+    .map((x) => x.i);
+}
+
 /**
- * Route `start` -> `end` through a free horizontal band: down/up to the band, straight across,
- * down/up into the target. Tries bands nearest the direct path between the two endpoints
- * first (the smallest real detour), falling back to the guaranteed-clear outermost bands —
- * "outside the tree bounds" — only when no band between the endpoints works. Returns null only
- * if `bands` is empty, which freeBands() never produces for a non-empty obstacle list.
+ * Route `start` -> `end` through a real free channel, trying two strategies before giving up:
  *
- * This is what "route through free channels" (operator, 2026-09-30) means concretely: not a
- * bigger nudge off the chord (the quad/cubic loops above already own that), a genuinely
- * different STRATEGY — go around the obstacle field via the row gaps it actually has, the way
- * a hand-drawn org chart would.
+ *  1. A single free BAND (horizontal): down/up to the band, straight across, down/up into the
+ *     target. Cheap and right for two endpoints in nearby rows — the two vertical jogs are
+ *     short. WRONG, and this is the bug it replaced: for two endpoints far apart vertically
+ *     (opposite ends of the tree — e.g. T0 to the rim), the band nearest their MIDPOINT still
+ *     forces one jog to travel the long way, straight through every row in between. Measured
+ *     live: gm<->telegram's "nearest band" jog crossed 2 other rows on its way there.
+ *
+ *  2. A single free COLUMN (vertical): left/right to the column, straight down, left/right into
+ *     the target. This is what actually fixes the far-apart case: a column that is clear for
+ *     its FULL HEIGHT needs no row-by-row validation at all, however far apart the two rows
+ *     are — the whole point of "free for the full height" is that distance stops mattering.
+ *
+ * Both candidates are verified with polylineClears before being returned — ranking picks a
+ * cheap-looking candidate first, the actual clearance check is what decides, never the ranking
+ * alone. Returns null only if no band AND no column produces a clear path, which is only
+ * possible when every column is also blocked somewhere along the endpoints' own y-range (a
+ * genuinely pathological layout, not this app's tree shape).
  */
-export function channelRoute(start: Point, end: Point, bands: Band[], boxes: Box[], pad: number): Point[] | null {
-  if (bands.length === 0) return null;
+export function channelRoute(
+  start: Point, end: Point, bands: Band[], columns: Column[], boxes: Box[], pad: number
+): Point[] | null {
   const loY = Math.min(start.y, end.y);
   const hiY = Math.max(start.y, end.y);
-  const midY = (loY + hiY) / 2;
   const bandY = (b: Band): number => {
     if (Number.isFinite(b.top) && Number.isFinite(b.bottom)) return (b.top + b.bottom) / 2;
-    // An open-ended outer band has no finite midpoint — aim just past its one finite edge,
-    // clear of the obstacle it borders without wandering arbitrarily far into open space.
     return Number.isFinite(b.bottom) ? b.bottom - 20 : b.top + 20;
   };
-  const ranked = bands
-    .map((b) => ({ band: b, y: bandY(b) }))
-    .sort((a, b) => {
-      const aBetween = a.y >= loY && a.y <= hiY;
-      const bBetween = b.y >= loY && b.y <= hiY;
-      if (aBetween !== bBetween) return aBetween ? -1 : 1;
-      return Math.abs(a.y - midY) - Math.abs(b.y - midY);
-    });
-  for (const { y } of ranked) {
+  const rankedBandIdx = rankedByMidpoint(bands.map(bandY), loY, hiY);
+  for (const i of rankedBandIdx) {
+    const y = bandY(bands[i]);
     const pts = [start, { x: start.x, y }, { x: end.x, y }, end];
     if (polylineClears(pts, boxes, pad)) return pts;
+  }
+
+  const loX = Math.min(start.x, end.x);
+  const hiX = Math.max(start.x, end.x);
+  const colX = (c: Column): number => {
+    if (Number.isFinite(c.left) && Number.isFinite(c.right)) return (c.left + c.right) / 2;
+    return Number.isFinite(c.right) ? c.right - 20 : c.left + 20;
+  };
+  const rankedColIdx = rankedByMidpoint(columns.map(colX), loX, hiX);
+  for (const i of rankedColIdx) {
+    const x = colX(columns[i]);
+    const pts = [start, { x, y: start.y }, { x, y: end.y }, end];
+    if (polylineClears(pts, boxes, pad)) return pts;
+  }
+
+
+  // 3. STAIRCASE: neither a single band nor a single column worked on its own -- the case
+  // that defeats both is two endpoints far apart in BOTH directions (gm<->operator: T0 to the
+  // rim, AND the rim spreads several other endpoints out along x between them). A single
+  // column's horizontal jog-in at start.y or end.y then has to cross that dense row itself,
+  // which is exactly what a column was supposed to avoid.
+  //
+  // The combination is what is actually guaranteed: jog from start into the band ADJACENT to
+  // its OWN row (short, one row's gap to cross) -> travel horizontally WITHIN that band to a
+  // free column's x (safe, a band is clear for its full width) -> travel down/up that column
+  // to the band adjacent to end's OWN row (safe, a column is clear for its full height) ->
+  // travel horizontally WITHIN that band to end.x (safe) -> jog into end (short). Only the two
+  // short jogs (start->its band, its band->end) need verifying; the three middle legs are each
+  // clear by construction of what a band/column IS.
+  const startBandIdx = rankedByMidpoint(bands.map(bandY), start.y, start.y)[0];
+  const endBandIdx = rankedByMidpoint(bands.map(bandY), end.y, end.y)[0];
+  if (startBandIdx != null && endBandIdx != null) {
+    const startBandY = bandY(bands[startBandIdx]);
+    const endBandY = bandY(bands[endBandIdx]);
+    for (const i of rankedColIdx) {
+      const x = colX(columns[i]);
+      const pts = [
+        start, { x: start.x, y: startBandY }, { x, y: startBandY },
+        { x, y: endBandY }, { x: end.x, y: endBandY }, end,
+      ];
+      if (polylineClears(pts, boxes, pad)) return pts;
+    }
   }
   return null;
 }
@@ -335,7 +418,6 @@ export function routeEdge(
   obstacles: Box[],
   opts: RouteEdgeOptions = {}
 ): EdgeRoute {
-  const samples = opts.samples ?? 16;
   const maxAttempts = opts.maxAttempts ?? 4;
   const maxOffset = opts.maxOffset ?? 180;
   const pad = opts.pad ?? 0;
@@ -358,6 +440,14 @@ export function routeEdge(
     // Coincident clip points (identical/overlapping boxes) — nothing to route around.
     return { kind: 'curve', d: curvePath(start, start, end) };
   }
+
+  // A FIXED 16 samples across a long curve leaves real gaps between sample points that a small
+  // obstacle can hide in — measured live: a curve-S clearing this module's own 16-point check
+  // still clipped a node box for 2 of 201 points at a finer resolution, a brief dip the coarse
+  // check simply stepped over. Scale with the chord length instead: one sample per ~4px, floor
+  // 16 (so a short edge isn't over-sampled for nothing). opts.samples, when given explicitly
+  // (existing direct curveClears/cubicClears tests in this module do), still wins outright.
+  const samples = opts.samples ?? Math.max(16, Math.ceil(len / 4));
 
   const perp: Point = { x: -dy / len, y: dx / len };
   // Capped at 2, deliberately: scaling the offset UP with how many boxes the chord crosses is
@@ -441,11 +531,13 @@ export function routeEdge(
   // crossed a node and 4 crossed a count-label pill even with pills already registered as
   // obstacles — the bounded local nudge above simply cannot find a gap in a dense scene, no
   // matter how far the budget is raised, because it only ever searches perpendicular to the
-  // ONE chord between these two endpoints). freeBands/channelRoute search the WHOLE obstacle
-  // field's actual empty rows, which is guaranteed to include at least the two outermost bands
-  // (above everything, below everything) — so this step can fail only if `obstacles` itself is
-  // empty, which the curve-clears check at the top of this function already would have caught.
-  const channel = channelRoute(start, end, freeBands(realObstacles, pad), realObstacles, pad);
+  // ONE chord between these two endpoints). channelRoute tries a free BAND first (cheap for
+  // nearby rows) and a free COLUMN second (the one that actually fixes two endpoints far apart
+  // vertically, like T0 to the rim — a column clear for its full height needs no row-by-row
+  // validation no matter how many rows it runs past).
+  const channel = channelRoute(
+    start, end, freeBands(realObstacles, pad), freeColumns(realObstacles, pad), realObstacles, pad,
+  );
   if (channel) {
     return { kind: 'polyline', d: polylinePath(channel) };
   }

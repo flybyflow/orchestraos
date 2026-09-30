@@ -18,6 +18,7 @@ import {
   routeEdge,
   pointAtFraction,
   freeBands,
+  freeColumns,
   channelRoute,
 } from './edgeRouting.ts';
 
@@ -365,14 +366,27 @@ function parsePathPoints(d) {
     { id: 'test', cx: 420, cy: 538, width: 110, height: 87 },
     { id: 'pill:9:5', cx: 481, cy: 325, width: 18, height: 19 },
   ];
+  // UPDATED by the channel-routing addition (operator live QA, 2026-09-30): routeEdge no
+  // longer ever SHIPS a clipping curve at maxOffset=140 -- channel routing is a safety net
+  // below the quad/cubic/polyline budget, not gated on it. What the historical 140-vs-180
+  // finding still says, and what this now checks instead: at 140 the plain-quad ATTEMPT itself
+  // still cannot clear (`kind` is not the quick 'curve' shape — it had to fall through to a
+  // channel-routed polyline to clear at all), so 180 remains the right default for staying a
+  // short, simple curve rather than needing a longer channel detour.
   const stillClips = routeEdge(from, to, obstacles, { maxOffset: 140 });
   {
-    const [p0, c, p1] = parsePathPoints(stillClips.d);
     const others = obstacles.filter((o) => o.id !== 'gm' && o.id !== 'operator');
-    assert.equal(curveClears(p0, c, p1, others, 32), false, 'at the old maxOffset=140 this real pair still clips — confirms it needed more than a tiny bump');
+    assert.notEqual(stillClips.kind, 'curve', 'at maxOffset=140 no plain quad bump clears this pair -- it needed the channel-route fallback');
+    const pts = parsePathPoints(stillClips.d);
+    for (let i = 0; i < pts.length - 1; i++) {
+      for (const o of others) {
+        assert.equal(segmentIntersectsBox(pts[i], pts[i + 1], o, 0), false,
+          `re-verified from the returned path: even at maxOffset=140, routeEdge still clears everything (via the channel-route fallback), segment ${i} vs ${o.id}`);
+      }
+    }
   }
   const clears = routeEdge(from, to, obstacles); // default (180) now
-  assert.equal(clears.kind, 'curve', 'settled: a plain quadratic at 180 -- a budget case, not a structural S-shape one');
+  assert.equal(clears.kind, 'curve', 'settled: at the default 180, a plain quadratic clears without needing the channel-route fallback -- a budget case, not a structural S-shape one');
   const [p0, c, p1] = parsePathPoints(clears.d);
   const others = obstacles.filter((o) => o.id !== 'gm' && o.id !== 'operator');
   assert.equal(curveClears(p0, c, p1, others, 32), true, 're-verified from the returned path: it actually clears at the new default');
@@ -530,7 +544,23 @@ function parsePathPoints(d) {
   console.log('PASS: freeBands — merges overlapping spans, drops gaps too small to survive padding, always has the two outer bands');
 }
 
-// ── channelRoute ────────────────────────────────────────────────────────────────────────
+// ── freeColumns ─────────────────────────────────────────────────────────────────────────
+{
+  // Exactly freeBands' own fixture, transposed onto x/width.
+  const cols = [
+    { id: 'c1', cx: 50, cy: 0, width: 40, height: 100 },  // x: 30..70
+    { id: 'c2', cx: 200, cy: 0, width: 40, height: 100 }, // x: 180..220
+  ];
+  assert.deepEqual(freeColumns(cols, 0), [
+    { left: -Infinity, right: 30 },
+    { left: 70, right: 180 },
+    { left: 220, right: Infinity },
+  ], 'three columns: left of everything, the real gap between the two, right of everything');
+  assert.deepEqual(freeColumns([], 7), [{ left: -Infinity, right: Infinity }], 'no obstacles -> the whole plane is one free column');
+  console.log('PASS: freeColumns — the x-axis transpose of freeBands, same merge/gap/outer-column behaviour');
+}
+
+// ── channelRoute: band, then column, then the band+column staircase ─────────────────────
 {
   const bands = [{ top: -Infinity, bottom: 0 }, { top: 40, bottom: 60 }, { top: 100, bottom: Infinity }];
   const start = { x: 0, y: 20 };
@@ -538,14 +568,14 @@ function parsePathPoints(d) {
 
   // No obstacles to actually clear -- picks the band nearest the direct start/end path
   // (here, both non-outer... only one middle band exists, at y 40..60, midpoint 50).
-  const pts = channelRoute(start, end, bands, [], 0);
+  const pts = channelRoute(start, end, bands, [], [], 0);
   assert.deepEqual(pts, [start, { x: 0, y: 50 }, { x: 100, y: 50 }, end],
     'routes through the one available band at its midpoint');
 
   // When the nearest band is blocked by a REAL obstacle, falls through to the next-best band
   // rather than returning null -- this is what makes it "guaranteed", not "best-effort".
   const blocker = { id: 'block', cx: 50, cy: 50, width: 200, height: 40 }; // sits across the y:40..60 band
-  const pts2 = channelRoute(start, end, bands, [blocker], 0);
+  const pts2 = channelRoute(start, end, bands, [], [blocker], 0);
   assert.notDeepEqual(pts2, pts, 'the blocked band is skipped');
   assert.ok(pts2 !== null, 'falls through to a different band instead of giving up');
 
@@ -555,8 +585,55 @@ function parsePathPoints(d) {
       `segment ${i} of the fallback route must not cross the blocker`);
   }
 
-  assert.equal(channelRoute(start, end, [], [], 0), null, 'no bands at all -> null, never throws');
+  assert.equal(channelRoute(start, end, [], [], [], 0), null, 'no bands and no columns at all -> null, never throws');
   console.log('PASS: channelRoute — nearest usable band first, falls through real blockers, re-verified segment by segment');
+}
+
+// ── channelRoute: the staircase — THE BUG (operator live QA, 2026-09-30) ─────────────────
+// gm<->telegram (opposite ends of the tree, T0 to the rim) and gm<->operator (same, plus the
+// rim row crowds the horizontal approach to `operator` specifically) both still crossed a real
+// node even after band-only and column-only routing shipped. Root cause: a single BAND's jog
+// forces one endpoint to travel the long way through every row between it and the band nearest
+// their midpoint; a single COLUMN's horizontal jog-IN can itself cross a dense row at the
+// endpoint's own y. Neither failure is hypothetical here — this fixture is built to trigger
+// both at once, and it is verified the same way the real bug was found: check band-only and
+// column-only ALONE actually fail this exact fixture before trusting that the combined
+// strategy is what rescues it.
+{
+  const start = { x: 10, y: 0 };
+  const end = { x: 150, y: 400 };
+  // Two full-width rows between start and end -- every band's jog from one side or the other
+  // has to cross at least one of them.
+  const rowA = { id: 'rowA', cx: 150, cy: 100, width: 500, height: 20 };  // x:-100..400, y:90..110
+  const rowB = { id: 'rowB', cx: 150, cy: 300, width: 500, height: 20 }; // x:-100..400, y:290..310
+  // Two obstacles flanking END at its OWN row, leaving only the narrow local gap around
+  // end.x=150 -- blocks a column's horizontal jog-in approaching end.x from far outside.
+  const rowCLeft = { id: 'rowCLeft', cx: 50, cy: 400, width: 100, height: 20 };   // x:0..100, y:390..410
+  const rowCRight = { id: 'rowCRight', cx: 250, cy: 400, width: 100, height: 20 }; // x:200..300, y:390..410
+  const boxes = [rowA, rowB, rowCLeft, rowCRight];
+
+  const bands = freeBands(boxes, 0);
+  const cols = freeColumns(boxes, 0);
+
+  // Confirm the fixture actually exercises the failure -- band-only and column-only ALONE,
+  // isolated by passing an empty list for the other, both give up.
+  assert.equal(channelRoute(start, end, bands, [], boxes, 0), null,
+    'sanity: band-only genuinely cannot solve this fixture');
+  assert.equal(channelRoute(start, end, [], cols, boxes, 0), null,
+    'sanity: column-only genuinely cannot solve this fixture either');
+
+  // THE FIX: band and column together, as a staircase, do.
+  const staircase = channelRoute(start, end, bands, cols, boxes, 0);
+  assert.ok(staircase !== null, 'band+column staircase finds a route neither strategy alone can');
+
+  // Re-verify independently: every segment of the returned staircase clears every obstacle.
+  for (let i = 0; i < staircase.length - 1; i++) {
+    for (const box of boxes) {
+      assert.equal(segmentIntersectsBox(staircase[i], staircase[i + 1], box, 0), false,
+        `staircase segment ${i} must not cross ${box.id}`);
+    }
+  }
+  console.log('PASS: channelRoute — the band+column staircase solves what neither strategy solves alone, re-verified segment by segment');
 }
 
 // ── routeEdge: a dense wall no quad/cubic/polyline nudge can get around -> channel route ──
@@ -616,6 +693,39 @@ function parsePathPoints(d) {
     assert.equal(curveClears(paddedPts[0], paddedPts[1], paddedPts[2], [grazer], 16, 6), true);
   }
   console.log('PASS: routeEdge — pad is wired through and actually changes whether a near-miss counts as clear');
+}
+
+// ── routeEdge: 16 fixed samples can miss a small obstacle a longer curve dips briefly into ──
+// THE BUG (live QA, 2026-09-30): builder-1<->lineage-daemon's curve-S was accepted by the
+// 16-sample check, then measured live re-sampling at 201 points to graze builder-2's box for
+// 2 of them -- a dip narrow enough that none of 16 EVENLY SPACED samples across a ~400px curve
+// happened to land inside the ~10px obstacle it briefly crossed. A fixed sample count that
+// does not scale with curve length always has this failure mode for a curve long enough
+// relative to the obstacles it is dodging.
+{
+  const p0 = { x: 0, y: 0 }, ctrl = { x: 300, y: 300 }, p1 = { x: 600, y: 0 };
+  // Built directly (not guessed): every one of the 16 evenly-spaced samples across this exact
+  // curve is >=8px from this box's centre, small enough (10x10) that none land inside it.
+  const box = { id: 'b', cx: 180, cy: 126, width: 10, height: 10 };
+  assert.equal(curveClears(p0, ctrl, p1, [box], 16, 0), true,
+    'sanity: the fixture genuinely defeats a fixed 16-sample check');
+  assert.equal(curveClears(p0, ctrl, p1, [box], 150, 0), false,
+    'the SAME curve, sampled densely (matching a ~600px chord at ~1 sample per 4px), catches the box the coarse check missed');
+
+  // routeEdge itself, end to end: from/to chosen so their clipped chord is this exact curve's
+  // endpoints, forcing this exact control point via the offset-0 attempt.
+  const from = { id: 'from', cx: -5, cy: 0, width: 10, height: 10 };
+  const to = { id: 'to', cx: 605, cy: 0, width: 10, height: 10 };
+  const route = routeEdge(from, to, [from, to, box]); // default samples: length-scaled
+  // Re-verify independently from the RETURNED path, not by trusting routeEdge's internal
+  // accounting -- this is the discipline every other case in this file uses.
+  const [rp0, rc, rp1] = parsePathPoints(route.d);
+  let denseClears = true;
+  for (let i = 0; i <= 150; i++) {
+    if (pointInBox(quadPoint(rp0, rc, rp1, i / 150), box, 0)) { denseClears = false; break; }
+  }
+  assert.ok(denseClears, `routeEdge's own default-sample-count result must clear ${box.id} at fine re-sampling, not just at 16 points`);
+  console.log('PASS: routeEdge — sample count scales with curve length, catching a brief dip a fixed 16 points would miss');
 }
 
 console.log('edgeRouting: all assertions passed');
