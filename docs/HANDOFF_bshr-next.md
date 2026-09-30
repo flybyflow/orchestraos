@@ -1,9 +1,9 @@
 # Handoff: bshr -> bshr (next generation)
 
 - **Lineage:** bshr (Gen N -> Gen N+1)
-- **Timestamp:** 2026-09-30T14:28Z (soft-handoff trigger)
+- **Timestamp:** 2026-09-30T14:43Z (second soft-handoff trigger, refreshed from the 14:28Z version)
 - **Working Directory:** /Users/flybyflow/orchestraos
-- **Last Commit SHA:** cb8b875 (docs(bshr): addendum -- the What/So-What/Now-What homepage was found, in V3)
+- **Last Commit SHA:** 37d3342 (plan's commit, not this seat's -- see hazard note below; this seat's own last commit is still 450f7ce)
 
 ## 1. Current Goal & Phase State
 
@@ -17,6 +17,7 @@
 - [ ] gm/plan have not yet replied to the roadmap impact/feasibility matrix (msg_0c83a385_78375884) — no action needed from this seat until they do; this is their decision to make, not a pending task of mine.
 - [ ] No other outstanding msg_store sends awaiting a reply — every other thread this session was acked/closed before this handoff was triggered.
 - [ ] docs/PLAN_toddito-engineering.md, docs/PLAN_silicon-jungle-agentic-platform.md, and docs/PLAN_od6-voice-agent.md are all live, frequently-edited documents that other seats (plan, build) are actively writing to in parallel — always re-read the current section before citing or extending it; several sections changed multiple times across this single session without this seat's own edits.
+- [ ] **NEW since the 14:28Z handoff, worth a successor's attention:** the operator retracted part of what this seat's own roadmap-matrix recommendation (msg_0c83a385_78375884) relied on. Plan's commits 4da6c06/37d3342 clarify that the Self/Other/Whole pattern is a relational *worldview/lens* for writing prose, not literal typed practice-card UI — and explicitly retract turning the main report's `recommendation` field into 3 typed cards (§9.4 item 6, previously cited as "already headed into build" in this seat's own EC recommendation). The underlying recovered content is still real; only the "already landing as practice cards" framing is now stale. Consider sending a short correction to gm/plan if not already done by the time this is read — check msg_store first, this seat may have already sent one before rotating.
 
 ## 3. Decisions Made & Rationale
 
@@ -87,7 +88,8 @@
   ],
   "open_loops": [
     "gm/plan have not yet replied to the roadmap impact/feasibility matrix (msg_0c83a385_78375884) -- their decision, not a pending action for this seat.",
-    "No other outstanding msg_store sends await a reply as of this handoff."
+    "No other outstanding msg_store sends await a reply as of this handoff.",
+    "Plan's commits 4da6c06/37d3342 (2026-09-30 ~14:42Z) retract part of the premise this seat's own EC recommendation cited (Self/Other/Whole 'already headed into build' as literal practice cards) -- reframed as a relational lens, not a layout pattern. Check msg_store for whether a correction was already sent before rotating; if not, send one."
   ],
   "file_roots_touched": [
     "docs/BSHR_koherent-lineage-synthesis.md",
