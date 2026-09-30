@@ -196,11 +196,16 @@ prose through, not generic labels slapped on a 3-column layout:
 - What does it say about my relationship with the other?
 - What does it say for the whole of the organization?
 
-**How to apply, concretely:** when §9's practices copy gets written
-(build, `msg_54c322e2_78671981`), each of the three practices should
-read as answering one of these questions in spirit, not just carry a
-"Self"/"Other"/"Whole" badge. Same discipline as everything else in this
-doc — cite the real source, don't approximate it.
+**SUPERSEDED (operator correction, `msg_af74ed49_79234813`, 2026-09-30
+14:40 UTC): this does NOT apply to §9's practices copy, because §9 no
+longer has practices copy — §9.4 item 6 (the 3 typed practice cards) was
+retracted as over-scoping a language fix into a structural rebuild.**
+This north-star context stays real and correctly placed here (§2a), but
+its actual application is to the **separate design-sprint seed** §9.4
+item 6 now points to (Executive Communicator or the "personal takeaway
+layer" question), not the current report-tone task. Corrected build
+directly (`msg_1563bc74_79290847`) after this seat's own earlier relay
+(`msg_cf317ddf_79121182`) got ahead of the operator's actual scope.
 
 ## 3. "Collective intelligence" — out of scope for this plan
 
@@ -744,34 +749,34 @@ by the IP owner himself, months before anyone named the pattern.
    scoring prompt's rationale-generation instructions** — not just the
    top-level tone line, but the per-field guidance for `stage_rationale`,
    `culture_rationale`, `leadership.rationale`, `strategy.rationale`.
-4. **Adopt the real What→So-What staged narrative shape — now confirmed
-   twice (V2 and V3's `a60503a`, §2a), not a reconstruction.** Apply to
-   the top-level hook/insight copy specifically — this is functionally
-   what S3b (Major Crisis/Growth Engine context) was already designed to
-   do; confirm whether S3b shipped before treating this as new work.
-5. **Consider Koherent's fixed narrative openers, applied selectively —
-   not universally** ("It seems you..." adapted to org-level: "This
-   organization tends to...", "A specific risk to watch is...") — a real,
-   working technique for consistency without formula, but only where it
-   reads naturally; forcing it onto every field risks the opposite
-   problem (mechanical instead of clinical).
-6. **CONFIRMED, not just flagged (gm relaying the operator directly,
-   `msg_672becde_77824931`, 2026-09-30 14:17 UTC): the full recovered
-   What/So-What/Now-What(Self/Other/Whole) structure IS the intended
-   pattern for THIS report — the main diagnostic every respondent sees —
-   not an optional nice-to-have.** Corrects this item's earlier hedge
-   ("a real opportunity, not required") — it's required, per the
-   operator directly. Pulse's `recommendation` field (single free-text
-   string today, `src/lib/scoring/prompt.ts`) is the natural landing
-   spot for the Now-What/practices piece specifically; the What/So-What
-   pairing (`whatReadMore`/`soWhatReadMore` style short+long framing)
-   likely extends further into the report than just that one field —
-   exact scope (which existing sections get restructured vs. which stay
-   as-is) needs its own design pass, not decided in this text review.
-   **Real sequencing note, since §10's JTBD work touches the same report
-   page:** JTBD 1's reorder (lead with the divergence) and this
-   structural change both land on the same file — do these together, not
-   as two separate passes that both touch overlapping sections.
+4. **RETRACTED as a structural claim, kept as language craft (operator
+   correction, gm relaying, `msg_af74ed49_79234813`, 2026-09-30 14:40
+   UTC) — "let's not conflate the two":** items 4-6 below (this whole
+   block, as previously written) over-scoped a LANGUAGE fix into a
+   structural rebuild the operator didn't ask for here. **This section's
+   actual scope is language only** — reverse-engineer Todd's IP at the
+   org level, change the LANGUAGE to be less clinical (his own words: it
+   reads as too PhD-level/academic today), nothing more structural. What
+   survives from the recovered content: the plain-language output rules
+   (item 3, unchanged) and the fixed narrative sentence-openers, used
+   selectively for tone, not as a new report structure.
+5. **Koherent's fixed narrative openers, applied selectively — not
+   universally** ("It seems you..." adapted to org-level: "This
+   organization tends to...", "A specific risk to watch is...") — a real
+   LANGUAGE technique for consistency without formula, used where it
+   reads naturally. This is a tone tool, not a structural change — stays
+   in scope.
+6. **REMOVED — do not build.** The earlier version of this item proposed
+   turning `recommendation` into 3 typed Self/Other/Whole practice
+   cards. **That is exactly the over-scoping the operator's correction
+   above rules out** — a structural rebuild, not a language fix, and not
+   what this section is for. The Self/Other/Whole ontology remains real
+   and valuable (the operator's own words) but as a **separate
+   design-sprint seed** — likely connects to Executive Communicator
+   (§7a.1's corrected survey) or the still-open "personal takeaway
+   layer" question (§2's original "different altitude" point) — not this
+   tone fix. If that design sprint happens, it gets its own section, not
+   a retrofit into §9.
 
 ### 9.5 What this section does not resolve
 
