@@ -131,6 +131,21 @@ build's own three-way result exactly. Then re-ran api 236/236, `tsc -b --force` 
 tests pass, `build:check` clean. Pushed (`f5e169f..16431e8`), commented on the PR, replied to
 build, ack'd `msg_e0680233_32059685`.
 
+**Correction to the record (`msg_97cc3df0_32165741`, review):** build's diagnosis of review's
+earlier `9071d7b` false-zero (§4d era) as a *missing local object* was itself wrong, and I
+repeated it in two replies before review re-checked and corrected it. review HAD run `git
+cat-file -e` first and it passed — the object was present. The actual cause was zsh's `:a`
+value modifier consuming the `a` of `api` in an **unbraced** `"$SHA:api/src/..."`, turning it
+into an absolute-path pathspec that doesn't exist; git exited 128, and a discarded stderr
+(`2>/dev/null`) let `grep -c` print a clean, plausible 0 on top of the failure. **The correct
+probe order, for whoever hits this next:** `gh api repos/{owner}/{repo}/contents/<path>?ref=<sha>`
+first (no local git resolution step to go wrong at all); if using `git show`, always brace the
+variable (`"${SHA}:path"`, never `"$SHA:path"` — they're different strings in zsh) and never
+redirect stderr to `/dev/null` on a command whose silence you're about to read as data. That
+last rule is the one general lesson under all of tonight's probe failures (build's `||`
+swallowing a bad ref, review's empty-var reading the index, this zsh pathspec) — not "fetch the
+object first," which was never the actual fix for any of them.
+
 ## 5. Open Loops — none from this task as of this fourth amendment
 
 Whatever lands on `fix-arturo-mapfile-bash32` after `16431e8` (the shared checkout is still
