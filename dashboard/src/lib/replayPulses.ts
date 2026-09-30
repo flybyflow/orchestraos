@@ -97,3 +97,80 @@ export function pulsePositionOnRoute(
   const reversed = pulse.a !== canonicalA;
   return pointAtFraction(route, reversed ? 1 - t : t);
 }
+
+/** Label pileup cap (operator QA item 3): "12 newest, the rest as dots". Busy windows had 59
+ *  concurrent labels (16 mutually overlapping, 182 overlapping pairs) on 24h and 316 on "all" —
+ *  an uncapped, uncollided label is legible at low traffic and unreadable noise at real traffic. */
+export const MAX_PULSE_LABELS = 12;
+
+const LABEL_HEIGHT_PX = 14;
+const LABEL_CHAR_WIDTH_PX = 6; // rough monospace-ish estimate at fontSize 9 — a heuristic for
+                                // decluttering, not a layout engine; doesn't need to be exact.
+const MAX_OFFSET_ATTEMPTS = 3;
+const FADED_LABEL_OPACITY = 0.35;
+
+export interface PulseLabelInput {
+  id: string;
+  x: number;
+  y: number;
+  label: string;
+  startedAt: number;
+}
+
+export interface PulseLabelPlacement {
+  id: string;
+  /** false = dot only, no text at all (the count-based cap, independent of any overlap). */
+  showLabel: boolean;
+  /** Additional vertical offset applied to the label's default position. 0 = default. */
+  dy: number;
+  /** Label-only opacity multiplier (the dot itself is unaffected). 1 = full. */
+  opacity: number;
+}
+
+interface Box { left: number; right: number; top: number; bottom: number }
+
+function labelBox(x: number, y: number, label: string): Box {
+  const width = label.length * LABEL_CHAR_WIDTH_PX + 8;
+  return { left: x - width / 2, right: x + width / 2, top: y - LABEL_HEIGHT_PX, bottom: y };
+}
+
+function boxesOverlap(a: Box, b: Box): boolean {
+  return a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+}
+
+/**
+ * Two independent declutter passes, in order:
+ *  1. COUNT CAP — only the `maxLabels` NEWEST pulses (by startedAt) are label candidates at
+ *     all; everything older is a dot, full stop, before any overlap check runs. This is what
+ *     keeps the WORST case (hundreds of concurrent pulses) bounded — overlap resolution alone
+ *     does not cap anything, it only spaces out however many labels it is given.
+ *  2. OVERLAP RESOLUTION — within the capped set, processed NEWEST first so a new pulse always
+ *     gets the default position and an older, already-overlapping one yields: first by
+ *     stacking upward (dy) a few attempts, then — if it still collides after those — by fading
+ *     instead of stacking indefinitely (an ever-taller column of labels is its own kind of
+ *     clutter). "Older" here only ever means older WITHIN the already-capped newest-N; a
+ *     pulse cut by the count cap never reaches this pass.
+ */
+export function layoutPulseLabels(entries: PulseLabelInput[], maxLabels = MAX_PULSE_LABELS): PulseLabelPlacement[] {
+  const sorted = [...entries].sort((a, b) => b.startedAt - a.startedAt);
+  const candidates = sorted.slice(0, maxLabels);
+  const overflow = sorted.slice(maxLabels);
+
+  const placedBoxes: Box[] = [];
+  const placements: PulseLabelPlacement[] = candidates.map((c) => {
+    let dy = 0;
+    let box = labelBox(c.x, c.y + dy, c.label);
+    let attempt = 0;
+    while (placedBoxes.some((p) => boxesOverlap(p, box)) && attempt < MAX_OFFSET_ATTEMPTS) {
+      attempt++;
+      dy -= LABEL_HEIGHT_PX;
+      box = labelBox(c.x, c.y + dy, c.label);
+    }
+    const stillColliding = placedBoxes.some((p) => boxesOverlap(p, box));
+    if (!stillColliding) placedBoxes.push(box);
+    return { id: c.id, showLabel: true, dy, opacity: stillColliding ? FADED_LABEL_OPACITY : 1 };
+  });
+
+  for (const o of overflow) placements.push({ id: o.id, showLabel: false, dy: 0, opacity: 1 });
+  return placements;
+}

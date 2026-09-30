@@ -16,7 +16,7 @@ import { clsx } from 'clsx';
 import { routeEdge, type Box, type EdgeRoute } from '../lib/edgeRouting';
 import { toLocalBox, samePositions, overlayContentSize, type RectLike } from '../lib/overlayGeometry';
 import { pairKey } from '../lib/topologyLines';
-import { pulseId, pulseProgress, pulsePositionOnRoute, pruneDeadPulses, type ReplayPulse } from '../lib/replayPulses';
+import { pulseId, pulseProgress, pulsePositionOnRoute, pruneDeadPulses, layoutPulseLabels, type ReplayPulse } from '../lib/replayPulses';
 
 export interface OverlayEdge {
   a: string;
@@ -406,26 +406,46 @@ export function TopologyOverlay({
           pulse layer"). Rendered on TOP of the static edges/labels so a pulse is never
           visually occluded by the line it rides. */}
       <g className="pointer-events-none">
-        {pulses.map((p) => {
-          if (!drawnPairs.has(pairKey(p.a, p.b))) return null;
-          // Ride the SAME route the edge above drew for this pair — never a second, possibly
-          // reversed, routeEdge call of its own (see routesByPair's comment above).
-          const entry = routesByPair.get(pairKey(p.a, p.b));
-          if (!entry) return null;
-          const pos = pulsePositionOnRoute(p, entry.a, entry.route, now);
-          const t = pulseProgress(p, now);
-          const color = edgeStroke(p.type);
-          // Fade in over the first 10% and out over the last 20% of the lifetime, rather than
-          // popping in/out at full opacity — the same reason CSS transitions exist.
-          const opacity = t < 0.1 ? t / 0.1 : t > 0.8 ? (1 - t) / 0.2 : 1;
-          return (
-            <g key={p.id} opacity={opacity}>
-              <circle cx={pos.x} cy={pos.y} r={5} fill={color} />
-              <circle cx={pos.x} cy={pos.y} r={9} fill={color} opacity={0.35} />
-              {p.type && (
+        {(() => {
+          // Position every visible pulse FIRST, in one pass, before any label decision —
+          // layoutPulseLabels (operator QA item 3: 59 concurrent labels on 24h, 16 mutually
+          // overlapping) needs the WHOLE batch at once to cap-and-declutter correctly; deciding
+          // labels one pulse at a time inside the render loop has no "everyone else" to compare
+          // against.
+          const visible = pulses
+            .map((p) => {
+              if (!drawnPairs.has(pairKey(p.a, p.b))) return null;
+              // Ride the SAME route the edge above drew for this pair — never a second,
+              // possibly reversed, routeEdge call of its own (see routesByPair's comment above).
+              const entry = routesByPair.get(pairKey(p.a, p.b));
+              if (!entry) return null;
+              const pos = pulsePositionOnRoute(p, entry.a, entry.route, now);
+              const t = pulseProgress(p, now);
+              // Fade in over the first 10% and out over the last 20% of the lifetime, rather
+              // than popping in/out at full opacity — the same reason CSS transitions exist.
+              const opacity = t < 0.1 ? t / 0.1 : t > 0.8 ? (1 - t) / 0.2 : 1;
+              return { pulse: p, pos, opacity, color: edgeStroke(p.type) };
+            })
+            .filter((v): v is NonNullable<typeof v> => v !== null);
+
+          const labelInputs = visible
+            .filter((v) => v.pulse.type)
+            .map((v) => ({
+              id: v.pulse.id, x: v.pos.x, y: v.pos.y - 12,
+              label: String(v.pulse.type).toUpperCase(), startedAt: v.pulse.startedAt,
+            }));
+          const labelPlacements = new Map(layoutPulseLabels(labelInputs).map((pl) => [pl.id, pl]));
+
+          return visible.map(({ pulse: p, pos, opacity, color }) => {
+            const placement = labelPlacements.get(p.id);
+            return (
+              <g key={p.id} opacity={opacity}>
+                <circle cx={pos.x} cy={pos.y} r={5} fill={color} />
+                <circle cx={pos.x} cy={pos.y} r={9} fill={color} opacity={0.35} />
+                {p.type && placement?.showLabel && (
                 <text
                   x={pos.x}
-                  y={pos.y - 12}
+                  y={pos.y - 12 + placement.dy}
                   textAnchor="middle"
                   fontSize={9}
                   fontWeight={600}
@@ -434,13 +454,15 @@ export function TopologyOverlay({
                   stroke="#0a0a0a"
                   strokeWidth={3}
                   paintOrder="stroke"
+                  opacity={placement.opacity}
                 >
                   {p.type.toUpperCase()}
                 </text>
-              )}
-            </g>
-          );
-        })}
+                )}
+              </g>
+            );
+          });
+        })()}
       </g>
     </svg>
   );

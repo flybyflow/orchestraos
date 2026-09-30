@@ -3,7 +3,7 @@
  *   node --experimental-strip-types dashboard/src/lib/replayPulses.test.mjs
  */
 import assert from 'node:assert';
-import { pulseId, pulseProgress, isPulseAlive, pruneDeadPulses, pulsePositionOnRoute, PULSE_LIFETIME_MS } from './replayPulses.ts';
+import { pulseId, pulseProgress, isPulseAlive, pruneDeadPulses, pulsePositionOnRoute, PULSE_LIFETIME_MS, layoutPulseLabels, MAX_PULSE_LABELS } from './replayPulses.ts';
 import { routeEdge, pointAtFraction } from './edgeRouting.ts';
 
 // ── pulseId: deterministic, collision-proof even when `id` is ABSENT ─────────────────────
@@ -107,6 +107,73 @@ import { routeEdge, pointAtFraction } from './edgeRouting.ts';
   assert.ok(distToCurve(oldBuggyPos) > 5,
     `the OLD per-pulse-routeEdge approach lands ${distToCurve(oldBuggyPos).toFixed(1)}px off the drawn curve -- ` +
     'proving this fixture actually exercises the asymmetry, and that the fix (reuse + reversed-t) is what avoids it');
+}
+
+// ── layoutPulseLabels: count cap + overlap resolution (operator QA item 3: 59 concurrent
+// labels on 24h, 16 mutually overlapping / 182 overlapping pairs; 316 on "all", 43/2482) ─────
+
+// Count cap: only the MAX_PULSE_LABELS newest get a label at all, independent of overlap.
+{
+  const n = MAX_PULSE_LABELS + 5;
+  // Spread far enough apart (200px) that none of them would overlap even if all were labeled —
+  // isolates the count cap from the overlap-resolution pass below.
+  const entries = Array.from({ length: n }, (_, i) => ({
+    id: `p${i}`, x: i * 200, y: 0, label: 'TASK', startedAt: i, // higher i = newer
+  }));
+  const placements = layoutPulseLabels(entries);
+  const byId = new Map(placements.map((p) => [p.id, p]));
+
+  assert.equal(placements.length, n, 'every pulse gets a placement decision, even the overflow ones');
+  const labeled = placements.filter((p) => p.showLabel);
+  assert.equal(labeled.length, MAX_PULSE_LABELS, `exactly ${MAX_PULSE_LABELS} get a label, not more`);
+
+  // The newest MAX_PULSE_LABELS (highest startedAt / highest i) must be the ones labeled.
+  for (let i = n - MAX_PULSE_LABELS; i < n; i++) {
+    assert.equal(byId.get(`p${i}`).showLabel, true, `pulse p${i} (one of the ${MAX_PULSE_LABELS} newest) must be labeled`);
+  }
+  for (let i = 0; i < n - MAX_PULSE_LABELS; i++) {
+    assert.equal(byId.get(`p${i}`).showLabel, false, `pulse p${i} (older than the newest ${MAX_PULSE_LABELS}) must be a dot only`);
+  }
+}
+
+// Overlap resolution: two labels at the SAME position collide; the newer one keeps the
+// default slot, the older one is pushed (dy != 0) or faded (opacity < 1) — never both at
+// dy=0/opacity=1, which would mean the collision was silently ignored.
+{
+  const older = { id: 'older', x: 100, y: 100, label: 'REPLY', startedAt: 0 };
+  const newer = { id: 'newer', x: 100, y: 100, label: 'REPLY', startedAt: 1 }; // identical position
+  const placements = layoutPulseLabels([older, newer]);
+  const byId = new Map(placements.map((p) => [p.id, p]));
+
+  assert.deepEqual(byId.get('newer'), { id: 'newer', showLabel: true, dy: 0, opacity: 1 },
+    'the newer pulse keeps the default, unmoved, fully-opaque label position');
+  const olderPlacement = byId.get('older');
+  assert.equal(olderPlacement.showLabel, true, 'the older pulse is still within the count cap, so it still gets a label slot');
+  assert.ok(olderPlacement.dy !== 0 || olderPlacement.opacity < 1,
+    'a directly-overlapping older label must be offset or faded, not left exactly on top of the newer one');
+}
+
+// No overlap -> no unnecessary offsetting or fading (the common case: most labels, most of
+// the time, should render exactly at their natural position).
+{
+  const entries = [
+    { id: 'a', x: 0, y: 0, label: 'TASK', startedAt: 0 },
+    { id: 'b', x: 500, y: 0, label: 'TASK', startedAt: 1 },
+  ];
+  const placements = layoutPulseLabels(entries);
+  for (const p of placements) {
+    assert.equal(p.dy, 0, `${p.id}: no collision, so no offset should be applied`);
+    assert.equal(p.opacity, 1, `${p.id}: no collision, so no fade should be applied`);
+  }
+}
+
+// Exactly at the cap boundary: all MAX_PULSE_LABELS get labeled, none dropped.
+{
+  const entries = Array.from({ length: MAX_PULSE_LABELS }, (_, i) => ({
+    id: `p${i}`, x: i * 200, y: 0, label: 'TASK', startedAt: i,
+  }));
+  const placements = layoutPulseLabels(entries);
+  assert.ok(placements.every((p) => p.showLabel), 'exactly at the cap, every pulse still gets a label');
 }
 
 console.log('replayPulses: all assertions passed');
