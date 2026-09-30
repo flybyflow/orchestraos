@@ -284,6 +284,11 @@ export default function Agents() {
   // /api/agents for liveness, /api/messages/pair-counts for traffic — so the strip cannot
   // disagree with the connection lines or with the status-filter counts below it.
   const pairs = pairData?.pairs ?? [];
+  // Layer toggles (spec step 4). Hierarchy is the skeleton and always draws, so it is
+  // not toggleable — hiding it would leave edges floating with nothing to anchor them.
+  // Default is top-12 cross edges: drawing all 30 at once is the "calm by default"
+  // violation the spec warns about, and show-all is one click away.
+  const [layers, setLayers] = useState({ cross: true, external: true, showAllCross: false });
   const messagesInWindow = pairs.reduce((n, p) => n + p.count, 0);
   const activeConnections = pairs.filter((p) => p.count > 0).length;
   const busiest = pairs.length ? pairs[0] : null;   // endpoint already orders by count desc
@@ -601,6 +606,49 @@ export default function Agents() {
       {viewMode === 'topology' && (
         <div className="flex flex-col lg:flex-row gap-4 items-stretch">
           <div className="flex-1 min-w-0 rounded-xl border border-neutral-800 bg-neutral-900 p-4 overflow-x-auto">
+            {/* Layer toggles. Hierarchy is deliberately absent: it is the skeleton every
+                other layer is positioned against, and hiding it would leave cross edges
+                floating with nothing to read them against. */}
+            <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
+              <span className="text-neutral-600">Layers</span>
+              {([
+                ['cross', 'cross edges'],
+                ['external', 'external'],
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={layers[k]}
+                  onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
+                  className={clsx(
+                    'px-2 py-0.5 rounded border focus:outline-none focus:ring-1 focus:ring-sky-500',
+                    layers[k]
+                      ? 'border-neutral-600 bg-neutral-800 text-neutral-200'
+                      : 'border-neutral-800 text-neutral-600',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={layers.showAllCross}
+                disabled={!layers.cross}
+                onClick={() => setLayers((l) => ({ ...l, showAllCross: !l.showAllCross }))}
+                title={layers.showAllCross
+                  ? 'Showing every cross edge'
+                  : 'Showing the 12 busiest cross edges — click for all'}
+                className={clsx(
+                  'px-2 py-0.5 rounded border focus:outline-none focus:ring-1 focus:ring-sky-500',
+                  'disabled:opacity-40 disabled:cursor-not-allowed',
+                  layers.showAllCross
+                    ? 'border-neutral-600 bg-neutral-800 text-neutral-200'
+                    : 'border-neutral-800 text-neutral-500',
+                )}
+              >
+                {layers.showAllCross ? 'all' : 'top 12'}
+              </button>
+            </div>
             <TopologyDiagram
               // `sorted`, NOT `agents`: Cards and Table got the filtered array and Topology
               // was handed the unfiltered one, so the status filter had NO effect on the
@@ -616,6 +664,14 @@ export default function Agents() {
               onClearSelection={() => { closePanel(); setHighlight(null); }}
               brightIds={highlight?.agentIds ?? null}
               dots={dots}
+              // allAgents, NOT `agents`: the rim needs the FULL registry to tell a
+              // hidden agent (gm-g2, retired) from a genuine external endpoint
+              // (telegram). Handed the filtered list it would invent a rim node for
+              // every retired seat.
+              allAgentIds={allAgents.map((a: { id: string }) => String(a.id))}
+              deadPairs={(pairData as { dead_pairs?: typeof pairs } | undefined)?.dead_pairs ?? []}
+              layers={layers}
+              crossTopN={layers.showAllCross ? null : 12}
             />
             {/* Bottom live ticker (spec §3). The time scrubber that shares this row is
                 step 9 and is not built. */}

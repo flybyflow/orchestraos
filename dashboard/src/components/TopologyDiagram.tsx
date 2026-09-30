@@ -1,10 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { clsx } from 'clsx';
 import { StatusDot } from './StatusDot';
 import { TierBadge } from './TierBadge';
 import type { PairCountRow } from '../lib/api';
 import { lineWidthPx, pairKey, shortAgo, partitionTopology } from '../lib/topologyLines';
 import { dotColor, type TrafficMessage } from '../lib/fleetTraffic';
+import { TopologyOverlay, RimNode, useNodePositions, type OverlayEdge } from './TopologyOverlay';
+import { externalEndpoints } from '../lib/rimNodes';
+import { selectCrossEdges, busiestDrawn, edgeLiveness } from '../lib/overlayGeometry';
 
 interface Agent {
   id: string;
@@ -47,6 +50,18 @@ interface TopologyDiagramProps {
    *  (spec §4). The page owns the poll-diff and the expiry; this component only draws what
    *  it is handed, so a dot can never appear without a real message behind it (spec §2). */
   dots?: TrafficMessage[];
+  /** Every agent id the fleet has ever known, retired rows included. Distinguishes "a
+   *  hidden agent" from "not an agent at all" — without it a retired seat like gm-g2
+   *  would be misclassified as an external endpoint and get a rim node of its own. */
+  allAgentIds?: string[];
+  /** Pairs with historic traffic but none in the window (API `dead_pairs`). Drawn
+   *  differently from quiet — see overlayGeometry.edgeLiveness. */
+  deadPairs?: PairCountRow[];
+  /** Layer visibility. Cross edges and the rim are independently toggleable from the
+   *  hierarchy, which always renders (spec: hierarchy is the skeleton). */
+  layers?: { cross?: boolean; external?: boolean; counts?: boolean };
+  /** Cap on cross edges drawn, highest count first. null = show all. */
+  crossTopN?: number | null;
 }
 
 /** A box or a line is a real control when it has a handler and plain markup when it does not.
@@ -54,13 +69,17 @@ interface TopologyDiagramProps {
  *  would drift. `button` over `div onClick` so the graph is usable from a keyboard (spec §2
  *  says everything is clickable — that has to include people not using a mouse). */
 function Clickable({
-  onClick, title, className, children,
+  onClick, title, className, children, elRef,
 }: {
   onClick?: () => void; title?: string; className: string; children: React.ReactNode;
+  /** Both shells forward the ref: the overlay has to measure a node whether or not
+   *  it happens to be interactive, or an unclickable box would have no position and
+   *  every edge touching it would silently vanish. */
+  elRef?: (el: HTMLElement | null) => void;
 }) {
-  if (!onClick) return <div title={title} className={className}>{children}</div>;
+  if (!onClick) return <div ref={elRef} title={title} className={className}>{children}</div>;
   return (
-    <button type="button" onClick={onClick} title={title}
+    <button type="button" ref={elRef} onClick={onClick} title={title}
       className={clsx(className, 'text-left focus:outline-none focus:ring-2 focus:ring-sky-500')}>
       {children}
     </button>
@@ -160,14 +179,19 @@ function isWorking(agent: Agent): boolean {
 }
 
 function AgentNode({
-  agent, onSelect, selected, dimmed,
-}: { agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean }) {
+  agent, onSelect, selected, dimmed, nodeRef,
+}: {
+  agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean;
+  /** Registers this box with the overlay's position tracker. */
+  nodeRef?: (el: HTMLElement | null) => void;
+}) {
   const working = isWorking(agent);
   // Agent-level only. The operator explicitly did NOT want skill/prompt execution detail,
   // so this shows the task a seat is on, never which tool or skill is running.
   const subtitle = working ? (agent.current_task || 'working').trim() : '';
   return (
     <Clickable
+      elRef={nodeRef}
       onClick={onSelect ? () => onSelect(agent.id) : undefined}
       className={clsx(
         'relative flex flex-col items-center gap-1 rounded-lg border-2 bg-neutral-900 px-3 py-2.5 min-w-[110px] transition hover:bg-neutral-800',
@@ -286,7 +310,12 @@ function Connection({
 export function TopologyDiagram({
   agents, pairs, windowHours = 24, onSelectConnection, onSelectAgent, selectedAgentId,
   onClearSelection, dots, brightIds,
+  allAgentIds, deadPairs, layers, crossTopN = 12,
 }: TopologyDiagramProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { positions, register } = useNodePositions(containerRef);
+  const showCross = layers?.cross ?? true;
+  const showExternal = layers?.external ?? true;
   // Partition first: the set of lines the tree will draw is what the thickness denominator has
   // to be computed from, so it cannot wait until render. partitionTopology computes `rest` by
   // SUBTRACTION — whatever the tree does not claim is still rendered — because the previous
@@ -321,6 +350,44 @@ export function TopologyDiagram({
     [brightIds, selectionBright],
   );
   const dotsByPair = useDotsByPair(dots);
+  // External endpoints: things with traffic that are not agents. `allAgentIds` is the
+  // FULL registry so a retired seat reads as a hidden agent rather than a new external
+  // endpoint; the visible list is what the tree actually drew.
+  const rim = useMemo(() => {
+    if (!showExternal) return { endpoints: [], dropped: [] };
+    const visible = agents.map((a) => a.id);
+    return externalEndpoints(pairs ?? [], allAgentIds ?? visible, visible);
+  }, [pairs, agents, allAgentIds, showExternal]);
+
+  // Cross edges: every pair with traffic that the hierarchy tree does not already draw.
+  // Dead pairs ride the same path so they are routed and hit-tested identically —
+  // the only difference is how they are stroked.
+  const crossSelection = useMemo(() => {
+    if (!showCross) return null;
+    const rows = [...(pairs ?? []), ...(deadPairs ?? [])];
+    const positioned = new Set(positions.keys());
+    return selectCrossEdges(rows, positioned, drawnKeys, pairKey, crossTopN);
+  }, [pairs, deadPairs, positions, drawnKeys, crossTopN, showCross]);
+
+  const overlayEdges: OverlayEdge[] = useMemo(() => {
+    if (!crossSelection) return [];
+    const now = Date.now();
+    const denom = busiestDrawn(crossSelection.drawn, lookup.busiest);
+    return crossSelection.drawn.map((p) => {
+      const byType = (p as PairCountRow & { by_type?: Record<string, number> }).by_type ?? {};
+      const top = Object.entries(byType).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+      const lastAt = p.last_at ? Date.parse(p.last_at) : null;
+      return {
+        a: p.a, b: p.b, count: p.count, type: top, byType,
+        liveness: edgeLiveness(p.count, Number.isNaN(lastAt as number) ? null : lastAt, now, windowHours * 3600_000),
+        widthPx: lineWidthPx(p.count, denom),
+        // Same rule hierarchy lines use: an edge stays bright only if the selected
+        // agent is one of its two ends.
+        dimmed: bright !== null && p.a !== selectedAgentId && p.b !== selectedAgentId,
+      };
+    });
+  }, [crossSelection, lookup.busiest, windowHours, bright, selectedAgentId]);
+
   const isDim = (id: string) => bright !== null && !bright.has(id);
   // A line stays bright only if the selected agent is one of its two ends.
   const lineDim = (a: string, b: string) =>
@@ -331,13 +398,30 @@ export function TopologyDiagram({
     // click that bubbled up from a node or a line does not immediately undo the selection
     // it just made — without that check, selecting anything is impossible.
     <div
-      className="flex flex-col items-center gap-0 py-6 overflow-x-auto"
+      ref={containerRef}
+      // `relative` is what the absolutely-positioned overlay measures against — every
+      // node box is converted into coordinates local to THIS element.
+      className="relative flex flex-col items-center gap-0 py-6 overflow-x-auto"
       onClick={(e) => { if (onClearSelection && e.target === e.currentTarget) onClearSelection(); }}
     >
+      {/* Edges first in document order so node boxes paint OVER them: an opaque
+          bg-neutral-900 node then covers any line passing near it, which is the
+          cheap half of "no lines through boxes" (routeEdge does the real half).
+          No double-render of nodes, one fewer thing to keep in sync. */}
+      {overlayEdges.length > 0 && (
+        <TopologyOverlay
+          width={containerRef.current?.scrollWidth ?? 0}
+          height={containerRef.current?.scrollHeight ?? 0}
+          edges={overlayEdges}
+          positions={positions}
+          windowHours={windowHours}
+          onSelectConnection={onSelectConnection}
+        />
+      )}
       {/* T0: GM */}
       {gm && (
         <>
-          <AgentNode agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} />
+          <AgentNode nodeRef={register(gm.id)} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} />
           {/* Trunk down to the PM bar. Deliberately unlabelled: this is a bus, not a pair,
               and the "hub-spoke" string it replaces described the shape rather than the
               traffic. The real gm<->pm counts sit on each PM's own segment below. */}
@@ -375,7 +459,7 @@ export function TopologyDiagram({
                       dots={dotsByPair.get(pairKey(gm.id, pm.id))}
                     />
                   )}
-                  <AgentNode agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} />
+                  <AgentNode nodeRef={register(pm.id)} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} />
 
                   {/* Workers under this PM. Each worker gets its OWN line to the PM rather
                       than sharing one "mesh" label for the group — a per-pair count is the
@@ -390,7 +474,7 @@ export function TopologyDiagram({
                             dimmed={lineDim(pm.id, w.id)}
                             dots={dotsByPair.get(pairKey(pm.id, w.id))}
                           />
-                          <AgentNode agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+                          <AgentNode nodeRef={register(w.id)} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
                         </div>
                       ))}
                     </div>
@@ -408,7 +492,42 @@ export function TopologyDiagram({
           <p className="text-xs text-neutral-600 text-center mb-3">Not in the tree ({orphanAgents.length})</p>
           <div className="flex items-start gap-3 flex-wrap justify-center">
             {orphanAgents.map((w) => (
-              <AgentNode key={w.id} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+              <AgentNode key={w.id} nodeRef={register(w.id)} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* External endpoints on the rim. These have real traffic and no node, so before
+          this they were invisible AND their busiest pair (gm<->telegram, the largest in
+          the whole dataset) was unreachable. Dashed border and no status dot: they are
+          not agents and must not be mistaken for one. */}
+      {rim.endpoints.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-neutral-800 w-full">
+          <p className="text-xs text-neutral-600 text-center mb-3">
+            External ({rim.endpoints.length})
+            {rim.dropped.length > 0 && (
+              // Say what is NOT drawn rather than leaving a silent gap. Today this is
+              // exactly one pair: an endpoint whose other end is a retired seat the
+              // fleet view hides on purpose, so the edge has nowhere to land.
+              <span
+                className="text-neutral-700"
+                title={rim.dropped.map((d) => `${d.a} ⇄ ${d.b} (${d.count}) — ${d.hiddenId} is retired and not drawn`).join('\n')}
+              >
+                {' · '}{rim.dropped.length} not drawn
+              </span>
+            )}
+          </p>
+          <div className="flex items-start gap-3 flex-wrap justify-center">
+            {rim.endpoints.map((e) => (
+              <RimNode
+                key={e.id}
+                id={e.id}
+                count={e.count}
+                nodeRef={register(e.id)}
+                onSelect={onSelectAgent}
+                dimmed={isDim(e.id)}
+              />
             ))}
           </div>
         </div>

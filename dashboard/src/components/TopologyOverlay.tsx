@@ -1,0 +1,238 @@
+/**
+ * Cross-edge SVG overlay for the topology (design §2).
+ *
+ * The flex tree keeps drawing hierarchy nodes and hierarchy edges exactly as
+ * before; this adds a layer on top for the edges the tree CANNOT express —
+ * any pair with traffic that is not a parent/child link, plus the external
+ * endpoints (telegram, operator, …) that have traffic and no node at all.
+ *
+ * Everything decidable without a browser lives in lib/overlayGeometry.ts,
+ * lib/edgeRouting.ts and lib/rimNodes.ts, all unit-tested. What is left here
+ * is only what genuinely needs the DOM: refs, getBoundingClientRect,
+ * ResizeObserver, rAF batching and the scroll listener.
+ */
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { clsx } from 'clsx';
+import { routeEdge, type Box } from '../lib/edgeRouting';
+import { toLocalBox, type RectLike } from '../lib/overlayGeometry';
+
+export interface OverlayEdge {
+  a: string;
+  b: string;
+  count: number;
+  /** Dominant message type, for colour. */
+  type?: string | null;
+  /** Per-type breakdown from the API's by_type, for the tooltip. */
+  byType?: Record<string, number>;
+  /** 'live' | 'quiet' | 'dead' — quiet and dead must not look the same. */
+  liveness?: 'live' | 'quiet' | 'dead';
+  /** Majority direction, for the arrow. null when evenly split. */
+  direction?: 'ab' | 'ba' | null;
+  widthPx: number;
+  dimmed?: boolean;
+}
+
+/**
+ * Track every registered node's box in overlay-local coordinates.
+ *
+ * Invalidation is the part the design's independent review corrected, and all
+ * four triggers below are load-bearing:
+ *  - a ResizeObserver on EVERY node, not just the container: a node's own box
+ *    changes when its task text or status updates, which moves no container
+ *    and changes no node-id set.
+ *  - rAF batching, so a burst of simultaneous node resizes recomputes once.
+ *  - a scroll listener: the container is overflow-x-auto, and without this
+ *    every edge silently drifts the moment anyone scrolls. A drifted endpoint
+ *    is worse than a missing one — it still looks connected, just to the
+ *    wrong node.
+ *  - window resize, for the reflow the container observer can miss.
+ */
+export function useNodePositions(containerRef: React.RefObject<HTMLElement | null>) {
+  const nodeRefs = useRef(new Map<string, HTMLElement>());
+  const [positions, setPositions] = useState<Map<string, Box>>(new Map());
+  const frame = useRef<number | null>(null);
+
+  const measure = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const cRect: RectLike = container.getBoundingClientRect();
+    const next = new Map<string, Box>();
+    for (const [id, el] of nodeRefs.current) {
+      // A ref can outlive its node for one frame (filter toggled, data changed).
+      // Skipping is correct; throwing would lose the positions of every node
+      // that IS still mounted.
+      if (!el.isConnected) continue;
+      next.set(id, toLocalBox(id, el.getBoundingClientRect(), cRect, container.scrollLeft, container.scrollTop));
+    }
+    setPositions(next);
+  }, [containerRef]);
+
+  const schedule = useCallback(() => {
+    if (frame.current != null) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      measure();
+    });
+  }, [measure]);
+
+  /** Registers a node. Passed straight to a `ref` prop. */
+  const register = useCallback((id: string) => (el: HTMLElement | null) => {
+    if (el) nodeRefs.current.set(id, el);
+    else nodeRefs.current.delete(id);
+    schedule();
+  }, [schedule]);
+
+  // Layout effect, not effect: measuring after paint shows one frame of edges
+  // drawn at stale coordinates on every change.
+  useLayoutEffect(() => { measure(); });
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(schedule);
+    ro.observe(container);
+    for (const el of nodeRefs.current.values()) if (el.isConnected) ro.observe(el);
+    container.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      ro.disconnect();
+      container.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      if (frame.current != null) cancelAnimationFrame(frame.current);
+    };
+  }, [containerRef, schedule, positions.size]);
+
+  return { positions, register, remeasure: schedule };
+}
+
+/** Stroke colour per message type — mirrors fleetTraffic's DOT_COLOR vocabulary. */
+const EDGE_STROKE: Record<string, string> = {
+  task: '#facc15',
+  task_request: '#fb923c',
+  reply: '#38bdf8',
+  task_complete: '#4ade80',
+  progress: '#a78bfa',
+  escalate: '#f87171',
+  held_message: '#fbbf24',
+  approval_resolved: '#2dd4bf',
+};
+const EDGE_STROKE_UNKNOWN = '#a3a3a3';
+
+export function edgeStroke(type: string | null | undefined): string {
+  if (!type) return EDGE_STROKE_UNKNOWN;
+  return EDGE_STROKE[type.toLowerCase()] ?? EDGE_STROKE_UNKNOWN;
+}
+
+function tooltip(e: OverlayEdge, windowHours: number): string {
+  const head = `${e.a} ⇄ ${e.b} · ${e.count} in ${windowHours}h`;
+  if (e.liveness === 'dead') return `${e.a} ⇄ ${e.b} · no traffic in ${windowHours}h`;
+  if (e.liveness === 'quiet') return `${e.a} ⇄ ${e.b} · quiet — last traffic just outside the window`;
+  const parts = Object.entries(e.byType ?? {})
+    .sort((x, y) => y[1] - x[1])
+    .map(([t, n]) => `${n} ${t.replace(/_/g, ' ')}`);
+  return parts.length ? `${head}\n${parts.join(', ')}` : head;
+}
+
+export interface TopologyOverlayProps {
+  width: number;
+  height: number;
+  edges: OverlayEdge[];
+  positions: Map<string, Box>;
+  windowHours: number;
+  onSelectConnection?: (a: string, b: string) => void;
+}
+
+export function TopologyOverlay({
+  width, height, edges, positions, windowHours, onSelectConnection,
+}: TopologyOverlayProps) {
+  if (width <= 0 || height <= 0) return null;
+  const obstacles = [...positions.values()];
+
+  return (
+    // pointer-events:none on the <svg> so the layer never steals a click meant
+    // for a node; re-enabled per hit-path below. aria-hidden because every edge
+    // is also reachable through the conversation list — an SVG path is not a
+    // keyboard target, and pretending otherwise would be worse than routing
+    // screen readers to the list that already works.
+    <svg
+      className="absolute inset-0 pointer-events-none"
+      width={width}
+      height={height}
+      aria-hidden
+    >
+      {edges.map((e) => {
+        const from = positions.get(e.a);
+        const to = positions.get(e.b);
+        // Never draw half an edge. selectCrossEdges already filters these out;
+        // this is the belt to that braces, because a path with a NaN endpoint
+        // renders as a line to the origin rather than as nothing.
+        if (!from || !to) return null;
+
+        const route = routeEdge(from, to, obstacles);
+        const stroke = edgeStroke(e.type);
+        const dead = e.liveness === 'dead';
+        const quiet = e.liveness === 'quiet';
+
+        return (
+          <g key={`${e.a}|${e.b}`} className={clsx(e.dimmed && 'opacity-20')}>
+            <path
+              d={route.d}
+              fill="none"
+              stroke={dead ? '#3f3f46' : stroke}
+              strokeWidth={dead || quiet ? 1 : e.widthPx}
+              // dead = sparse dots (a connection that WAS real), quiet = dashes
+              // (alive, just below the window). One grey line for both would say
+              // "nothing here" about a link that is merely idle.
+              strokeDasharray={dead ? '1 6' : quiet ? '5 4' : undefined}
+              strokeOpacity={dead ? 0.55 : quiet ? 0.75 : 0.85}
+              strokeLinecap="round"
+            />
+            {onSelectConnection && (
+              // A 1-2px line is not a clickable target. A wide transparent path
+              // on top gives it a real hit area without inflating its weight.
+              <path
+                d={route.d}
+                fill="none"
+                stroke="transparent"
+                strokeWidth={14}
+                className="pointer-events-auto cursor-pointer"
+                onClick={() => onSelectConnection(e.a, e.b)}
+              >
+                <title>{tooltip(e, windowHours)}</title>
+              </path>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/** A non-agent endpoint (telegram, operator, …) drawn on the rim. */
+export function RimNode({
+  id, count, nodeRef, onSelect, dimmed,
+}: {
+  id: string;
+  count: number;
+  nodeRef: (el: HTMLElement | null) => void;
+  onSelect?: (id: string) => void;
+  dimmed?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      ref={nodeRef}
+      onClick={onSelect ? () => onSelect(id) : undefined}
+      title={`${id} — ${count} messages, external endpoint (not an agent)`}
+      className={clsx(
+        'flex flex-col items-center gap-0.5 rounded-lg border border-dashed border-neutral-700',
+        'bg-neutral-900 px-2.5 py-1.5 min-w-[88px] transition hover:bg-neutral-800',
+        'focus:outline-none focus:ring-1 focus:ring-sky-500',
+        dimmed && 'opacity-30',
+      )}
+    >
+      <span className="text-[11px] text-neutral-300">{id}</span>
+      <span className="text-[10px] text-neutral-500">{count}</span>
+    </button>
+  );
+}
