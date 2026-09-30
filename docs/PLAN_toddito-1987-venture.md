@@ -126,137 +126,117 @@ system had no equivalent, being pre-LLM). The gap is not "the old system
 was better" — it's "the old system covered more product surface area,
 today's system covers one surface more deeply and more modernly."
 
-## 3. Market — reused from the Silicon Jungle brief, not re-derived
+## 3. Who this is for
 
-Per `docs/PLAN_silicon-jungle-agentic-platform.md` §0j (resolved
-2026-09-29): primary target is **boutique consulting practices** —
-independent consultants who have client relationships and domain trust but
-lack a fast way to understand an organization ("continuous holistic
-meaning," full-organization not just executive-team, voice-first). A
-second, distinct angle: positioning the same methodology as a **due-
-diligence / de-risking tool for PE and M&A investors** evaluating a
-company before committing capital — connects directly to gap item 2's
-unbuilt "M&A Manager" and "Investor Insight" Application Suite modules,
-meaning this isn't just a marketing angle, it's a real product-scope
-signal pointing at which unbuilt module to prioritize first if this market
-is real.
+The people this is really for are independent consultants and boutique
+consulting firms — people who already have the client relationships and
+the trust, but no fast way to actually understand an organization from the
+inside. What Toddito offers them is a full, honest read of a company, not
+just the executive team's view, done by voice instead of paperwork.
 
-**38 years of validated client data is a real, usable trust asset for
-this market** — not just a curiosity. Todd's own Blue Ocean positioning
-work (June 17 CEO review) already identified this: the report format, the
-"hook report" framing, and Todd himself as spokesperson/proof point
-("I built a system with this company and now I just kick it off") are
-already-designed GTM assets for exactly this boutique-consultant market.
-This venture plan does not need to invent GTM thinking that already
-exists — it inherits it.
+There's a second, real angle on top of that: the same method can be
+positioned as a way for private-equity and M&A investors to check the
+health of a company before they put money into it. That's not just a
+marketing idea — it points directly at two of the unbuilt modules from
+Todd's own original framework, the M&A tool and the investor-facing one,
+so it's a real signal about what to build next if that market turns out
+to be real.
 
-## 4. Product scope roadmap — informed by the gap analysis, not
-duplicating the engineering plan
+And there's something underneath both of those worth saying plainly:
+thirty-eight years of real client data is an actual trust asset, not a
+nice-to-have detail. Todd himself, standing up and saying "I built this
+with real companies and I just run it now," is already a strong story for
+exactly the boutique-consultant audience above — nothing here needs to
+invent that positioning, it already exists.
 
-The companion engineering plan (`docs/PLAN_toddito-engineering.md`) owns
-*how* to build; this section is *what a venture pitch should say the
-product becomes*, informed by §2's gap analysis:
+## 4. What the product becomes, if this becomes a pitch
 
-1. **Near-term differentiator: honest about what's proven vs. what's
-   still hypothesis.** Today's product can honestly say "org diagnostic,
-   single scoring model." What's **actually verified**: the 1987 system
-   really was industry-tuned into distinct variants (3 content-families,
-   real per-variant weight files), and — per bshr's 2026-09-29
-   correction — the letter↔industry mapping is now fully decoded (§1),
-   no longer a Todd-dependent unknown. What's **still a hypothesis, not
-   yet verified**: whether decoding those per-variant weights and
-   re-running them actually closes the two ground-truth divergences the
-   engineering plan's F8 documents (`thor-score.test.ts`) — that's the
-   engineering plan's §5 spike, not yet run. Don't promote "a methodology
-   proven to adapt by industry context" from hypothesis to differentiator
-   in an external pitch until that spike reports back (§7's own
-   eng-review caveat already said this; unchanged by this correction).
-2. **Mid-term: the Application Suite as the expansion roadmap.** Six
-   unbuilt modules (§2 item 2) are not blue-sky invention — they are
-   Todd's own documented IP, with one already partially evidenced in the
-   original binaries (the Client Relationship Module). This is a
-   legitimate, IP-backed product roadmap a pitch deck can show, not a
-   speculative "and then we'll add features" slide. Sequencing depends on
-   Todd (OD4, per the engineering plan) — this document does not invent an
-   order Todd hasn't confirmed.
-3. **The M&A/PE angle and the Investor Insight module are the same
-   product thread.** Worth stating plainly in a pitch: the market angle
-   in §3 and the unbuilt module in §2 point at each other. If the PE/M&A
-   positioning validates in the market, module (5) Investor Insight is the
-   concrete next build, not a new idea invented for the pitch.
+The companion engineering plan owns how this actually gets built. This
+part is about what a pitch should honestly say the product is turning
+into.
 
-## 5. The Sponsor Flywheel — Toddito as Silicon Jungle Ventures #1
+Right now, honestly, Toddito is one thing: an organization read, using one
+scoring model. What's real and confirmed: the 1987 system genuinely was
+tuned for different industries, with real separate scoring weights for
+each one, and — as of a correction made after the original draft of this
+document — it's now fully worked out which industry each of those old
+variants actually stood for. What's still a hypothesis, not yet proven:
+whether re-deriving those old per-industry weights actually fixes the two
+places where today's scoring engine disagrees with the original system's
+real, historical verdicts. That's a real, specific piece of engineering
+work, not yet done — so "a methodology proven to adapt by industry" isn't
+a claim that's earned yet. It's close, and it's worth saying so, but it
+shouldn't go in front of an outside audience as settled until that piece
+of work actually closes the gap.
 
-**The explicit ask, stated plainly:** Toddito graduates from being a
-Silicon Jungle *output* (something the studio produced) to being a
-Silicon Jungle *sponsor/funder* of the next cohort — success proves the
-model, then funds the next iteration of it.
+Further out, the real expansion story is the rest of Todd's own
+framework. He designed seven distinct uses for this diagnostic engine;
+only one is built today. The other six aren't invented for this pitch —
+they're his own documented ideas, and one of them even shows up already,
+in a different form, inside the original 1987 software itself. That's a
+real, IP-backed roadmap a pitch can show honestly, not a "we'll add
+features eventually" slide — though the order they get built in is
+Todd's call, not something this document should invent on his behalf.
 
-**Grounded in what's already real, not invented from nothing:** the
-Silicon Jungle brief (§0c) already documents that sponsor/funding
-conversations — including speculative fund-manager interest — are already
-in progress for the broader Silicon Jungle program, following 8 real
-BUILD-A-THON events and a real prior JV precedent ("Snap Eats"). Toddito
-becoming a sponsor is a **specific instance of a flywheel the studio is
-already pursuing generally**, not a new mechanism invented for this plan.
+And the investor/M&A angle from the last section and the unbuilt
+Application Suite modules point at the same thing: if that market turns
+out to be real, the investor-facing module is the obvious next build, not
+a new idea dreamed up for a slide.
 
-**Concrete mechanism, proposed here (not yet operator-confirmed — an
-open decision, not a settled fact):**
-- Toddito, once revenue-generating (boutique-consultant subscriptions
-  and/or PE/M&A engagements per §3), commits a defined slice of revenue
-  or margin to sponsoring future Weekender/Experience cohorts — cash,
-  in the same shape as any other sponsor relationship the studio already
-  has conversations open for (§0c).
-- **Technology-in-kind, distinct from cash sponsorship:** Toddito's
-  diagnostic engine could itself be offered as a real tool *during* future
-  Weekenders — e.g., running a lightweight organizational/team-dynamics
-  read on a newly-formed build team at the start of a Weekender, the same
-  way the community-brain's `seating.py` (per the Silicon Jungle brief's
-  §7) is meant to compose a dinner table on purpose. Both are instances of
-  a graduated venture feeding infrastructure back into the studio's own
-  event mechanics — worth the operator considering together, not just
-  Toddito in isolation.
-- **The "proof case" framing is the actual pitch asset:** "we ran this
-  studio's own playbook on ourselves first, and it worked" is a stronger
-  claim to make to a future sponsor or investor than an untested thesis.
-  This is the flywheel's real value — not the specific dollar mechanism
-  (TBD, operator's call), but the credibility a working example creates
-  for everything after it.
+## 5. The idea of Toddito sponsoring the next cohort
 
-**Explicitly not decided here, flagged as open:** the specific revenue
-percentage, timing (at what revenue/traction milestone does sponsorship
-start), and whether cash, technology-in-kind, or both is the right shape.
-This document proposes the mechanism's shape; the operator sets the
-numbers.
+Here's the actual idea, said plainly: Toddito started as something Silicon
+Jungle produced. The proposal is that it eventually becomes something that
+funds Silicon Jungle back — success proving the model, then paying for the
+next round of it.
 
-## 6. Risks — stated plainly, because this may become an investor-facing
-deck
+This isn't a new mechanism invented for this document. Silicon Jungle is
+already having real conversations about sponsorship and funding more
+broadly, off the back of eight real events and a real joint venture that
+already came out of one of them. Toddito doing this would just be one
+specific, concrete instance of something the studio is already pursuing in
+general.
 
-**The single most important risk to disclose honestly, not soften:**
-per the companion engineering plan (§6), Pulse's own `docs/SECURITY.md`
-still lists 6 open S1 security findings, and **OD6 — the biometric
-voice-data privacy/ToS hard gate from the June 2026 CEO review — remains
-unresolved as of this document's writing (2026-09-29), more than three
-months after it was flagged as a one-way-door decision.** A venture pitch
-that omits this would be actively misleading to anyone evaluating the
-company; it is stated here so it cannot be silently dropped when this
-document becomes a deck. This does not mean the venture is unsound — it
-means wide distribution and any external-facing pitch that implies
-broad usage should wait for this to close, consistent with what the June
-review already decided.
+What that could actually look like, not yet confirmed by the operator:
+once Toddito is making real money, from either the consultants or the
+investor side, it commits some defined slice of that to sponsoring future
+weekends, in cash — the same shape as any other sponsor relationship the
+studio is already discussing. Separately, and not the same thing as cash,
+Toddito's own diagnostic tool could be used directly at a weekend — a
+quick read on a newly-formed team's dynamics right at the start, the same
+instinct behind Keonda's own dinner-seating work. Both are the same
+pattern: something that grew up here turning around and feeding the event
+mechanics that grew it.
 
-**Other real risks, not overstated:** (a) the industry-letter mapping
-(§1) is now resolved (bshr, 2026-09-29) — that specific unknown is gone —
-but the "proven industry-tuned scoring" claim in §4 item 1 is still a
-hypothesis grounded in real binary evidence, not yet a verified, shipped
-capability: knowing which letter maps to which industry does not yet
-prove that decoding those weights closes F8's ground-truth divergence;
-(b) the Application Suite roadmap (§4 item
-2) depends on Todd's own OD4 response — this document does not promise a
-build timeline Todd hasn't confirmed; (c) no real revenue, user-count, or
-retention data was available to this seat at the time of writing — every
-financial claim in a resulting deck needs real numbers from the operator,
-not filled in with plausible-sounding placeholders.
+The real value in this isn't the specific dollar mechanism, which is
+genuinely still open. It's being able to say, honestly, "we ran our own
+playbook on ourselves, and it worked" — that's a stronger thing to tell a
+future sponsor or investor than an untested idea, and it's the actual
+reason this is worth doing at all. The specific percentage, when it
+starts, and whether it's cash or the tool itself or both — those are the
+operator's calls, not settled here.
+
+## 6. What has to be said honestly if this becomes a deck
+
+There's one risk that matters more than any other, and it has to be said
+plainly, not softened: Pulse still has six open security findings, and the
+big one — whether it's actually okay, legally and ethically, to be
+recording and analyzing people's voices the way this product does — has
+been open since a review back in June, more than three months now. Leaving
+that out of a pitch would be actively misleading to anyone evaluating the
+company. It doesn't mean the underlying idea is unsound. It does mean
+wide distribution, or any pitch that implies broad usage today, should
+wait until that's actually closed.
+
+A few other things worth being honest about, without overstating them.
+The industry-mapping question from earlier is genuinely resolved now —
+that specific unknown is gone — but knowing the mapping doesn't yet prove
+that using it actually fixes the scoring disagreement; that's still a
+real piece of work, not done yet. The bigger product roadmap depends on
+Todd actually confirming an order, which hasn't happened. And there's no
+real revenue or user data behind any of this yet — any number that ends
+up in an actual deck needs to come from the operator, not be filled in
+with something that merely sounds plausible.
 
 ## 7. GSTACK REVIEW REPORT
 

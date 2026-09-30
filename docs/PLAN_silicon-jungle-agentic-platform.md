@@ -40,6 +40,15 @@
   **That split is the first thing this brief flags:** these are two different
   sizes of decision, and treating the bridge swap as "step one" of this platform
   vision would be a mistake — see §5.
+- **On the 2026-09-30 plain-language pass:** checked against
+  `docs/BRIEF_how-we-come-across-plain.md` and left unrewritten, on purpose. This
+  document is internal security/access-control/review material — a threat model,
+  a facilitator control spec, a CEO/eng review gauntlet — not something meant for
+  a founder, sponsor, or outside reader. Its actual narrative — what Silicon
+  Jungle is and why it matters — already has a plain-language home:
+  `docs/BRIEF_silicon-jungle-the-why.md`, with `docs/BRIEF_how-we-come-across-plain.md`
+  covering how to talk about it out loud. Anyone who wants the story reads those
+  two; this document stays exactly as technical as the work inside it requires.
 
 ## 0a. Ground truth confirmed after this brief's first draft (gm addendum 3)
 
