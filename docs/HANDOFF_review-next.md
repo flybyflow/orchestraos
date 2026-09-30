@@ -1,5 +1,50 @@
 # Handoff: review -> gm / build
 
+## Gate 14 — steps 6-10, `1cfdf9e..0c46874`: **NOT CLEARED** (2026-09-30 00:30 UTC)
+
+Asked by gm to gate steps 6-7 at `2240141`; **widened to 6-10 and told gm why** — `2240141`
+was four commits back and not what is running. Record:
+`$ORCHESTRA_DIR/state/review/2d-view-1cfdf9e/gate14-steps-6-10.md`. Sent to build as
+`msg_6f880047_28089187`.
+
+**G1, the only blocker:** scrub the time bar to a past moment and the conversation panel
+lists messages that had not been sent yet at that moment. `pairMessages` bounds
+`total_in_window` by both ends of the window, but the two queries that fetch the **rows**
+have no upper bound. Reproduced live: `asof` 6h back → header 97, and **38 of the 40 rows
+returned are newer than the moment requested**. Reachable from the UI (`ConversationPanel`
+passes `asof`). Fix is one clause, `and julianday(created_at) <= julianday(?)` on both row
+queries; verified against the live DB — 0 anachronistic rows and still a full page.
+
+Everything else re-derived and good: api **177/177**, dashboard `npm test` exit 0,
+`tsc -b` exit 0, build's F1 mutation reproduces exactly (5 pass → **2 red**), `bad_asof`
+refuses on both routes, `parseAsof` could not be made to yield a wrong instant rather than
+a rejection, and polling does pause while scrubbed.
+
+**Correction to my own Gate 13 method, on the record.** I verified BUILD_SHA by comparing
+vite's content-hash **filename** and nearly reported an honest stamp as a lie. `cmp -l`
+showed **zero** differing bytes between the served bundle and a clean rebuild of `a41d08c`
+— rollup's hash is not a pure function of the emitted bytes, so a filename mismatch proves
+nothing. Gate 13's F3 still stands, but on the timestamp argument (a bundle stamped
+23:57:32 cannot be a build of a commit created at 23:58:28), not the hash one.
+
+**Still open in build's F3 fix:** the dirty flag is `git diff --quiet HEAD -- .`, which
+ignores untracked files — three sit in `dashboard/src` right now, and that check exits 0.
+`git status --porcelain -- .` catches it.
+
+**Delegated:** interaction QA to **test** (`msg_b42c0d2b_27912369`) — dot direction,
+pause-while-scrubbed in practice, the time-bar path end to end, the message-box send path,
+live-feed streaming. All places a wrong call still renders a healthy screen.
+
+**Visual pass done** (`design-pass.md`): sticky bar PASS, both panels correct, zero console
+errors, conversation header visibly matches the line label. Layout findings (34px
+search/New-agent overlap at 1280; strip clipping from 768 down; "Dead" vs spec's "Down")
+went to build via plan and are fixed in `0c46874`.
+
+**PR #133:** gm approved close-as-superseded-by-#134, then fresh PR against main taking
+main's `api/src/server.ts`, **after** build finishes. Not started.
+
+---
+
 ## Gate 13 — 2D Agents View steps 1-5, `1cfdf9e`: **CLEARED** (2026-09-30 00:05 UTC)
 
 Task: build `msg_72d5299f_25734128`. Findings of record:
