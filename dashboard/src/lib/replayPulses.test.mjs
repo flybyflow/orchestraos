@@ -3,7 +3,8 @@
  *   node --experimental-strip-types dashboard/src/lib/replayPulses.test.mjs
  */
 import assert from 'node:assert';
-import { pulseId, pulseProgress, isPulseAlive, pruneDeadPulses, PULSE_LIFETIME_MS } from './replayPulses.ts';
+import { pulseId, pulseProgress, isPulseAlive, pruneDeadPulses, pulsePositionOnRoute, PULSE_LIFETIME_MS } from './replayPulses.ts';
+import { routeEdge, pointAtFraction } from './edgeRouting.ts';
 
 // ── pulseId: deterministic, collision-proof even when `id` is ABSENT ─────────────────────
 // THE REAL BUG (build, live QA 2026-09-30, traced via curl not guessed): GET
@@ -58,6 +59,54 @@ import { pulseId, pulseProgress, isPulseAlive, pruneDeadPulses, PULSE_LIFETIME_M
   const pruned = pruneDeadPulses([p1, p2], now);
   assert.deepEqual(pruned.map((p) => p.id), ['p2'], 'only the still-alive pulse survives pruning');
   assert.deepEqual(pruneDeadPulses([], now), [], 'pruning an empty list throws nothing and returns empty');
+}
+
+// ── pulsePositionOnRoute: a REVERSE pulse rides the SAME curve as the drawn edge, not a
+// second, independently-routed one (build, live QA 2026-09-30: 239 of 301 reverse pulses sat
+// 10-62px off the line) ────────────────────────────────────────────────────────────────────
+{
+  // Same fixture shape as edgeRouting.test.mjs's "a chord straight through one box -> curve":
+  // a blocker centered on the chord forces a REAL curve (ctrl off the midpoint), not a
+  // degenerate straight one — a straight-chord fixture would pass with the bug still in,
+  // exactly the trap the cubic-S work already caught itself in once.
+  const boxA = { id: 'a', cx: 0, cy: 0, width: 20, height: 20 };
+  const boxB = { id: 'b', cx: 200, cy: 0, width: 20, height: 20 };
+  const blocker = { id: 'mid', cx: 100, cy: 0, width: 40, height: 20 };
+  const obstacles = [boxA, boxB, blocker];
+
+  // THE canonical route — computed exactly once, the way the edge itself draws it, for pair
+  // (a='a', b='b'). Every pulse on this pair, forward or reverse, must sample THIS object.
+  const canonicalRoute = routeEdge(boxA, boxB, obstacles);
+  assert.equal(canonicalRoute.kind, 'curve', 'fixture sanity: this must be a genuinely curved route, not a straight chord');
+
+  // Dense sampling of the ACTUAL canonical curve — the reference "is this point on the drawn
+  // line" check, independent of how pulsePositionOnRoute computes anything internally.
+  const curveSamples = Array.from({ length: 200 }, (_, i) => pointAtFraction(canonicalRoute, i / 199));
+  const distToCurve = (pt) => Math.min(...curveSamples.map((s) => Math.hypot(s.x - pt.x, s.y - pt.y)));
+
+  const now = 300; // PULSE_LIFETIME_MS=1200, so t = 300/1200 = 0.25
+  const forwardPulse = { a: 'a', b: 'b', startedAt: 0 };
+  const reversePulse = { a: 'b', b: 'a', startedAt: 0 };
+
+  const forwardPos = pulsePositionOnRoute(forwardPulse, 'a', canonicalRoute, now);
+  assert.deepEqual(forwardPos, pointAtFraction(canonicalRoute, 0.25),
+    'a forward pulse (a matches the canonical a) rides the route at raw t');
+
+  const reversePos = pulsePositionOnRoute(reversePulse, 'a', canonicalRoute, now);
+  assert.deepEqual(reversePos, pointAtFraction(canonicalRoute, 0.75),
+    'a reverse pulse (a is the canonical b) rides the SAME route at (1 - t), not a recomputed one');
+  assert.ok(distToCurve(reversePos) < 2,
+    'the reverse pulse position lies (within sampling granularity) ON the canonical curve that is actually drawn');
+
+  // THE BUG, reproduced directly (this is what the old TopologyOverlay.tsx pulse loop did: a
+  // second routeEdge call using the pulse's own, reversed (a, b), then sampled at raw t with
+  // no direction handling at all). If pulsePositionOnRoute regresses back to this pattern,
+  // this assertion is what catches it.
+  const oldBuggyRoute = routeEdge(boxB, boxA, obstacles); // swapped args, exactly like the old per-pulse call
+  const oldBuggyPos = pointAtFraction(oldBuggyRoute, 0.25); // old code used raw t, no reversal
+  assert.ok(distToCurve(oldBuggyPos) > 5,
+    `the OLD per-pulse-routeEdge approach lands ${distToCurve(oldBuggyPos).toFixed(1)}px off the drawn curve -- ` +
+    'proving this fixture actually exercises the asymmetry, and that the fix (reuse + reversed-t) is what avoids it');
 }
 
 console.log('replayPulses: all assertions passed');

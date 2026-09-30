@@ -9,6 +9,7 @@
  * entry {head,glow,embers,label,a,b,t,dur,...} advanced every animation frame and removed once
  * `t` passes `dur`. This is the same shape, minus the 3D mesh/sprite bookkeeping.
  */
+import { pointAtFraction, type EdgeRoute, type Point } from './edgeRouting.ts';
 
 /** Ported directly: /field's pulseLink() sets dur = 2400 + random ms. Fixed here (no
  *  randomness — determinism matters more than a little visual variety for something this
@@ -53,7 +54,7 @@ export function pulseId(event: { from?: string; to?: string; id?: string; t: num
 
 /** 0 at creation, 1 at end-of-life, clamped — never negative (a `now` before `startedAt`,
  *  e.g. a fake clock in a test, must not produce a pulse riding backward off the chord). */
-export function pulseProgress(pulse: ReplayPulse, now: number): number {
+export function pulseProgress(pulse: Pick<ReplayPulse, 'startedAt'>, now: number): number {
   const elapsed = now - pulse.startedAt;
   return Math.max(0, Math.min(1, elapsed / PULSE_LIFETIME_MS));
 }
@@ -68,4 +69,31 @@ export function isPulseAlive(pulse: ReplayPulse, now: number): boolean {
  *  out so it has the same "re-derive independently" testability as the rest of this module. */
 export function pruneDeadPulses(pulses: ReplayPulse[], now: number): ReplayPulse[] {
   return pulses.filter((p) => isPulseAlive(p, now));
+}
+
+/**
+ * Where a pulse sits along its pair's route, at `now` — WITHOUT ever computing its own route.
+ * `route` is the SAME EdgeRoute object the static edge line for this pair already built this
+ * frame; this function only samples it, at `t` for a pulse riding forward or `1 - t` for one
+ * riding the reverse direction relative to however the edge was drawn.
+ *
+ * THE BUG THIS REPLACES (build, live QA 2026-09-30): the overlay used to call
+ * `routeEdge(from, to, obstacles)` a SECOND time per pulse, using the pulse's own (a, b) —
+ * which for a reverse-direction message is the drawn edge's (b, a). routeEdge is NOT symmetric
+ * under swapping its two arguments (the perpendicular control-point offset flips sign), so that
+ * second call produced a curve bulging the OPPOSITE side from the line actually drawn — a
+ * reverse pulse riding its own, different curve, 10-62px off the one on screen (239 of 301
+ * reverse pulses measured live; 0 of 297 forward pulses, because forward pulses happened to
+ * match the canonical (a, b) order the edge itself used). There is exactly ONE route per pair,
+ * computed once; a pulse only ever picks WHERE on it to sit.
+ */
+export function pulsePositionOnRoute(
+  pulse: Pick<ReplayPulse, 'a' | 'startedAt'>,
+  canonicalA: string,
+  route: EdgeRoute,
+  now: number,
+): Point {
+  const t = pulseProgress(pulse, now);
+  const reversed = pulse.a !== canonicalA;
+  return pointAtFraction(route, reversed ? 1 - t : t);
 }

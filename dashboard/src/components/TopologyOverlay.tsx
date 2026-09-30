@@ -13,10 +13,10 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
-import { routeEdge, pointAtFraction, type Box } from '../lib/edgeRouting';
+import { routeEdge, type Box, type EdgeRoute } from '../lib/edgeRouting';
 import { toLocalBox, samePositions, type RectLike } from '../lib/overlayGeometry';
 import { pairKey } from '../lib/topologyLines';
-import { pulseId, pulseProgress, pruneDeadPulses, type ReplayPulse } from '../lib/replayPulses';
+import { pulseId, pulseProgress, pulsePositionOnRoute, pruneDeadPulses, type ReplayPulse } from '../lib/replayPulses';
 
 export interface OverlayEdge {
   a: string;
@@ -258,6 +258,22 @@ export function TopologyOverlay({
   // already carries the one true answer for "is this pair drawn".
   const drawnPairs = new Set(edges.map((e) => pairKey(e.a, e.b)));
 
+  // Routed ONCE per pair, in the edge's own canonical (a, b) order — the static line below and
+  // every pulse riding this pair both read from THIS entry rather than each calling routeEdge
+  // for themselves. routeEdge is not symmetric under swapping its two args (the perpendicular
+  // control-point offset flips sign), so a pulse that recomputed its own route from its own,
+  // possibly-reversed (a, b) used to ride a DIFFERENT curve than the one actually drawn —
+  // measured live 10-62px off the line, on 239 of 301 reverse-direction pulses (build QA,
+  // 2026-09-30). One route per pair; a pulse only ever samples WHERE on it to sit
+  // (lib/replayPulses.ts's pulsePositionOnRoute).
+  const routesByPair = new Map<string, { route: EdgeRoute; a: string; b: string }>();
+  for (const e of edges) {
+    const from = positions.get(e.a);
+    const to = positions.get(e.b);
+    if (!from || !to) continue;
+    routesByPair.set(pairKey(e.a, e.b), { route: routeEdge(from, to, obstacles), a: e.a, b: e.b });
+  }
+
   // Trail weight per pair, for the seek-drag highlight — a Map so a repeated pair (should not
   // happen, but a malformed trail must not crash) keeps its LAST/strongest weight rather than
   // silently picking whichever entry happened to iterate last by accident.
@@ -290,14 +306,13 @@ export function TopologyOverlay({
         </marker>
       </defs>
       {edges.map((e) => {
-        const from = positions.get(e.a);
-        const to = positions.get(e.b);
         // Never draw half an edge. selectCrossEdges already filters these out;
         // this is the belt to that braces, because a path with a NaN endpoint
         // renders as a line to the origin rather than as nothing.
-        if (!from || !to) return null;
+        const entry = routesByPair.get(pairKey(e.a, e.b));
+        if (!entry) return null;
 
-        const route = routeEdge(from, to, obstacles);
+        const route = entry.route;
         const stroke = edgeStroke(e.type);
         const dead = e.liveness === 'dead';
         const quiet = e.liveness === 'quiet';
@@ -359,14 +374,12 @@ export function TopologyOverlay({
       <g className="pointer-events-none">
         {pulses.map((p) => {
           if (!drawnPairs.has(pairKey(p.a, p.b))) return null;
-          const from = positions.get(p.a);
-          const to = positions.get(p.b);
-          // The pair may have scrolled out of `positions` (node unmounted/filtered) between
-          // the event firing and this render — drop it rather than draw from stale boxes.
-          if (!from || !to) return null;
-          const route = routeEdge(from, to, obstacles);
+          // Ride the SAME route the edge above drew for this pair — never a second, possibly
+          // reversed, routeEdge call of its own (see routesByPair's comment above).
+          const entry = routesByPair.get(pairKey(p.a, p.b));
+          if (!entry) return null;
+          const pos = pulsePositionOnRoute(p, entry.a, entry.route, now);
           const t = pulseProgress(p, now);
-          const pos = pointAtFraction(route, t);
           const color = edgeStroke(p.type);
           // Fade in over the first 10% and out over the last 20% of the lifetime, rather than
           // popping in/out at full opacity — the same reason CSS transitions exist.
