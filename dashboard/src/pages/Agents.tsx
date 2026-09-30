@@ -47,6 +47,18 @@ export default function Agents() {
   // Defaulting to 'Active' meant a down agent was invisible until you thought to
   // look for it, which is the opposite of what this page is for. Default is All.
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  // Layer toggles (spec step 4). Hierarchy is the skeleton and always draws, so it is
+  // not toggleable — hiding it would leave edges floating with nothing to anchor them.
+  // Default is top-12 cross edges: drawing all 30 at once is the "calm by default"
+  // violation the spec warns about, and show-all is one click away.
+  //
+  // DECLARED HERE, WITH THE OTHER HOOKS, AND NOT FURTHER DOWN. There is an
+  // `if (isLoading) return ...` early return below this point. A useState placed after
+  // it runs on the loaded render and NOT on the loading one, so the hook count changes
+  // between renders — React error #310, "rendered more hooks than during the previous
+  // render", which unmounts the tree and renders the entire page BLANK. That is exactly
+  // what shipped: first paint fine, queries fire, data arrives, page goes white.
+  const [layers, setLayers] = useState({ cross: true, external: true, showAllCross: false });
   const [clientFilter, setClientFilter] = useState<string>('All');
   const [machineFilter, setMachineFilter] = useState<string>('All');
   const [recentAgents, setRecentAgents] = useState<RecentAgent[]>(getRecentAgents());
@@ -284,11 +296,6 @@ export default function Agents() {
   // /api/agents for liveness, /api/messages/pair-counts for traffic — so the strip cannot
   // disagree with the connection lines or with the status-filter counts below it.
   const pairs = pairData?.pairs ?? [];
-  // Layer toggles (spec step 4). Hierarchy is the skeleton and always draws, so it is
-  // not toggleable — hiding it would leave edges floating with nothing to anchor them.
-  // Default is top-12 cross edges: drawing all 30 at once is the "calm by default"
-  // violation the spec warns about, and show-all is one click away.
-  const [layers, setLayers] = useState({ cross: true, external: true, showAllCross: false });
   const messagesInWindow = pairs.reduce((n, p) => n + p.count, 0);
   const activeConnections = pairs.filter((p) => p.count > 0).length;
   const busiest = pairs.length ? pairs[0] : null;   // endpoint already orders by count desc
