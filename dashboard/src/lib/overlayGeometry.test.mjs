@@ -5,7 +5,7 @@
 import assert from 'node:assert';
 import {
   toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions, edgeDirection,
-  bornUpTo, overlayContentSize, filterExistedByAsof,
+  bornUpTo, overlayContentSize, filterExistedByAsof, trafficByAgent, nodeScaleTier,
 } from './overlayGeometry.ts';
 
 // ── samePositions: the guard that stops an infinite render loop ─────────────
@@ -308,6 +308,41 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
     'filter-then-cap: the cap only ever competes among pairs that actually existed by the viewed moment');
 
   console.log('PASS: filterExistedByAsof — asof-filtering before the cap keeps real pairs the old cap-then-filter order dropped');
+}
+
+// ── trafficByAgent: credited to BOTH ends, every pair summed ────────────────────────────
+{
+  const pairs = [
+    { a: 'gm', b: 'build', count: 10 },
+    { a: 'gm', b: 'plan', count: 5 },
+    { a: 'build', b: 'ea', count: 3 },
+  ];
+  const traffic = trafficByAgent(pairs);
+  assert.strictEqual(traffic.get('gm'), 15, 'gm: 10 (with build) + 5 (with plan)');
+  assert.strictEqual(traffic.get('build'), 13, 'build: 10 (with gm) + 3 (with ea) -- credited on BOTH sides of a pair, not just `a`');
+  assert.strictEqual(traffic.get('plan'), 5);
+  assert.strictEqual(traffic.get('ea'), 3);
+  assert.deepStrictEqual(trafficByAgent([]), new Map(), 'no pairs -> empty map, not a crash');
+  console.log('PASS: trafficByAgent — every pair credited to both ends, summed correctly');
+}
+
+// ── nodeScaleTier: relative to the busiest node in view, four discrete boundaries ────────
+{
+  // Real numbers at and either side of each threshold (0.15, 0.4, 0.75), against maxCount=100
+  // — pinning the boundary itself, not just "somewhere in the middle of a bucket".
+  assert.strictEqual(nodeScaleTier(14, 100), 0, 'just below 0.15 -> tier 0');
+  assert.strictEqual(nodeScaleTier(15, 100), 1, 'exactly 0.15 -> tier 1 (>=, not >)');
+  assert.strictEqual(nodeScaleTier(39, 100), 1, 'just below 0.4 -> still tier 1');
+  assert.strictEqual(nodeScaleTier(40, 100), 2, 'exactly 0.4 -> tier 2');
+  assert.strictEqual(nodeScaleTier(74, 100), 2, 'just below 0.75 -> still tier 2');
+  assert.strictEqual(nodeScaleTier(75, 100), 3, 'exactly 0.75 -> tier 3');
+  assert.strictEqual(nodeScaleTier(100, 100), 3, 'the busiest node itself -> tier 3');
+
+  assert.strictEqual(nodeScaleTier(0, 100), 0, 'zero traffic -> baseline, never throws');
+  assert.strictEqual(nodeScaleTier(-5, 100), 0, 'a negative count (should not happen, but must not crash or invert) -> baseline');
+  assert.strictEqual(nodeScaleTier(50, 0), 0, 'maxCount<=0 (quiet fleet, nobody has any traffic) -> baseline for everyone, not a divide-by-zero');
+  assert.strictEqual(nodeScaleTier(50, -1), 0, 'a negative maxCount -> baseline, defensively');
+  console.log('PASS: nodeScaleTier — four discrete boundaries pinned exactly, zero/negative guards hold');
 }
 
 console.log('\nAll overlayGeometry tests passed.');

@@ -7,7 +7,7 @@ import { lineWidthPx, pairKey, shortAgo, partitionTopology } from '../lib/topolo
 import { dotColor, type TrafficMessage } from '../lib/fleetTraffic';
 import { TopologyOverlay, RimNode, useNodePositions, type OverlayEdge, type ReplayFiredEvent } from './TopologyOverlay';
 import { externalEndpoints } from '../lib/rimNodes';
-import { selectCrossEdges, busiestDrawn, edgeLiveness, edgeDirection, filterExistedByAsof } from '../lib/overlayGeometry';
+import { selectCrossEdges, busiestDrawn, edgeLiveness, edgeDirection, filterExistedByAsof, trafficByAgent, nodeScaleTier, type NodeScaleTier } from '../lib/overlayGeometry';
 
 interface Agent {
   id: string;
@@ -210,8 +210,35 @@ function isWorking(agent: Agent): boolean {
   return agent.status === 'working' && (agent.alive || agent.tmux_alive) === true;
 }
 
+// Node scaling by traffic (operator ask, /field: "busy agents bigger or brighter"). Full
+// literal class strings per tier, indexed 0..3 — NOT a template built from the tier number,
+// which Tailwind's JIT scanner cannot statically see and would silently purge from the build.
+// Size grows via padding/min-width only, never font-size: the name and tier badge must read
+// at exactly the same size at every tier (operator's own "keep legible" constraint).
+const NODE_SIZE_BY_TIER: readonly string[] = [
+  'px-3 py-2.5 min-w-[110px]',
+  'px-3.5 py-3 min-w-[122px]',
+  'px-4 py-3.5 min-w-[134px]',
+  'px-4.5 py-4 min-w-[148px]',
+];
+// "Brighter" modulates the SAME status-coloured glow's blur/opacity rather than adding a
+// second colour channel — a separate neutral glow would fight the status glow for the same
+// visual real estate and risk reading as a different signal.
+const WORKING_GLOW_BY_TIER: readonly string[] = [
+  'shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]',
+  'shadow-[0_0_16px_-2px_rgba(56,189,248,0.75)]',
+  'shadow-[0_0_20px_-1px_rgba(56,189,248,0.8)]',
+  'shadow-[0_0_26px_0px_rgba(56,189,248,0.85)]',
+];
+const DOWN_GLOW_BY_TIER: readonly string[] = [
+  'shadow-[0_0_10px_-3px_rgba(248,113,113,0.65)]',
+  'shadow-[0_0_14px_-2px_rgba(248,113,113,0.7)]',
+  'shadow-[0_0_18px_-1px_rgba(248,113,113,0.75)]',
+  'shadow-[0_0_24px_0px_rgba(248,113,113,0.8)]',
+];
+
 function AgentNode({
-  agent, onSelect, selected, dimmed, nodeRef, alerts, unborn, showStatusGlow = true,
+  agent, onSelect, selected, dimmed, nodeRef, alerts, unborn, showStatusGlow = true, scaleTier = 0,
 }: {
   agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean;
   /** Registers this box with the overlay's position tracker. */
@@ -225,6 +252,9 @@ function AgentNode({
    *  of the status DOT and border colour below, which are information and stay regardless —
    *  only the glow is decoration this layer hides. */
   showStatusGlow?: boolean;
+  /** 0 (baseline) .. 3 (busiest node in view this window). lib/overlayGeometry.ts's
+   *  nodeScaleTier — relative to the busiest node actually drawn, not an absolute count. */
+  scaleTier?: NodeScaleTier;
 }) {
   const working = isWorking(agent);
   // Agent-level only. The operator explicitly did NOT want skill/prompt execution detail,
@@ -238,7 +268,10 @@ function AgentNode({
       dataAgentId={agent.id}
       onClick={onSelect ? () => onSelect(agent.id) : undefined}
       className={clsx(
-        'relative flex flex-col items-center gap-1 rounded-lg border-2 bg-neutral-900 px-3 py-2.5 min-w-[110px] transition hover:bg-neutral-800',
+        'relative flex flex-col items-center gap-1 rounded-lg border-2 bg-neutral-900 transition hover:bg-neutral-800',
+        // Node scaling by traffic (operator ask, /field): bigger, via padding/min-width
+        // only — see NODE_SIZE_BY_TIER's own comment for why never font-size.
+        NODE_SIZE_BY_TIER[scaleTier],
         // Status GLOW, not just a dot (spec step 3). The dot stays — it is the thing
         // that survives prefers-reduced-motion and a colourblind read — and the glow is
         // an additional, redundant cue on the same fact. A down seat gets a red glow at
@@ -247,9 +280,9 @@ function AgentNode({
         // The BORDER colour is information (spec §2, must never be hidden) and always
         // applies; only the shadow glow is the /field 'status' layer showStatusGlow gates.
         working ? 'border-sky-400' : getNodeBorder(agent),
-        showStatusGlow && working && 'shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]',
+        showStatusGlow && working && WORKING_GLOW_BY_TIER[scaleTier],
         showStatusGlow && !working && !agent.alive && !agent.tmux_alive
-          && 'shadow-[0_0_10px_-3px_rgba(248,113,113,0.65)]',
+          && DOWN_GLOW_BY_TIER[scaleTier],
         // An escalation landing here outranks both: it is the one state that is asking
         // a human for something. Ring rather than border swap, so the status colour
         // underneath is never destroyed (spec section 2).
@@ -466,6 +499,17 @@ export function TopologyDiagram({
     [brightIds, selectionBright],
   );
   const dotsByPair = useDotsByPair(dots);
+  // Node scaling by traffic (operator ask, /field: "busy agents bigger or brighter").
+  // RELATIVE to the busiest node actually in view this window, same reasoning as
+  // busiestDrawn() for edge thickness just above — an absolute threshold would leave every
+  // node maxed-out on a busy fleet or flat on a quiet one.
+  const scaleTierByAgent = useMemo(() => {
+    const traffic = trafficByAgent(pairs ?? []);
+    const maxTraffic = Math.max(0, ...traffic.values());
+    const tiers = new Map<string, NodeScaleTier>();
+    for (const [id, count] of traffic) tiers.set(id, nodeScaleTier(count, maxTraffic));
+    return tiers;
+  }, [pairs]);
   // External endpoints: things with traffic that are not agents. `allAgentIds` is the
   // FULL registry so a retired seat reads as a hidden agent rather than a new external
   // endpoint; the visible list is what the tree actually drew.
@@ -602,7 +646,7 @@ export function TopologyDiagram({
       {/* T0: GM */}
       {gm && (
         <>
-          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} unborn={unbornNode(gm.id)} showStatusGlow={showStatusGlow} />
+          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} unborn={unbornNode(gm.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(gm.id) ?? 0} />
           {/* Trunk down to the PM bar. Deliberately unlabelled: this is a bus, not a pair,
               and the "hub-spoke" string it replaces described the shape rather than the
               traffic. The real gm<->pm counts sit on each PM's own segment below. */}
@@ -669,7 +713,7 @@ export function TopologyDiagram({
                       unborn={unbornEdge(gm.id, pm.id)}
                     />
                   )}
-                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} unborn={unbornNode(pm.id)} showStatusGlow={showStatusGlow} />
+                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} unborn={unbornNode(pm.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(pm.id) ?? 0} />
 
                   {/* Workers under this PM. Each worker gets its OWN line to the PM rather
                       than sharing one "mesh" label for the group — a per-pair count is the
@@ -694,7 +738,7 @@ export function TopologyDiagram({
                             dots={dotsByPair.get(pairKey(pm.id, w.id))}
                             unborn={unbornEdge(pm.id, w.id)}
                           />
-                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} />
+                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(w.id) ?? 0} />
                         </div>
                       ))}
                     </div>
@@ -712,7 +756,7 @@ export function TopologyDiagram({
           <p className="text-xs text-neutral-600 text-center mb-3">Not in the tree ({orphanAgents.length})</p>
           <div className="flex items-start gap-3 flex-wrap justify-center">
             {orphanAgents.map((w) => (
-              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} />
+              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(w.id) ?? 0} />
             ))}
           </div>
         </div>

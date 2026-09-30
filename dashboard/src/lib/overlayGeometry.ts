@@ -319,3 +319,38 @@ export function bornUpTo(
   }
   return { nodes, edges };
 }
+
+/**
+ * Node scaling by traffic (operator ask, ported from /field: "busy agents bigger or
+ * brighter"). Every pair's count is credited to BOTH ends — an agent's own busy-ness is its
+ * total traffic, not just one direction of it.
+ */
+export function trafficByAgent<T extends PairLike>(pairs: readonly T[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const p of pairs) {
+    counts.set(p.a, (counts.get(p.a) ?? 0) + p.count);
+    counts.set(p.b, (counts.get(p.b) ?? 0) + p.count);
+  }
+  return counts;
+}
+
+/** 0 (baseline) .. 3 (busiest). Four DISCRETE tiers, not a continuous multiplier: the name and
+ *  tier badge must stay exactly the same font size at every tier (the operator's own "keep
+ *  name and tier badge legible" constraint) — a continuous scale would either do nothing
+ *  visible at small ratios or blur/distort text at large ones. Only padding/min-width/glow
+ *  respond to the tier; text never does.
+ *
+ *  RELATIVE to the busiest node actually in view, not an absolute message-count threshold —
+ *  same reasoning as busiestDrawn() above: scaling against a number nobody can see (or that
+ *  does not exist on a quiet fleet) makes every node either maxed-out or flat, which is
+ *  internally consistent and quietly wrong either way. */
+export type NodeScaleTier = 0 | 1 | 2 | 3;
+
+export function nodeScaleTier(count: number, maxCount: number): NodeScaleTier {
+  if (maxCount <= 0 || count <= 0) return 0;
+  const frac = count / maxCount;
+  if (frac >= 0.75) return 3;
+  if (frac >= 0.4) return 2;
+  if (frac >= 0.15) return 1;
+  return 0;
+}
