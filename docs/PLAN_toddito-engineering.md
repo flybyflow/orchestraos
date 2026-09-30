@@ -144,6 +144,41 @@ changes is the operator has now explicitly lifted that hold (§9 below) —
 the corrected content above is what should ground that design pass, not
 the never-built 6-field rumor.
 
+**CORRECTION to the correction above (bshr, 2026-09-30 14:09 UTC,
+`msg_25785f88_77361808`, independently re-verified by this seat via `git
+show` directly, not taken on trust): the full 6-field structure DOES
+exist as real, working, rendered code — just not in V2, and not at
+current HEAD anywhere. `relationalos` (Koherent V3)'s very first commit
+(`a60503a`, "init") shipped a real homepage with a working `InsightsWizard`
+component, steps literally labeled "What"/"So what"/"Now what", backed by
+a complete system prompt (`app/api/insights/[insightsId]/prompts.ts` at
+that commit) that generates exactly: `what` + `whatReadMore`, `soWhat` +
+`soWhatReadMore` (matching V2's structure above), **and a real "Now What"
+step generating 3 typed practices — `type: "Self" | "Other" | "Whole"`,
+each with `title`, `hook`, `description`, and a `content` field containing
+"Why" (3-4 sentences) and "How" (2 concrete action steps).** This is the
+real 6-field pattern the operator remembered — What, So-What, and three
+distinct Now-What practices — just missing the 6th rumored field,
+"Nugget," which still has zero hits anywhere, now confirmed across four
+separate repos/commits (V2 at HEAD, V3-main-HEAD, `daern91/koherent-mvp`,
+and this V3 init commit) — strengthens, not newly discovers, the
+hypothesis that "Nugget" may never have existed outside a Notion doc.
+
+**The wipe, dated and attributed, not inferred:** commit `e0e9381`,
+"cleanup," authored by the operator himself, one day after `a60503a` —
+deletes the homepage, check-in flow, insights wizard, practice screens,
+and roast/serenade components in one pass. Today's HEAD `app/page.tsx` is
+a one-line `redirect("/spectacle")`, confirming the operator's own account
+exactly: wiped and redirected toward the newer product line, not never
+built.
+
+**Bonus, directly relevant to §9 (report tone):** the same prompt file
+carries a rich, genuinely well-crafted "Persona & tonality" system block —
+*"Illuminate, not dictate. Guide, not control. Explore, not conclude. Be
+concise, not verbose. Be clear and simple, not complicated."* — worth
+citing as additional real source material for §9's tone rewrite, on top
+of V2's rules already cited there.
+
 ## 3. "Collective intelligence" — out of scope for this plan
 
 Zero trace in Pulse (`src/`, `docs/` grepped) or in `koherentai-main`.
@@ -612,30 +647,48 @@ by the IP owner himself, months before anyone named the pattern.
    scoring prompt's rationale-generation instructions** — not just the
    top-level tone line, but the per-field guidance for `stage_rationale`,
    `culture_rationale`, `leadership.rationale`, `strategy.rationale`.
-4. **Adopt the real What→So-What staged narrative shape** (§2a's
-   corrected version, not the never-built 6-field rumor) for the
-   top-level hook/insight copy specifically — this is functionally what
-   S3b (Major Crisis/Growth Engine context) was already designed to do;
-   confirm whether S3b shipped before treating this as new work.
+4. **Adopt the real What→So-What staged narrative shape — now confirmed
+   twice (V2 and V3's `a60503a`, §2a), not a reconstruction.** Apply to
+   the top-level hook/insight copy specifically — this is functionally
+   what S3b (Major Crisis/Growth Engine context) was already designed to
+   do; confirm whether S3b shipped before treating this as new work.
 5. **Consider Koherent's fixed narrative openers, applied selectively —
    not universally** ("It seems you..." adapted to org-level: "This
    organization tends to...", "A specific risk to watch is...") — a real,
    working technique for consistency without formula, but only where it
    reads naturally; forcing it onto every field risks the opposite
    problem (mechanical instead of clinical).
+6. **New, from the recovered real Now-What content (§2a): Pulse's schema
+   already has a `recommendation` field** (`src/lib/scoring/prompt.ts`'s
+   JSON output, read during §9.1's research) — currently a single
+   free-text string. The real Koherent structure (3 typed practices —
+   what changes for you, what changes for how you relate to others
+   affected, what changes at the whole-organization level) doesn't map
+   1:1 onto an org diagnostic the way it does onto individual coaching
+   (§2a's own "different altitude" point still holds), but the STRUCTURE
+   — a hook, a "why," a concrete "how" in 2 steps — is a real, reusable
+   shape for turning `recommendation` from one paragraph into something
+   more actionable, without needing the full individual-coaching
+   Self/Other/Whole typing. Flagging as a real opportunity, not scoping
+   it as required — genuinely a separate decision from items 1-5.
 
 ### 9.5 What this section does not resolve
 
-**The operator referenced existing "what/so-what/now-what" mockups this
-pass could not locate** (checked `docs/`, `conductor/`, `gstack/` project
-dirs — no match). This proposal is grounded in Koherent V2's real,
-*implemented* prompt craft, which may or may not be what those mockups
-show — if real mockups exist, they should govern over this document's
-reconstruction from prompt text. gm is asking the operator directly in
-parallel. **Do not treat §9.4 as final until that pointer resolves, or is
-confirmed not to exist.** Also unresolved: whether S3b/S4-text actually
-shipped (§9.2) — needs a direct repo check this pass didn't do, since it
-wasn't the assigned scope.
+**RESOLVED (bshr, 2026-09-30 14:09 UTC, `msg_25785f88_77361808`,
+independently re-verified via `git show`):** the real "what/so-what/
+now-what" mockup was found — `relationalos`'s init commit `a60503a`
+(`app/(user)/page.tsx` + `InsightsWizard.tsx`), wiped one day later by
+the operator's own `e0e9381` "cleanup" commit. Full real content now
+folded into §2a, informing items 4-6 above. This governs over the V2-only
+reconstruction the original pass was grounded in, per the operator's own
+principle (a real answer beats a reconstruction). **§9.4 items 1-3 and
+the TONE-line rewrite were never gated on this and remain approved and
+dispatched to build** (`msg_06b71ab7_75961657`) — items 4-6 are the ones
+this resolves, previously held per gm's instruction.
+
+Still unresolved: whether S3b/S4-text actually shipped (§9.2) — needs a
+direct repo check this pass didn't do, since it wasn't the assigned
+scope.
 
 ## GSTACK REVIEW REPORT
 
