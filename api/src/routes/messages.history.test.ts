@@ -60,6 +60,18 @@ test('historyEvents: window, archived, to_agent-null, and ordering', () => {
   }
 });
 
+test('historyEvents: every event carries the real message id, distinct per row', () => {
+  // build's find: the UI keys pulses on `${from}>${to}@${t}:${id}`, and without id two
+  // messages on the same pair in the same millisecond collide -- React drops one silently,
+  // which reads as "that message never happened" on a replay that exists to show what did.
+  const data = makeDb();
+  const events = historyEvents(data, 24);
+  assert.ok(events.every((e) => typeof e.id === 'string' && e.id.length > 0),
+    'every event must carry a non-empty id');
+  const ids = new Set(events.map((e) => e.id));
+  assert.strictEqual(ids.size, events.length, 'ids must be distinct per row, or the key collision is not actually fixed');
+});
+
 test('historyEvents: julianday, not string compare — a DEFAULT-format row still lands in the window', () => {
   const data = makeDb();
   const events = historyEvents(data, 24);

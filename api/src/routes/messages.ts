@@ -439,7 +439,7 @@ router.get('/alerts', (req: Request, res: Response) => {
  * is applied below like every other query in this file.
  */
 export interface HistoryEvent {
-  t: string; from: string; to: string; type: string; subject: string;
+  t: string; from: string; to: string; type: string; subject: string; id: string;
 }
 
 export function historyEvents(dataDir: string, windowHours = 24): HistoryEvent[] {
@@ -448,7 +448,7 @@ export function historyEvents(dataDir: string, windowHours = 24): HistoryEvent[]
   try {
     const { from, to } = windowBounds(windowHours, null);
     const rows = db.prepare(
-      `select created_at, from_agent, to_agent, type, subject
+      `select id, created_at, from_agent, to_agent, type, subject
          from messages
         where archived_at is null
           and to_agent is not null
@@ -456,10 +456,10 @@ export function historyEvents(dataDir: string, windowHours = 24): HistoryEvent[]
           and julianday(created_at) <= julianday(?)
         order by julianday(created_at) asc
         limit 20000`).all(from, to) as
-      { created_at: string; from_agent: string; to_agent: string; type: string | null; subject: string | null }[];
+      { id: string; created_at: string; from_agent: string; to_agent: string; type: string | null; subject: string | null }[];
     return rows.map((r) => ({
       t: r.created_at, from: r.from_agent, to: r.to_agent,
-      type: r.type ?? '', subject: (r.subject ?? '').slice(0, 80),
+      type: r.type ?? '', subject: (r.subject ?? '').slice(0, 80), id: r.id,
     }));
   } catch { return []; } finally { db.close(); }
 }
