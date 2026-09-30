@@ -271,13 +271,15 @@ export function TopologyOverlay({
 
 /** A non-agent endpoint (telegram, operator, …) drawn on the rim. */
 export function RimNode({
-  id, count, nodeRef, onSelect, dimmed,
+  id, count, nodeRef, onSelect, dimmed, unborn,
 }: {
   id: string;
   count: number;
   nodeRef: (el: HTMLElement | null) => void;
   onSelect?: (id: string) => void;
   dimmed?: boolean;
+  /** GROW mode: no replayed event has touched this endpoint yet. */
+  unborn?: boolean;
 }) {
   return (
     <button
@@ -295,6 +297,9 @@ export function RimNode({
         'bg-neutral-900 px-2.5 py-1.5 min-w-[88px] transition hover:bg-neutral-800',
         'focus:outline-none focus:ring-1 focus:ring-sky-500',
         dimmed && 'opacity-30',
+        // `invisible`, not removed: a rim node that leaves the flow during GROW reflows the
+        // rim row and moves every other endpoint, which moves every edge landing on one.
+        unborn && 'invisible',
       )}
     >
       <span className="text-[11px] text-neutral-300">{id}</span>

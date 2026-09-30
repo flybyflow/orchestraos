@@ -212,3 +212,57 @@ export function edgeLiveness(
   if (lastAtMs > nowMs) return 'absent';
   return nowMs - lastAtMs <= quietWindowMs ? 'quiet' : 'dead';
 }
+
+/** Minimal shape growBorn needs off a replayed event. Deliberately not ReplayEvent:
+ *  this file must not import the replay engine, or the pure geometry layer starts
+ *  depending on the playback layer for a fold that is just two set insertions. */
+export interface GrowEvent {
+  from?: string;
+  to?: string;
+  /** 'spawn' reveals `id` alone — a seat can be born with no edge. */
+  kind?: string;
+  id?: string;
+}
+
+export interface GrowBorn {
+  nodes: ReadonlySet<string>;
+  edges: ReadonlySet<string>;
+}
+
+/**
+ * GROW bookkeeping: fold the events that fired this frame into the sets of things that
+ * have appeared. A node is born by any event that touches it; an edge is born by a
+ * message between its two ends.
+ *
+ * `changed` is the load-bearing return value, not a convenience. advance() fires events
+ * on most frames of a 45s replay, and a caller that unconditionally committed two fresh
+ * Sets would re-render the entire tree at 60fps for the majority of frames that reveal
+ * nothing new. When changed is false the caller keeps its existing state object and React
+ * does nothing. The returned sets are also the SAME objects as `prev`'s in that case, so
+ * a caller that ignores the flag and does setState(next.nodes) still bails out on identity.
+ */
+export function growBorn(
+  prev: GrowBorn,
+  fired: readonly GrowEvent[],
+  pairKeyFn: (a: string, b: string) => string,
+): { nodes: ReadonlySet<string>; edges: ReadonlySet<string>; changed: boolean } {
+  let nodes: Set<string> | null = null;
+  let edges: Set<string> | null = null;
+  const addNode = (id: string | undefined) => {
+    if (!id || prev.nodes.has(id)) return;
+    (nodes ??= new Set(prev.nodes)).add(id);   // Set.add is idempotent; no second guard needed
+  };
+  for (const e of fired) {
+    if (e.kind === 'spawn') { addNode(e.id); continue; }
+    if (!e.from || !e.to) continue;   // a half-event reveals nothing; it cannot name an edge
+    addNode(e.from);
+    addNode(e.to);
+    const k = pairKeyFn(e.from, e.to);
+    if (!prev.edges.has(k)) (edges ??= new Set(prev.edges)).add(k);
+  }
+  return {
+    nodes: nodes ?? prev.nodes,
+    edges: edges ?? prev.edges,
+    changed: nodes !== null || edges !== null,
+  };
+}

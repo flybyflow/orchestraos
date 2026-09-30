@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { StatusDot } from './StatusDot';
 import { TierBadge } from './TierBadge';
@@ -71,6 +71,13 @@ interface TopologyDiagramProps {
    *  read from a clock, so edge liveness is judged against what was true THEN — an
    *  edge whose only traffic is after this instant did not exist yet. */
   asof?: string | null;
+  /** GROW mode. `null`/absent means normal: everything is present. A Set means the replay
+   *  is growing the chart, and ONLY these ids (agents) / pairKeys (edges) have been touched
+   *  by a replayed event so far; everything else is hidden until its first event lands.
+   *  Two sets rather than one derived from the other: an edge needs BOTH ends born, but a
+   *  node can be born by a spawn event with no edge at all, so neither implies the other. */
+  bornIds?: ReadonlySet<string> | null;
+  bornEdges?: ReadonlySet<string> | null;
 }
 
 /** A box or a line is a real control when it has a handler and plain markup when it does not.
@@ -193,15 +200,30 @@ function isWorking(agent: Agent): boolean {
 }
 
 function AgentNode({
-  agent, onSelect, selected, dimmed, nodeRef, alerts,
+  agent, onSelect, selected, dimmed, nodeRef, alerts, unborn,
 }: {
   agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean;
   /** Registers this box with the overlay's position tracker. */
   nodeRef?: (el: HTMLElement | null) => void;
   /** Escalations and held messages landing ON this agent, already windowed. */
   alerts?: { escalate: number; held: number };
+  /** GROW mode: this seat has not been touched by a replayed event yet. */
+  unborn?: boolean;
 }) {
   const working = isWorking(agent);
+  // GROW reveal flash. Local state rather than a set held by the parent: the parent would
+  // have to own one independent 700ms timer per seat and re-render the whole tree to clear
+  // each one, when the only thing that changes is a ring on a single box.
+  const [flash, setFlash] = useState(false);
+  const wasUnborn = useRef(unborn);
+  useEffect(() => {
+    const was = wasUnborn.current;
+    wasUnborn.current = unborn;
+    if (!was || unborn) return;                 // only fire on unborn -> born
+    setFlash(true);
+    const t = setTimeout(() => setFlash(false), 700);
+    return () => clearTimeout(t);
+  }, [unborn]);
   // Agent-level only. The operator explicitly did NOT want skill/prompt execution detail,
   // so this shows the task a seat is on, never which tool or skill is running.
   const subtitle = working ? (agent.current_task || 'working').trim() : '';
@@ -233,6 +255,13 @@ function AgentNode({
         // Fade, not hide: a down agent that is also unrelated to the selection still has to
         // stay on screen and still has to be red (spec §2, §7 — nothing important is hidden).
         dimmed && 'opacity-30',
+        // GROW: `invisible`, NOT conditional render and NOT `hidden`. Removing the box from
+        // the flex flow would reflow the whole tree every time a seat is revealed, which
+        // moves every other box, which invalidates every position the overlay measured —
+        // the edges would jump on every reveal. visibility:hidden keeps the geometry frozen
+        // so a reveal is a box fading in at the coordinates the overlay already knows.
+        unborn && 'invisible',
+        flash && 'ring-2 ring-sky-300',
         getNodeOpacity(agent)
       )}
       title={working ? (agent.activity || 'working') : (agent.status || (agent.alive ? 'idle' : 'stopped'))}
@@ -285,11 +314,13 @@ function AgentNode({
  *  `stubPx` is the length of the line above and below the label, so the caller keeps the
  *  spacing the tree already had instead of this component guessing at layout. */
 function Connection({
-  a, b, lookup, windowHours, onSelect, stubPx, dimmed, dots, labelRef,
+  a, b, lookup, windowHours, onSelect, stubPx, dimmed, dots, labelRef, unborn,
 }: {
   a: string; b: string; lookup: PairLookup; windowHours: number;
   onSelect?: (a: string, b: string) => void; stubPx: number;
   dimmed?: boolean; dots?: TrafficMessage[];
+  /** GROW mode: no replayed event has touched this pair yet. */
+  unborn?: boolean;
   /** Registers the count pill as a routing OBSTACLE.
    *
    *  builder-1 measured 12 of 12 cross edges overlapping something on the real page,
@@ -341,7 +372,11 @@ function Connection({
   return (
     // `relative` so a dot animates across the WHOLE connection, label included, rather than
     // across one half of it — over a 30px segment, half the travel reads as a flicker.
-    <div className={clsx('relative flex flex-col items-center gap-0', dimmed && 'opacity-30')}>
+    // `invisible` for the same reason AgentNode uses it: the count pill is a registered
+    // routing obstacle, so removing it from the flow during GROW would change every route
+    // mid-replay. Hidden but still occupying its box keeps the geometry identical.
+    <div className={clsx('relative flex flex-col items-center gap-0', dimmed && 'opacity-30',
+      unborn && 'invisible')}>
       {line}
       {label}
       {line}
@@ -363,7 +398,12 @@ export function TopologyDiagram({
   agents, pairs, windowHours = 24, onSelectConnection, onSelectAgent, selectedAgentId,
   onClearSelection, dots, brightIds,
   allAgentIds, deadPairs, layers, crossTopN = 12, nodeAlerts, edgeAlerts, asof = null,
+  bornIds = null, bornEdges = null,
 }: TopologyDiagramProps) {
+  // GROW predicates. Both collapse to `false` when the sets are absent, so every call site
+  // below is a no-op outside growth rather than a branch each one has to remember.
+  const unbornNode = (id: string) => bornIds != null && !bornIds.has(id);
+  const unbornEdge = (a: string, b: string) => bornEdges != null && !bornEdges.has(pairKey(a, b));
   const containerRef = useRef<HTMLDivElement>(null);
   const { positions, register, size: overlaySize } = useNodePositions(containerRef);
   const showCross = layers?.cross ?? true;
@@ -461,6 +501,15 @@ export function TopologyDiagram({
     });
   }, [crossSelection, lookup.busiest, windowHours, bright, selectedAgentId, asof]);
 
+  // GROW: a cross edge is drawn only once a replayed event has touched it. Filtered AFTER
+  // the memo, not inside it, so widthPx keeps the live `denom` — a growing chart whose
+  // surviving lines rescaled on every reveal would read as traffic changing when only
+  // visibility did. Unlike the DOM nodes this needs no invisible-box trick: SVG paths are
+  // absolutely positioned, so removing one moves nothing.
+  const drawnOverlayEdges = bornEdges == null
+    ? overlayEdges
+    : overlayEdges.filter((e) => bornEdges.has(pairKey(e.a, e.b)));
+
   const isDim = (id: string) => bright !== null && !bright.has(id);
   // A line stays bright only if the selected agent is one of its two ends.
   const lineDim = (a: string, b: string) =>
@@ -481,11 +530,11 @@ export function TopologyDiagram({
           bg-neutral-900 node then covers any line passing near it, which is the
           cheap half of "no lines through boxes" (routeEdge does the real half).
           No double-render of nodes, one fewer thing to keep in sync. */}
-      {overlayEdges.length > 0 && (
+      {drawnOverlayEdges.length > 0 && (
         <TopologyOverlay
           width={overlaySize.w}
           height={overlaySize.h}
-          edges={overlayEdges}
+          edges={drawnOverlayEdges}
           positions={positions}
           windowHours={windowHours}
           onSelectConnection={onSelectConnection}
@@ -494,7 +543,7 @@ export function TopologyDiagram({
       {/* T0: GM */}
       {gm && (
         <>
-          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} />
+          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} unborn={unbornNode(gm.id)} />
           {/* Trunk down to the PM bar. Deliberately unlabelled: this is a bus, not a pair,
               and the "hub-spoke" string it replaces described the shape rather than the
               traffic. The real gm<->pm counts sit on each PM's own segment below. */}
@@ -558,9 +607,10 @@ export function TopologyDiagram({
                       onSelect={onSelectConnection} stubPx={18}
                       dimmed={lineDim(gm.id, pm.id)}
                       dots={dotsByPair.get(pairKey(gm.id, pm.id))}
+                      unborn={unbornEdge(gm.id, pm.id)}
                     />
                   )}
-                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} />
+                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} unborn={unbornNode(pm.id)} />
 
                   {/* Workers under this PM. Each worker gets its OWN line to the PM rather
                       than sharing one "mesh" label for the group — a per-pair count is the
@@ -575,8 +625,9 @@ export function TopologyDiagram({
                             onSelect={onSelectConnection} stubPx={14}
                             dimmed={lineDim(pm.id, w.id)}
                             dots={dotsByPair.get(pairKey(pm.id, w.id))}
+                            unborn={unbornEdge(pm.id, w.id)}
                           />
-                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} />
                         </div>
                       ))}
                     </div>
@@ -594,7 +645,7 @@ export function TopologyDiagram({
           <p className="text-xs text-neutral-600 text-center mb-3">Not in the tree ({orphanAgents.length})</p>
           <div className="flex items-start gap-3 flex-wrap justify-center">
             {orphanAgents.map((w) => (
-              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} />
             ))}
           </div>
         </div>
@@ -629,6 +680,7 @@ export function TopologyDiagram({
                 nodeRef={register(e.id)}
                 onSelect={onSelectAgent}
                 dimmed={isDim(e.id)}
+                unborn={unbornNode(e.id)}
               />
             ))}
           </div>
