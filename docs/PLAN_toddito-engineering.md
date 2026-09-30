@@ -599,8 +599,14 @@ less clinical — design proposal, grounded in real sources not invented
 ### 9.1 The literal, mechanical root cause, found in code not guessed
 
 `src/lib/scoring/prompt.ts` (`brollistika/toddito`, read directly)
-contains this exact line, **twice** — once in the Full scoring prompt,
-once in the Lite scoring prompt:
+contains this exact line, **three times, not two as first found** — the
+Full scoring prompt, the Lite scoring prompt, and (found later, during
+§10's group-report research) `GROUP_SYNTHESIS_SYSTEM_PROMPT`, the prompt
+generating the group report's `divergence_flags`/`group_observations`/
+`critical_divergence` — the exact content §10's JTBD work is redesigning
+the layout of. **This third instance was not included in the fix already
+dispatched to build** (`msg_06b71ab7_75961657`, which only named the
+Full/Lite prompts) — needs a follow-up, flagged below in §9.1a:
 
 > `TONE: Clinical. Precise. Authoritative. Not preachy.`
 
@@ -613,6 +619,13 @@ a vague stylistic drift to diagnose; it is a direct instruction to the
 model, still in place today, doing exactly what it says.** High
 confidence this is the majority of what the operator and Todd are
 reacting to.
+
+**9.1a — follow-up needed:** `GROUP_SYNTHESIS_SYSTEM_PROMPT` also has NO
+"the move"/owner/condition structure anywhere — its output schema is
+flat strings (`divergence_flags: [string]`, `group_observations:
+[string, string, string]`, `critical_divergence: string`). Relevant to
+§10.1 JTBD 5 below — flagging here since it's the same file/prompt this
+subsection is about.
 
 ### 9.2 What Todd's June feedback already fixed — don't re-do it
 
@@ -783,8 +796,46 @@ buildable directly from `stage_distribution` (already computed, already
 fetched) — when the distribution shows real disagreement (not all
 respondents landing on `consensus_stage`), surface that explicitly
 BEFORE the stage/priority content, e.g. *"You and your co-leader placed
-this company at different stages."* Small: a conditional check against
-already-available data, not a new data source.
+this company at different stages. That disagreement is itself a
+finding."* (completion text, gm `msg_46ca2d93_77758073`) — **then show
+both priority matrices side by side**, rather than picking one as
+canonical. Still small: existing data, a conditional render, not a new
+data source or scoring change.
+
+**JTBD 5 — the founder who needs to act, not just understand.** Per the
+operator: each divergence flag is claimed to already have "The move" —
+specific, owned, conditioned — called out as the best part of the
+product, just formatted identically to everything else so it reads as
+more text instead of a commitment. **Premise NOT confirmed, same class
+of gap as JTBD 3 — flagging, not assuming:** read
+`GROUP_SYNTHESIS_SYSTEM_PROMPT` directly (§9.1a) — the real output
+schema is flat strings, `divergence_flags: [string]`, with no
+owner/condition/move sub-structure anywhere in the prompt or its
+instructions. Either "the move" is embedded as unstructured prose inside
+the flag string today (matching the JTBD's own complaint that it "reads
+as more text"), or the operator's Claude session was evaluating a vision/
+mockup, not the shipped prompt. **This changes the implementation shape
+either way:** extracting "the move" into a real commitment card (gap in
+one line, action in one sentence, an owner field, a completion
+CONDITION — not a date, per the report's own existing spec elsewhere)
+needs the scoring prompt to output those as SEPARATE structured fields,
+not parsed out of free text after the fact — a schema/prompt change,
+not just a UI reformat like JTBD 1/4. Real, scoped, but bigger than it
+reads at first: 3-5 commitment cards per report is a new structured
+output, one more prompt change alongside §9's TONE-line and per-field
+fixes to the same file.
+
+**The three research throughline questions (gm `msg_46ca2d93_77758073`,
+relaying the operator) — stated as the actual acceptance criteria for
+this whole redesign, not an addendum:**
+1. Does the person with less power feel safe enough to tell the truth?
+2. Does the person with more power receive it without defending?
+3. Does the practitioner have what they need to hold the room?
+
+Every screen/label/sequence decision in §10.1 should be evaluated
+against these three, explicitly, not just shipped because it looks
+right — worth carrying into whatever screens-level design pass JTBD 2/3
+(and now 5) still need (§10.3/§10.4).
 
 ### 10.2 Folding together with §9 (report-tone), per gm's instruction
 
@@ -833,13 +884,18 @@ JTBD 3's grounding (is `group_observations` really "the readout agenda"
 the operator meant, or something else) — needs a direct one-line
 confirmation before any design work starts on it. JTBD 3's actual
 per-divergence guiding questions — not sourced, needs Todd or a real
-content pass. JTBD 2's and JTBD 3's screens-level design — flagged as
-needing their own passes, not done in this text-only review. Sequencing
-with §9 and §7a.3 (three Toddito UI threads now touching overlapping
-report surfaces) — recommend one coordinated build pass across all
-three rather than three separate ones landing on the same files in
-sequence, but that's a scheduling call for whoever routes this to build,
-not decided here.
+content pass. **JTBD 5's grounding is the same open class of question as
+JTBD 3** — is "the move" already real content embedded in
+`divergence_flags` prose, or does it need a genuinely new structured
+prompt output — needs a direct check of real generated report content
+(not just the prompt source) before scoping the schema change. JTBD 2's,
+JTBD 3's, and now JTBD 5's screens-level design — flagged as needing
+their own passes, not done in this text-only review. Sequencing with §9
+(now confirmed, not just proposed) and §7a.3 (three Toddito UI threads
+now touching overlapping report surfaces) — recommend one coordinated
+build pass across all three rather than three separate ones landing on
+the same files in sequence, but that's a scheduling call for whoever
+routes this to build, not decided here.
 
 ## GSTACK REVIEW REPORT
 
