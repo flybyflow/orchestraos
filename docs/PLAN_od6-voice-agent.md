@@ -666,6 +666,260 @@ deploy-feasibility read, or the branch-archaeology findings above — only
 the economics conclusion, and only by making it conditional rather than
 settled in either direction.
 
+## 7. Operator ask, high priority (2026-09-30 10:20 UTC): real-world web research, then the final SWOT
+
+Operator, via gm, verbatim: "Search the internet for opinions bshr style
+for success stories. Bshr. Then finalize report back a swot for self
+host." Read as: real community field experience (not first-party docs —
+already covered above), then a SWOT specifically for self-hosting vs.
+staying on ElevenLabs/Vapi hosted. Research: bshr. Synthesis below: this
+seat.
+
+**Read this section's honesty as the point, not a hedge.** The ask was for
+"success stories." What the research actually found is a genuinely mixed
+picture — real successes exist, but the *live conversational* combined
+STT+orchestration+TTS self-hosting space specifically has almost no
+verified success stories at real volume. Reporting that plainly serves the
+decision better than forcing a positive narrative the evidence doesn't
+support.
+
+### Meta-findings that govern how much weight everything below deserves
+
+- **The search landscape is dominated by SEO content-farm material** —
+  multiple "different" sites (gigagpu.com, layer3labs.io, cekura.ai,
+  ai-agentsplus.com, callsphere.ai, and others) with suspiciously precise
+  dollar figures, no identifiable authors, and near-identical phrasing.
+  **Any web-sourced dollar claim not traceable to a named, verifiable
+  source should be discounted** — including, potentially, some of this
+  document's own earlier desk-research figures if they drew on the same
+  cluster. GitHub-issue-level evidence (real reporters, real version
+  numbers, real error text) is weighted far more heavily below.
+- **Reddit was completely inaccessible tonight** — bot-blocked across
+  direct fetch, headless browser, search engines, and API access. Every
+  "nothing found" claim below should be read as "not checkable tonight,"
+  not "the community said nothing." Worth a manual check by a human with a
+  real login before this becomes a final decision basis.
+- **Evidence-direction bias, stated explicitly rather than left implicit:**
+  GitHub issues systematically over-represent failures — people file an
+  issue when something breaks, essentially never when it works fine. This
+  cuts the *opposite* direction from blog-post survivorship bias. Between
+  the two, tonight's evidence base may be net **over-pessimistic** relative
+  to the true rate of boring, successful, unreported deployments.
+
+### Concurrency/latency — the priority question, per this seat's own instruction to bshr
+
+Real, verified GitHub issues (not benchmark extrapolation) show concurrency
+walls **well below** this document's own 15–20-per-4090 extrapolated
+estimate, across every component of the stack:
+- faster-whisper on an RTX 6000 Ada: a named user's real-time transcription
+  server "degrades significantly beyond ~8 clients, regardless of model
+  size" — tried multiple model instances and a shared model with
+  `num_workers`, both hit the same wall. No maintainer fix.
+  (`SYSTRAN/faster-whisper#1192`)
+- Kokoro-FastAPI (TTS): latency "gets very bad if I send two requests
+  simultaneously" — degradation starting at n=2. Closed with no fix.
+  (`remsky/Kokoro-FastAPI#115`)
+- LiveKit Agents, self-hosted Docker: an agent "stops speaking for some
+  users after 2-3 concurrent rooms," directly contradicting LiveKit's own
+  docs (10–25 concurrent jobs per 4-core/8GB server claimed). Unresolved.
+  A more severe, very recent (Sept 2026) bug: just **two** concurrent jobs
+  on one worker can cause a process-killing FFI panic or silent permanent
+  hang — the reporter notes "multiple concurrent sessions per worker is
+  the normal case, not an edge case." Open, unresolved.
+  (`livekit/agents#4331`, `#7545`)
+
+**Honest caveat:** nobody in these threads runs the exact "full STT+TTS
+pipeline together" configuration this document's own model assumed —
+everything found is single-component (STT-only or TTS-only), not a clean
+apples-to-apples refutation. But every real number found (n=2, n=2-3, n=4,
+n=8) sits well under 15-20, which reads as evidence the extrapolated
+estimate was optimistic relative to today's off-the-shelf tooling, not as a
+confirmed replacement number.
+
+On latency specifically: no first-hand account anywhere of GPU concurrency
+scaling cleanly to double digits in a live conversational pipeline was
+found. A tuned self-hosted whisper.cpp + Coqui TTS setup on an RTX 3090
+reported "three-four seconds all-in... not usable" for a **single**
+session — missing the ~700-800ms budget by 4-5x. A named consultancy
+(webrtc.ventures) reports a better 500-800ms on an A10G, but explicitly as
+a single-call demo with no concurrent-load test and no production
+observability. **This is a separate, GPU-side risk from the CPU-only
+latency finding already in this section above** (the 3.3-second-to-
+transcribe-a-3.2-second-clip report) — the two together mean neither the
+GPU-concurrency path nor the CPU-marginal-cost path has a verified,
+comfortable latency margin in real-world reports; both need the bounded
+spike already recommended above before either is trusted.
+
+### Pipecat / LiveKit / Dograh field experience
+
+The strongest single piece of evidence in this whole research pass:
+**Pipecat's self-hosted production story is a real, named, admitted gap.**
+A confirmed outside user (`author_association: NONE`, checked directly via
+`gh api`, not guessed) calls the framework itself "genuinely best-in-class"
+but documents that existing deploy guides (Fly.io, Modal, AWS AgentCore)
+are "starter-level" — AWS's own README admits it "does not address
+production-readiness concerns." Their conclusion, verbatim: "the deployment
+story pushes teams toward LiveKit even when they prefer Pipecat's DX,
+simply because LiveKit's transport is integrated and production-ready."
+Pipecat's own official docs corroborate this candidly — the dev runner "is
+not built for production" and often ships an unauthenticated `/start`
+endpoint that "can spawn a bot and create paid resources," with no rate
+limiting or backpressure by default. (`pipecat-ai/pipecat#3987`, plus
+several more independently-verified reports of connection-recovery bugs,
+thread panics, message-routing failures, and 4-second startup latency.)
+
+**LiveKit self-hosted** carries real, confirmed TURN/SFU operational pain —
+exactly the burden this document's own §3b already flagged LiveKit carries
+that Pipecat doesn't. LiveKit's own community forum tells a user asking if
+self-hosting is cost-effective that it only pays off "at scale," and below
+that you're "spending on engineering time" instead. Real GitHub issues:
+custom TURN passing internal tests but failing LiveKit's own Connection
+Tester, STUN lookup failures on a from-the-docs Kubernetes deploy,
+disconnects ~15s in on Android from a self-hosted backend.
+
+**Dograh** (the new lead from §6) now has real, if thin, independent field
+signal — reported honestly rather than dismissed or oversold. A confirmed
+outside user filed a detailed bug: self-hosted Docker/Windows deploy, TURN
+configured and ICE completes, but the WebRTC data channel never
+establishes and audio never arrives — a real, still-open bug in exactly the
+self-hosted WebRTC path Dograh's own pitch claims to have solved. Five more
+externally-filed bugs found (SIP trunk integration, webhook 500s, STT
+client crash, idle-disconnect timing). Two identifiable Product Hunt
+reviewers beyond generic praise, one with a specific complaint that got a
+direct fix-it response from a co-founder — a real (if small) signal of real
+usage. **Explicitly flagged: Dograh's launch-day popularity (5.8k stars, #1
+Product Hunt) should not be conflated with field-proven reliability — those
+are different claims**, and the sample found skews "tried it over a
+weekend," not "ran it in production for months."
+
+### Cost outcomes — thinnest, most content-farm-polluted question, genuinely inconclusive
+
+- One real, named anecdote (Ask HN): a self-hosted pipeline reportedly
+  "~10x cheaper per minute at scale" than ElevenLabs — but also "difficult
+  to maintain, requires serious GPU capacity," called "total overkill" for
+  their own app **by the same poster in the same breath**.
+- Dograh's own README states 60-70% of their hosted-Vapi spend was the
+  platform fee itself, not usage — a real motivation data point, not a
+  matching self-hosted-actual-dollars-spent figure.
+- Audioscrape (real, named, verifiable): scaled self-hosted WhisperX from a
+  $7/month VM to 1,000+ users / 20,000+ episodes — a real cost win, but
+  **batch** transcription only, no TTS, no live turn-taking. Partial analog
+  at best.
+- **No verified team was found running a combined live-conversational
+  Whisper+TTS pipeline at real volume with a published, named,
+  self-hosted-actual $/month figure.** Every other cost/breakeven claim
+  found traces back to the content-farm cluster above.
+- Net: community evidence neither confirms nor refutes this document's own
+  "volume is the dominant variable" model — it's essentially **absent** at
+  this specific level, not contradicted. Treat the modeled numbers above as
+  still the best available, just not field-validated either way.
+
+### Ops burden — second-strongest evidence tier, all GitHub-issue-level, real and specific
+
+- Pipecat: a ~3GB/minute memory leak, introduced in v0.0.85 and persisting
+  through v0.0.92, on Kubernetes/Ubuntu 24.04/Python 3.12 — **the same code
+  did not leak on macOS.** Exactly the "works in dev, breaks in prod on a
+  different OS" class of pain no docs page warns about. Still open.
+- LiveKit Agents (JS): a memory leak root-caused via V8 heap snapshots to a
+  `Promise.race` retention bug in a Deepgram STT plugin — leaking even on
+  silent audio, ~0.5GB/hour per open stream, causing OOM kills on
+  multi-hour sessions.
+- faster-whisper: a recurring CUDA/driver failure class, and — worse — a
+  **dangerous silent fallback to CPU** when CUDA init fails, masking a real
+  deployment problem as a mere performance regression instead of a crash.
+  At least one report of silent transcription-quality degradation after a
+  driver upgrade (garbled on GPU, fine on CPU) with no obvious triggering
+  error.
+- Real organizational-risk precedent, directly relevant to Kokoro-TTS's own
+  maintenance risk: **Coqui TTS's parent company shut down in Jan 2024**
+  without relicensing its non-commercial weights, leaving production users
+  with no vendor to escalate to.
+- What could not be found anywhere, verified: anyone quantifying the actual
+  dollar tradeoff ("$X saved on GPU but $Y in eng time to keep it
+  running") — the specific number this pass most wanted doesn't exist in
+  verifiable form.
+
+### Failure stories/regrets — genuinely rare to nonexistent, specifically for voice
+
+Searched hard for "why we went back to a hosted API" — found none in the
+voice-agent space specifically. Closest analog is an **adjacent-domain**
+general LLM self-hosting regret story with real hard numbers: self-hosted
+Llama on an RTX 3090 measured 12s avg / 38s p99 / ~50% timeout rate under
+10 concurrent requests, vs. GPT-4o-mini's 0.8s avg / 1.5s p99 / zero
+failures. Not a direct hit, but the closest named regret-with-numbers
+story found. One inverse data point for balance: an HN launch post
+(Rapida) states its founders spent "~2 years running voice agents in
+production" and repeatedly hit "dropped calls, unexplained latency,
+black-box vendor failures" on the **hosted** side — motivating their move
+toward self-hosted control. Thin (one comment), but points the opposite
+direction and is worth including.
+
+### Final SWOT: self-host vs. stay on ElevenLabs/Vapi hosted
+
+**Strengths.** Real cost savings are possible at volume, and the marginal-
+cost-on-existing-infrastructure framing above ($0-13/month, not
+$360/month) is a genuinely better number than a dedicated-box model —
+though still latency-gated, not free. A real inverse-regret pattern
+exists: teams do report hosted-side failures (dropped calls, black-box
+vendor issues) motivating moves toward self-hosted control, not just cost.
+OD6 compliance (audio staying off third-party infra) remains real and
+**completely untouched by any of tonight's economics findings** — the one
+benefit self-hosting uniquely provides regardless of how the cost case
+lands. `substrate` already has real, working self-hosted Pipecat+LiveKit
+code — not a green-field start. Pipecat itself is independently called
+"genuinely best-in-class" as a framework.
+
+**Weaknesses.** Every real-world concurrency report found, across every
+component, sits well below this document's own extrapolated 15-20/4090
+estimate (caveat: none tested the exact combined config). No first-hand
+account anywhere of clean double-digit concurrency scaling for a live
+conversational pipeline. Pipecat's own production-deployment story is a
+real, admitted, named gap — its dev runner isn't built for production and
+defaults to an unauthenticated endpoint. LiveKit self-hosted carries real,
+confirmed TURN/SFU pain. A dangerous silent-CPU-fallback failure mode
+exists in faster-whisper. Real memory-leak bugs exist in both Pipecat
+(OS-specific, prod-only) and LiveKit Agents (multi-hour-session OOM risk).
+Coqui TTS's parent-company shutdown is a live organizational-risk
+precedent for any single-maintainer TTS/STT dependency. Dograh's real
+field signal is thin — a confirmed bug in exactly its core self-hosted
+claim is still open, and its popularity metrics should not be read as
+proven reliability.
+
+**Opportunities.** The evidence-direction bias (GitHub over-represents
+failures) means the true success rate of boring, unreported self-hosted
+deployments is plausibly better than tonight's evidence base alone
+suggests — this isn't a settled-negative verdict, it's an
+under-documented space. Cost evidence at the specific combined-pipeline
+level is genuinely *absent*, not contradicted — this document's own
+modeled numbers stand un-refuted by real field data either way. Dograh
+specifically demos well for the Silicon Jungle sponsor narrative (§6) if
+the operator wants a sponsorable capability, independent of whether it's
+the right internal integration target.
+
+**Threats.** Confidence in any web-sourced dollar figure needs active
+discounting — the search landscape is dominated by unverifiable
+content-farm material, and this may have already touched earlier desk
+research tonight. Reddit — plausibly the single most relevant community —
+was completely unreachable tonight; treat silence there as unchecked, not
+confirmed. The closest real regret story found (adjacent-domain LLM
+self-hosting) shows how badly self-hosted concurrency can degrade under
+real load if under-provisioned (50% timeout rate at just 10 concurrent
+requests) — a real cautionary number even though it's not a direct hit on
+this exact stack.
+
+**Net recommendation, stated plainly rather than softened to match what
+was asked for:** the evidence does not support a clean "success story"
+narrative for self-hosting a *live conversational* voice pipeline at this
+specific combined scale — that space is under-documented and what
+documentation exists skews toward real, unresolved concurrency and ops
+pain. It also does not support abandoning the idea: the concurrency risk
+is unconfirmed at the exact configuration that matters, the cost case
+(marginal-cost framing) is genuinely more favorable than first modeled,
+and OD6 compliance is untouched by any of this either way. **The bounded
+spike already recommended in this document — real hardware, real load,
+real measurement — remains the single step that would convert the most
+unknowns into knowns, for the least cost, before any build decision.**
+
 ## 4. What this document does not decide
 
 - Whether the operator wants to pursue self-hosting at all vs. the cheaper
@@ -711,6 +965,12 @@ settled in either direction.
   operator before anyone integrates against it.
 - **The true scope of dependency drift on `substrate`'s Coolify deploy path
   (§6)** — unquantified until the recommended bounded spike actually runs.
+- **The final SWOT itself (§7)** — a comparison and a recommendation to
+  run the bounded spike, not a build-or-don't decision. Real-world
+  concurrency evidence sits well below this document's own estimate but at
+  a different configuration than what's actually planned; genuinely does
+  not resolve to a clean verdict either direction, by design — stated
+  plainly rather than forced positive to match what was asked for.
 
 ## GSTACK REVIEW REPORT
 
