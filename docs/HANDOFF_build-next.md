@@ -3,13 +3,13 @@
 - **Timestamp:** 2026-09-30T00:05:00Z
 - **Working Directory:** /Users/flybyflow/orchestraos (**shared with plan/review/ship — commit only through `scripts/git-lock.sh` with explicit pathspecs**)
 - **Second working tree:** `/tmp/sec01-toddito` (clone of `brollistika/toddito`, branch `main`) — the Pulse/Toddito security work. In `/tmp`, so treat it as disposable and push after every commit.
-- **Last Commit SHA (orchestraos):** `adf6838` on `fix-arturo-mapfile-bash32` (feature commits `47a3314`, `1cfdf9e`, `2240141`, `b300e73`, `6ab2d1d`, `b9ebbe0`, `a41d08c`, `0c46874`, `adf6838`)
-- **Live right now:** API pid 12994 (from `api/dist`); dashboard bundle stamped `adf6838` — check with `curl -s localhost:8891/BUILD_SHA`
+- **Last Commit SHA (orchestraos):** `9071d7b` on `fix-arturo-mapfile-bash32`. Feature commits: `47a3314` `1cfdf9e` `2240141` `b300e73` `6ab2d1d` `b9ebbe0` `a41d08c` `0c46874` `adf6838` `e3efa77` `996752f` `9071d7b`
+- **Live right now:** API pid 39531 (from `api/dist`); dashboard bundle stamped `9071d7b` — check with `curl -s localhost:8891/BUILD_SHA`
 - **Last Commit SHA (toddito):** `4f83b9f` on `main`, pushed and remote-verified
 
 ## 1. Current Goal & Phase State
 Two workstreams, both at a clean stopping point. Nothing half-applied in either tree.
-- **2D Agents View** (`docs/2d-agents-view-spec.md`): steps **1-10 COMPLETE** (gm cleared 6-11 via plan `msg_a2a5b9db_25894792`). Step **11 CANNOT be done** — see Decisions 8. All four of review's browser-pass must-fixes actioned.
+- **2D Agents View** (`docs/2d-agents-view-spec.md`): steps **1-10 COMPLETE** (gm cleared 6-11 via plan `msg_a2a5b9db_25894792`). Step **11 CANNOT be done** — see Decisions 8. All four browser-pass must-fixes actioned. **Gate 14 CLEARED at `e3efa77`** after review's blocking G1 (the row list showed the present under a header describing the past — the count was bounded by the window, the row queries were not).
   - Reviewed and CLEARED for 1-5 by review; F1/F2/F3/F4 all actioned (Decisions 9).
   - Live and verified: API pid 12994, dashboard bundle stamped `a41d08c`.
 - **Toddito security backlog** (gm): SEC-01/02/04/05/06 closed earlier; **SEC-03 closed tonight** (`4f83b9f`), **SEC-08 partial landed** (`f7c3111`).
