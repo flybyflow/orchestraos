@@ -426,6 +426,31 @@ rather than inventing a parallel system:
    this facet's copy AFTER §9's tone fix lands, not before, so it doesn't
    inherit the "TONE: Clinical" problem on day one.
 
+**Update (gm, `msg_3919283a_77535776`, 2026-09-30 14:12 UTC): the
+recovered What/So-What/Now-What content (§2a) sharpens this facet's
+REPORT FORMAT specifically, distinct from and additive to point 2's
+question-content source.** Two different real 1987/Koherent sources for
+two different parts of the same facet, not competing or overlapping:
+- **CPCSP's Client Relationship dimension (§7a.2) supplies the
+  diagnostic CONTENT** — what to ask, the trust/influence-style item
+  family.
+- **Koherent's recovered What/So-What/Now-What(Self/Other/Whole)
+  structure (§2a) supplies the REPORT FORMAT** — how to present the
+  result back to the consultant. This maps unusually well onto a
+  consultant self-feedback facet specifically, better than it maps onto
+  Pulse's org-level report (§2a's "different altitude" point): **What** =
+  the observed pattern in their influence style; **So What** = what it
+  means for their practice; **Now What** = three concrete practices,
+  and the real Self/Other/Whole typing maps almost directly —
+  **Self** = a personal-development practice, **Other** = a practice
+  specific to the client relationship being assessed, **Whole** = a
+  practice for their consulting practice as a whole. This is a genuine
+  fit, not a forced one — worth building the report step this way rather
+  than reusing Pulse's org-level report components (`src/components/
+  report/*`) as originally proposed in point 3 above; point 3 is
+  superseded by this for the report-rendering piece specifically, the
+  scoring/data pipeline reuse in point 3 still stands.
+
 ### 7a.4 What this section does not resolve
 
 **OD4 RESOLVED (gm, `msg_e7ef7d06_77168841`, 2026-09-30 14:06 UTC) — Todd
