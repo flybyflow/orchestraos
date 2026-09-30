@@ -72,6 +72,15 @@ ones that carry the work are `goto`, `js`, `screenshot`, `snapshot -i`, `console
 
 ## Standing up the branch you are gating
 
+**Use a worktree you created yourself.** Not the one another seat is working in — check
+`git worktree list` first. Two seats sharing a worktree corrupts both: a `git checkout`
+by one detaches `HEAD` under the other, so commits land off-branch and every build from
+that directory silently contains whatever the last checkout left behind. This happened on
+2026-09-30: a bisect checkout orphaned three commits (including the fix that made the page
+render) and produced a confident single-commit bisect result that was pure artifact. It
+cost two retractions. Nothing was lost only because the other seat read the reflog.
+
+
 `:8891` serves `<repo>/dashboard/dist`, which **is** the deployed bundle. Never build into
 it. Gate from a worktree, which has its own `dist`:
 
