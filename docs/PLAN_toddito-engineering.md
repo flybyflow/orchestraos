@@ -179,6 +179,29 @@ concise, not verbose. Be clear and simple, not complicated."* — worth
 citing as additional real source material for §9's tone rewrite, on top
 of V2's rules already cited there.
 
+**North star context for Self/Other/Whole (gm relaying the operator
+directly, `msg_76e78da3_78992024`, 2026-09-30 14:36 UTC) — not a new
+task, context for whoever writes the actual copy in §9 and any future
+reuse (Executive Communicator, etc.).** Self/Other/Whole is **a
+relational worldview, not a layout pattern.** Koherent's own North Star
+horizon question, the operator's words: *"how might we foster connection
+and unlock new collaboration using technology."* Underlying ontology:
+lead with care and curiosity to create a space where creativity/creation
+can emerge, directed at the Self, the Other, and the Whole — participatory,
+not a report section with three labeled columns. Four reflective
+questions meant to recur across features, the lens to write the actual
+prose through, not generic labels slapped on a 3-column layout:
+- What does this say about me?
+- What does it say about the other?
+- What does it say about my relationship with the other?
+- What does it say for the whole of the organization?
+
+**How to apply, concretely:** when §9's practices copy gets written
+(build, `msg_54c322e2_78671981`), each of the three practices should
+read as answering one of these questions in spirit, not just carry a
+"Self"/"Other"/"Whole" badge. Same discipline as everything else in this
+doc — cite the real source, don't approximate it.
+
 ## 3. "Collective intelligence" — out of scope for this plan
 
 Zero trace in Pulse (`src/`, `docs/` grepped) or in `koherentai-main`.
