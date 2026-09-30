@@ -364,6 +364,41 @@ router.get('/recent', (req: Request, res: Response) => {
   res.json({ messages: recentMessages(ORCHESTRA, limit) });
 });
 
+/**
+ * Alert-bearing messages in the window — escalations and held messages only.
+ *
+ * Deliberately NOT served by /recent. The badge needs a COUNT over the window and
+ * /recent is capped at 200: measured on the live store, the most recent 40 messages
+ * contain ONE escalation while the last 24h contain thirty-five. A badge fed from
+ * /recent would have been wrong by a factor of 35 and would have flickered as ordinary
+ * traffic pushed escalations off the end of the list.
+ *
+ * Filtering server-side is what keeps this cheap: the whole 24h window is ~42 rows,
+ * versus the ~1000 a client would have to download to count them itself. Same reasoning
+ * as by_type on pair-counts — aggregate where the data is.
+ */
+export function alertMessages(dataDir: string, windowHours = 24, asofMs?: number | null): AlertRow[] {
+  const db = openMessagesDb(dataDir);
+  if (!db) return [];
+  try {
+    const { from, to } = windowBounds(windowHours, asofMs);
+    return db.prepare(
+      `select id, from_agent, to_agent, type, created_at
+         from messages
+        where archived_at is null
+          and type in ('escalate', 'held_message')
+          and from_agent <> to_agent
+          and julianday(created_at) >= julianday(?)
+          and julianday(created_at) <= julianday(?)
+        order by created_at desc`).all(from, to) as AlertRow[];
+  } catch { return []; }
+}
+
+export interface AlertRow {
+  id: string; from_agent: string; to_agent: string;
+  type: string; created_at: string | null;
+}
+
 function windowHoursFrom(q: unknown): number {
   const h = parseInt(String(q ?? '24'), 10);
   return Number.isFinite(h) && h > 0 ? Math.min(24 * 90, h) : 24;
@@ -371,6 +406,21 @@ function windowHoursFrom(q: unknown): number {
 
 // GET /api/messages/pair-counts?hours=24 — message count per connection line.
 // The ONLY source for any count rendered on a line (spec §16).
+// GET /api/messages/alerts?hours=24 — escalations and held messages in the window.
+// Only the rows the graph draws alerts from, so the client counts a few dozen rows
+// instead of downloading a thousand to find them.
+router.get('/alerts', (req: Request, res: Response) => {
+  const hours = windowHoursFrom(req.query.hours);
+  const raw = req.query.asof ? String(req.query.asof) : null;
+  const asofMs = raw ? parseAsof(raw) : null;
+  if (raw && asofMs === null) {
+    res.status(400).json({ error: 'asof is not a parseable instant', code: 'bad_asof', asof: raw });
+    return;
+  }
+  res.json({ window_hours: hours, asof: asofMs == null ? null : new Date(asofMs).toISOString(),
+             messages: alertMessages(ORCHESTRA, hours, asofMs) });
+});
+
 router.get('/pair-counts', (req: Request, res: Response) => {
   const hours = windowHoursFrom(req.query.hours);
   const raw = req.query.asof ? String(req.query.asof) : null;

@@ -18,7 +18,7 @@ import { mkdtempSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import Database from 'better-sqlite3';
-import { pairCounts, deadPairs, pairMessages, parseAsof, oldestMessageAt } from './messages.js';
+import { pairCounts, deadPairs, pairMessages, parseAsof, oldestMessageAt, alertMessages } from './messages.js';
 
 function hoursAgo(h: number): string {
   return new Date(Date.now() - h * 3600_000).toISOString();
@@ -32,6 +32,33 @@ function hoursAgo(h: number): string {
  *  Direction fixtures: plan<->test is majority one-way (4 plan->test, 1 test->plan);
  *  brain<->think is exactly even (2 each way — a real "must not get a direction" case);
  *  bshr<->ship is a single message (one side 1, the other 0). */
+/**
+ * Alert fixture, deliberately SEPARATE from makeDb(). makeDb is shared and several
+ * tests assert exact counts and sums against it — adding escalations there would
+ * silently change other people's expected numbers, which is how a shared fixture
+ * becomes a source of spooky failures. Cheaper to build a second one.
+ */
+function makeAlertDb(): string {
+  const data = mkdtempSync(join(tmpdir(), 'orch-alerts-'));
+  mkdirSync(join(data, 'state'));
+  const db = new Database(join(data, 'state', 'tasks.db'));
+  db.exec(`create table messages (id text primary key, conversation_id text, from_agent text,
+           to_agent text, type text, subject text, body text, priority text, status text,
+           created_at text, delivered_at text, acknowledged_at text, archived_at text)`);
+  const ins = db.prepare(`insert into messages
+    (id,from_agent,to_agent,type,subject,body,priority,status,created_at,archived_at)
+    values (?,?,?,?,?,?,'high','pending',?,?)`);
+  ins.run('a1', 'review', 'build', 'escalate', 's', 'b', hoursAgo(2), null);
+  ins.run('a2', 'build', 'gm', 'escalate', 's', 'b', hoursAgo(3), null);
+  ins.run('a3', 'gm', 'reflect', 'held_message', 's', 'b', hoursAgo(4), null);
+  ins.run('a4', 'review', 'build', 'escalate', 's', 'b', hoursAgo(24 * 30), null); // outside 24h
+  ins.run('a5', 'gm', 'build', 'reply', 's', 'b', hoursAgo(1), null);              // not an alert
+  ins.run('a6', 'gm', 'gm', 'escalate', 'self', 'b', hoursAgo(1), null);           // self-send
+  ins.run('a7', 'ea', 'gm', 'escalate', 's', 'b', hoursAgo(1), hoursAgo(0.5));     // archived
+  db.close();
+  return data;
+}
+
 function makeDb(): string {
   const data = mkdtempSync(join(tmpdir(), 'orch-pairs-'));
   mkdirSync(join(data, 'state'));
@@ -447,4 +474,44 @@ test('oldestMessageAt finds the true oldest, not the lexicographic one', () => {
   new Database(join(d3, 'state', 'tasks.db')).exec(`create table messages (id text primary key, created_at text, archived_at text)`);
   assert.equal(oldestMessageAt(d3), null, 'empty store -> null');
   assert.equal(oldestMessageAt(join(d3, 'nowhere')), null, 'missing db -> null, never throws');
+});
+
+// ── /messages/alerts — the badge data source ────────────────────────────────
+// THE BUG THIS PREVENTS: feeding the alert badges from /recent. Measured on the live
+// store, the most recent 40 messages contain ONE escalation while the last 24h contain
+// thirty-five, so a /recent-fed badge is wrong by a factor of 35 AND flickers as
+// ordinary traffic pushes escalations off the end. Same paginated-undercount shape as
+// by_type. These assert the filter is real, not that a function exists.
+test('alertMessages returns ONLY escalate and held_message, and nothing else', () => {
+  const dir = makeAlertDb();
+  const rows = alertMessages(dir, 24);
+  assert.ok(rows.length > 0, 'fixture must contain at least one alert or this proves nothing');
+  const types = [...new Set(rows.map((r) => r.type))].sort();
+  assert.deepEqual(types.filter((t) => t !== 'escalate' && t !== 'held_message'), [],
+    'a non-alert type leaking in means the badge would count ordinary traffic');
+});
+
+test('alertMessages respects the window — an older alert is excluded', () => {
+  const dir = makeAlertDb();
+  const inWindow = alertMessages(dir, 24).map((r) => r.id).sort();
+  // a4 is 30 days old and a7 is archived; a5 is a reply and a6 is a self-send.
+  assert.deepEqual(inWindow, ['a1', 'a2', 'a3'],
+    'exactly the in-window, unarchived, non-self alerts — nothing else');
+  assert.ok(alertMessages(dir, 24 * 365).some((r) => r.id === 'a4'),
+    'and the old one IS returned once the window reaches it, so it was filtered not lost');
+});
+
+test('alertMessages excludes self-sends, same as every other pair query', () => {
+  const dir = makeAlertDb();
+  assert.deepEqual(alertMessages(dir, 24 * 365).filter((r) => r.from_agent === r.to_agent), []);
+});
+
+test('alertMessages carries to_agent — the badge hangs on the RECIPIENT', () => {
+  const dir = makeAlertDb();
+  const rows = alertMessages(dir, 24 * 365);
+  for (const r of rows) {
+    assert.ok(typeof r.to_agent === 'string' && r.to_agent.length > 0,
+      'without to_agent there is no node to put the badge on');
+    assert.ok(typeof r.id === 'string' && r.id.length > 0, 'id is needed to dedupe across polls');
+  }
 });
