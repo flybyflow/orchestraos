@@ -599,7 +599,7 @@ the data) — 619 min over 23.5 days = ~791 min/month. **September 2026**
 (now) — 172.5 min over 19 days = ~272 min/month. Against the ~3,600
 min/month breakeven above: spring peak was 22% of breakeven, current is
 7.6%. Blending both rates over the ~7 months since February gives a rough
-total-spend estimate of ~$400 — this resolves this section's earlier
+total-spend estimate of ~$300-400 — this resolves this section's earlier
 monthly-vs-total-spend ambiguity: "hundreds of dollars" reads as a
 **total**, not a monthly run-rate.
 
