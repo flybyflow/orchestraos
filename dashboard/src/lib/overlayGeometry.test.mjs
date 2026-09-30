@@ -6,6 +6,7 @@ import assert from 'node:assert';
 import {
   toLocalBox, selectCrossEdges, busiestDrawn, edgeLiveness, samePositions, edgeDirection,
   bornUpTo, overlayContentSize, filterExistedByAsof, trafficByAgent, nodeScaleTier,
+  spriteAnimation,
 } from './overlayGeometry.ts';
 
 // ── samePositions: the guard that stops an infinite render loop ─────────────
@@ -343,6 +344,29 @@ const key = (a, b) => (a < b ? `${a}|${b}` : `${b}|${a}`);
   assert.strictEqual(nodeScaleTier(50, 0), 0, 'maxCount<=0 (quiet fleet, nobody has any traffic) -> baseline for everyone, not a divide-by-zero');
   assert.strictEqual(nodeScaleTier(50, -1), 0, 'a negative maxCount -> baseline, defensively');
   console.log('PASS: nodeScaleTier — four discrete boundaries pinned exactly, zero/negative guards hold');
+}
+
+// ── spriteAnimation: standing arrow-sprite density and speed track the recent rate ───────
+{
+  assert.deepStrictEqual(spriteAnimation(0), { spriteCount: 1, lapSeconds: 8 },
+    'a quiet pair still gets one slow sprite, not zero (reads as "alive, barely")');
+  assert.strictEqual(spriteAnimation(9).spriteCount, 1, 'just below the 10-message tier -> still 1 sprite');
+  assert.strictEqual(spriteAnimation(10).spriteCount, 2, 'exactly 10 -> 2 sprites (>=, not >)');
+  assert.strictEqual(spriteAnimation(49).spriteCount, 2, 'just below the 50-message tier -> still 2 sprites');
+  assert.strictEqual(spriteAnimation(50).spriteCount, 3, 'exactly 50 -> the top tier, 3 sprites');
+  assert.strictEqual(spriteAnimation(100000).spriteCount, 3, 'an extreme count caps at 3, never more');
+
+  assert.strictEqual(spriteAnimation(100000).lapSeconds, 2.5, 'an extreme count hits the 2.5s floor exactly');
+  // Exact values at PERFECT SQUARES, so `8 - sqrt(count)*0.5` lands on round numbers a linear
+  // `8 - count*0.5` formula could not coincidentally match -- this is what actually pins the
+  // formula down (re-derived by hand: sqrt(4)=2, sqrt(16)=4, sqrt(100)=10) rather than a
+  // regression to plain linear scaling merely happening to look plausible on non-square inputs.
+  assert.strictEqual(spriteAnimation(4).lapSeconds, 7, '8 - sqrt(4)*0.5 = 7 exactly');
+  assert.strictEqual(spriteAnimation(16).lapSeconds, 6, '8 - sqrt(16)*0.5 = 6 exactly');
+  assert.strictEqual(spriteAnimation(100).lapSeconds, 3, '8 - sqrt(100)*0.5 = 3 exactly (would be -42 under a naive linear formula, caught instead by the 2.5s floor if it were -- see the 100000 case above for that)');
+  assert.strictEqual(spriteAnimation(-5).spriteCount, 1, 'a negative count (should not happen) does not crash or invert');
+  assert.strictEqual(spriteAnimation(-5).lapSeconds, 8, 'and clamps to the slow end, not NaN');
+  console.log('PASS: spriteAnimation — density and lap time track the rate, sqrt-scaled, bounded, negative-safe');
 }
 
 console.log('\nAll overlayGeometry tests passed.');

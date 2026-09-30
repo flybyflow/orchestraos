@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { routeEdge, type Box, type EdgeRoute, type RouteEdgeOptions } from '../lib/edgeRouting';
-import { toLocalBox, samePositions, overlayContentSize, type RectLike } from '../lib/overlayGeometry';
+import { toLocalBox, samePositions, overlayContentSize, spriteAnimation, type RectLike } from '../lib/overlayGeometry';
 import { pairKey } from '../lib/topologyLines';
 import { pulseId, pulseProgress, pulsePositionOnRoute, pruneDeadPulses, layoutPulseLabels, type ReplayPulse } from '../lib/replayPulses';
 
@@ -389,9 +389,27 @@ export function TopologyOverlay({
         const trailW = showEdgeGlows ? (trailWeight.get(pairKey(e.a, e.b)) ?? 0) : 0;
         const escalated = showEdgeGlows && (e.escalate ?? 0) > 0;
 
+        // /field-named 'pulses' layer, standing traffic (operator, 2026-09-30) -- small
+        // arrowheads that travel the edge continuously in the majority-flow direction, ambient
+        // in the LIVE view rather than tied to an explicit replay tick. Native SVG
+        // <animateMotion>, not a React/rAF-driven loop: once mounted the browser animates it
+        // with zero re-renders per frame, which matters here specifically -- the operator's
+        // very next ask after this one is "replay feels laggy", and a hand-rolled JS animation
+        // loop for a layer that runs on every edge, all the time, would only make that worse.
+        // No direction, no sprite: an evenly-split pair (ea<->gm, 53/53) has no majority to
+        // point an arrow along, and a guessed direction is worse than none (spec precedent:
+        // the static marker on the line below already withholds for exactly this reason).
+        const showSprite = showArrowSprites && !dead && e.direction != null;
+        const pathId = `xedge-path-${pairKey(e.a, e.b)}`;
+        // Density and speed by recent rate: lib/overlayGeometry.ts's spriteAnimation (pure,
+        // unit-tested) owns the actual formula -- this file only wires the DOM/SVG bits.
+        const { spriteCount, lapSeconds } = spriteAnimation(e.count);
+        const forward = e.direction === 'ab';
+
         return (
           <g key={`${e.a}|${e.b}`} className={clsx(e.dimmed && 'opacity-20')}>
             <path
+              id={pathId}
               d={route.d}
               fill="none"
               // Escalation outranks the per-type colour: type is what the traffic
@@ -422,6 +440,31 @@ export function TopologyOverlay({
               markerEnd={!dead && e.direction === 'ab' ? 'url(#xedge-arrow)' : undefined}
               markerStart={!dead && e.direction === 'ba' ? 'url(#xedge-arrow)' : undefined}
             />
+            {showSprite && Array.from({ length: spriteCount }, (_, i) => (
+              // A small triangle riding the path via <mpath>, rotate="auto" orients it along
+              // the LOCAL tangent at every instant -- correct through a curve's bend and
+              // through a polyline's corners with no per-frame geometry work on this side at
+              // all, the whole point of using the native primitive instead of sampling
+              // pointAtFraction on a timer the way the replay pulses (a genuinely different
+              // feature: discrete, one per real message event) already do.
+              // keyPoints/keyTimes reversed for 'ba' plays the SAME forward-authored path
+              // backward, rather than a second, possibly-diverging route computed for the
+              // reverse pair -- the exact class of bug the reverse-replay-pulse fix upstream
+              // of this already exists to prevent, so this sprite never reopens it.
+              <path key={i} d="M-4,-3 L4,0 L-4,3 z" fill={stroke} opacity={0.85}>
+                <animateMotion
+                  dur={`${lapSeconds}s`}
+                  repeatCount="indefinite"
+                  begin={`${(i * lapSeconds) / spriteCount}s`}
+                  rotate="auto"
+                  keyPoints={forward ? '0;1' : '1;0'}
+                  keyTimes="0;1"
+                  calcMode="linear"
+                >
+                  <mpath href={`#${pathId}`} />
+                </animateMotion>
+              </path>
+            ))}
             {onSelectConnection && (
               // A 1-2px line is not a clickable target. A wide transparent path
               // on top gives it a real hit area without inflating its weight.

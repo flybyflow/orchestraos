@@ -354,3 +354,16 @@ export function nodeScaleTier(count: number, maxCount: number): NodeScaleTier {
   if (frac >= 0.15) return 1;
   return 0;
 }
+
+/** How the standing arrow-sprite layer's density and speed track a pair's recent rate
+ *  (operator, 2026-09-30: "density or speed by the recent message rate"). Both, each bounded:
+ *  a quiet pair still gets one slow sprite (reads as "alive, barely") rather than nothing, and
+ *  a very busy one caps at 3 sprites / a 2.5s lap rather than becoming strobing noise. sqrt, not
+ *  linear, so the jump from 1 to 10 messages moves the needle about as much as 10 to 100 does —
+ *  message counts are the same kind of long-tailed distribution busiestDrawn()/nodeScaleTier()
+ *  above already treat as relative, not absolute. */
+export function spriteAnimation(count: number): { spriteCount: 1 | 2 | 3; lapSeconds: number } {
+  const spriteCount = count >= 50 ? 3 : count >= 10 ? 2 : 1;
+  const lapSeconds = Math.max(2.5, Math.min(8, 8 - Math.sqrt(Math.max(0, count)) * 0.5));
+  return { spriteCount, lapSeconds };
+}
