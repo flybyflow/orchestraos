@@ -325,6 +325,167 @@ invented.
 migration run, no policy language published anywhere respondent-facing.
 This is the draft for the morning report only.
 
+## 5. Morning follow-up (gm, `msg_ac263acf_54745135`, 2026-09-30 07:52 UTC): SWOT — build on existing internal repos vs. custom-built from open-source
+
+The operator responded to this doc with new information: there's existing
+internal work already partway toward a self-hosted voice agent. Verbatim:
+"we had a bunch of pipecat logic in there already there we mostly there 80%
+of the [way]... one thing that was missing however is that we were still
+using cloud rather than self hosting pipecat and that we had no UI
+functionality that these other products are using." Verified against real
+source in three `brollistika`-org repos (bshr, `gh api` + clone, not
+README/manifest inference) rather than taken at face value in either
+direction — same discipline as §0/§2's original verification.
+
+**What the three repos actually are, confirmed by cross-reference, not org
+proximity:** `substrate` is the backend/orchestration platform — its own
+README: "The API for deploying agents that execute SOPs across messy human
+channels — WhatsApp first, voice via Pipecat, anywhere via polymorphic
+channel adapters." `kokoro-frontend` is a client + admin UI that calls
+`substrate`'s `infra/pipecat-cloud/bot.py` by path — confirmed via its own
+webhook route comment. **`kokoro-svc` is NOT a TTS service** — its own
+docker-compose comment labels it "Kokoro-svc (Python/Flask astrology IP —
+natal readings)." The "Kokoro" name collision with the open-source
+Kokoro-TTS model (§1's voicebox comparison) is coincidental; this is an
+unrelated astrology-companion product (hardcoded default persona "Luna,
+astrology guide" in both `bot.py` and `pipecat_server.py`). Flagging plainly
+so the two Kokoros are never conflated going forward.
+
+**Verifying the operator's claim, part by part — one accurate, one
+understated, one backwards:**
+1. *Pipecat orchestration is mostly built* — **accurate, not overstated.**
+   `substrate/infra/pipecat/pipecat_server.py` (407 lines) and
+   `infra/pipecat-cloud/bot.py` (318 lines) both have genuine `Pipeline([...])`
+   construction, custom `FrameProcessor` subclasses, Silero VAD, Smart-Turn
+   detection, and real transport wiring — `LiveKitTransport` (self-hosted) in
+   one variant, `DailyTransport` (Pipecat Cloud) in the other.
+   `kokoro-frontend`'s "pipecat" code (`usePipecatCloudEngine.ts`,
+   `usePipecatEngine.ts`, 2164 lines) is real but client/session-proxy side
+   only — no `Pipeline` construction, no Python backend in that repo.
+2. *Cloud vs. self-hosted* — **accurate for what's LIVE today, but
+   understates existing groundwork and misses the part that actually
+   matters for OD6.** The live session route
+   (`kokoro-frontend/api/voice/pipecat-cloud/session/route.ts`) hits
+   `api.pipecat.daily.co` — Pipecat Cloud, with the route's own comment
+   noting "self-hosted substrate GCP deploy is not part of this path." But a
+   self-hosted transport variant **already exists and is wired**: `substrate`'s
+   docker-compose runs a real self-hosted `livekit/livekit-server:latest`,
+   and `pipecat_server.py` already joins it. So this is closer to "point the
+   live path at the already-built self-hosted variant" than "build
+   self-hosting from scratch." **The gap the claim doesn't name, and the one
+   that actually matters:** STT/TTS are **100% cloud APIs in every variant
+   checked** — Groq/Deepgram/OpenAI for STT, ElevenLabs/Cartesia/OpenAI for
+   TTS. Every "whisper" reference in all three repos is the cloud-hosted
+   Groq/OpenAI API, never a locally-run model. Zero local-Whisper or
+   local-TTS code exists anywhere in these three repos. **Self-hosting the
+   orchestration layer alone does not close OD6's actual concern** (raw
+   audio leaving the operator's infra) — audio still transits Groq and
+   ElevenLabs/Cartesia regardless of where the orchestrator runs.
+3. *No UI functionality* — **backwards.** `kokoro-frontend` has MORE
+   relevant UI than voicebox/VoiceStudio/Patter (§1's comparison table) — a
+   real 469-line admin/calls dashboard (stat cards, per-session
+   latency/token/completion metrics, filterable sessions table, explicitly
+   built to "replace the ElevenLabs post-call analytics dashboard"), real
+   auth, session dashboards. None of the three originally-evaluated
+   candidates ship anything like this. The real gap: this UI is wired to a
+   different product's data model (astrology sessions/personas, not
+   Pulse's respondent-interview/scoring model) — reuse means porting
+   patterns/screens, not dropping in a finished feature.
+
+**Self-hosted Pipecat, confirmed via context7:** Pipecat Cloud is a strictly
+optional hosted layer on top of the open-source framework, adding
+auto-scaling, container deployment, secrets management, and built-in WebRTC
+on top of the same `Pipeline`/`FrameProcessor` code. Self-hosting means
+running the identical pipeline as a plain Python process with a
+self-hosted transport (WebSocket, Daily, or SmallWebRTC/LiveKit) instead —
+matching exactly what `substrate/infra/pipecat/pipecat_server.py` already
+does. (Sourced from bshr's research pass; the underlying context7 call
+encountered a tool error mid-response that this seat did not independently
+re-verify — the finding is consistent with everything else confirmed by
+direct source reading above, so treated as reliable, but flagged as the one
+claim in this section sourced from a tool call with a caught glitch rather
+than raw file contents.)
+
+**One unverified item, stated rather than guessed:** the self-hosted LiveKit
+path exists in code and docker-compose — whether it has actually been
+run/deployed recently vs. written and left idle is not confirmed; that needs
+the operator or a deploy-log check, not repo access.
+
+### SWOT — Path A: build on `substrate` + `kokoro-frontend` (self-host the existing Pipecat path, port the UI, add local STT/TTS)
+
+**Strengths:** Real, working Pipecat orchestration already exists with both
+cloud and self-hosted transport variants wired — not a green-field build.
+The self-hosted LiveKit transport question (§3b's own unresolved
+Pipecat-vs-LiveKit spike) is already answered by internal precedent:
+`substrate` runs Pipecat over a self-hosted LiveKit transport today. A more
+mature admin/analytics UI already exists than any of the three externally
+evaluated candidates. Internal code, same org — no new license to evaluate,
+no unfamiliar external codebase.
+
+**Weaknesses:** STT/TTS are 100% cloud in every variant checked — this path
+does **not** close OD6's actual concern by itself; the local-audio work is
+just as new here as anywhere else. `kokoro-frontend`/`kokoro-svc` are built
+for an unrelated product (astrology) — reuse is porting, not adoption, with
+real integration risk adapting to Pulse's data model. `kokoro-svc` itself
+(the real astrology backend) is likely not reusable at all. The self-hosted
+LiveKit path's actual deployment freshness is unconfirmed — possible hidden
+bitrot.
+
+**Opportunities:** Substrate's existing self-hosted Pipecat+LiveKit wiring
+could stand in for (or substantially shortcut) the timeboxed orchestration
+spike §3/§3b already called for. The existing admin dashboard could deliver
+OD6-adjacent value (session analytics, audit-trail-adjacent visibility)
+faster via porting than building new. Whoever built `substrate` can be
+consulted directly.
+
+**Threats:** Scope creep — "build on existing" inviting "also fix the
+astrology-specific parts we don't need," inflating timeline past a narrower
+build. If the self-hosted LiveKit path is stale, the "80% there" framing
+could collapse toward fresh-build-equivalent effort, plus the cost of first
+understanding someone else's possibly-abandoned code. No external community
+maintaining this code — the team owns 100% of the ongoing maintenance
+burden, unlike an open-source dependency.
+
+### SWOT — Path B: custom-built from open-source research (voicebox / VoiceStudio / Patter, per §1)
+
+**Strengths:** voicebox ships **real, working local Whisper + local TTS
+code today** — directly closes OD6's actual gap that Path A's existing code
+does not. MIT-licensed candidates (voicebox, Patter) carry no legal risk,
+unlike VoiceStudio's AGPL-3.0-only. A fresh build avoids inheriting
+`kokoro-frontend`/`svc`'s astrology-specific data model.
+
+**Weaknesses:** None of the three ships a working orchestration + local-audio
++ UI combination — still real assembly work across 2-3 separate projects.
+No existing UI at all in any of the three, vs. Path A's head start (even
+needing porting). Zero team operational familiarity with any of these
+external codebases, unlike `substrate`/`kokoro-frontend` which the org
+already built.
+
+**Opportunities:** A clean-slate build can adopt §3b's own Pipecat pick
+without inheriting any of `substrate`'s astrology-specific coupling. UI can
+be built directly against Pulse's actual data model from day one.
+
+**Threats:** Assembling three previously-unconnected open-source pieces from
+scratch is a bigger, riskier project than adapting one internal codebase
+that already has most pieces wired — even accounting for Path A's own
+STT/TTS gap. Dependent on external projects' continued maintenance.
+
+**What this SWOT does not resolve, presented as a comparison for a decision,
+not a directive:** neither path is actually "mostly there" for OD6's real
+concern — both need comparably new local-STT/local-TTS integration work,
+since neither the operator's own repos nor any of the three external
+candidates have it today. Where the paths genuinely diverge is
+orchestration and UI, and Path A has a real, substantive head start on
+both. The strongest-looking option given the facts above, offered as a
+recommendation rather than a decision: a **hybrid** — adapt `substrate`'s
+Pipecat orchestration and self-hosted LiveKit transport (Path A's real
+strength) while sourcing the local STT/TTS layer from voicebox's approach
+(Path B's real strength, since Path A has none). This is not a new idea —
+it's what §3's original recommendation already called for (self-hosted
+Whisper + a local TTS engine + an orchestration layer), except `substrate`
+now supplies real, working code for the orchestration piece that was
+previously unresolved.
+
 ## 4. What this document does not decide
 
 - Whether the operator wants to pursue self-hosting at all vs. the cheaper
@@ -347,6 +508,10 @@ This is the draft for the morning report only.
   record — closing OD6 fully means deciding whether that existing data needs a
   retention/deletion pass of its own, independent of the self-hosting question.
   Not sized here; flagging so it doesn't get silently skipped as "handled."
+- **Build-on-existing (`substrate`/`kokoro-frontend`) vs. custom-built (§5)** —
+  a SWOT, not a decision. Genuinely the operator's call; this seat's own
+  read is that a hybrid (§5's closing paragraph) is the strongest option on
+  the facts, but that is a recommendation, not what got decided here.
 
 ## GSTACK REVIEW REPORT
 
@@ -400,8 +565,16 @@ still true, still not run.
   draft (including the proposed 90-day window and policy language) —
   operator sign-off required before any of it ships.
 - Confirm Pipecat as the orchestration framework, or require the timeboxed
-  spike to run before treating §3b's desk-research pick as sufficient.
+  spike to run before treating §3b's desk-research pick as sufficient — §5's
+  morning follow-up found real internal precedent (`substrate`) that could
+  shortcut this spike, but hasn't replaced it.
+- Build-on-existing vs. custom-built vs. hybrid (§5) — a SWOT was produced,
+  not a decision; this seat's own read favors the hybrid named in §5's
+  closing paragraph, offered as a recommendation only.
 - GPU infrastructure spend, once the orchestration layer is chosen.
 - Is VoiceStudio's AGPL license (§1) acceptable for even component-level,
   unmodified, arm's-length use, or does its legal risk rule it out entirely
   regardless of technical fit?
+- Whether `substrate`'s self-hosted LiveKit/Pipecat path (§5) has actually
+  been run/deployed recently or was written and left idle — not
+  checkable from repo access alone.
