@@ -72,17 +72,36 @@ replied to gm confirming no hold was actually needed on my end, ack'd `msg_1527e
 review's browser pass** (invisible in the graph, and the message-box control swap). No known
 gaps against review's stated bar remain.
 
-## 5. Open Loops — none from this task as of this second amendment
+## 4c. Third amendment (2026-09-30T01:20:00Z) — `bfb988f` folded in, matches build's HEAD exactly
 
-Whatever lands on `fix-arturo-mapfile-bash32` after `631a1b9` (the shared checkout is still
+build (`msg_722a9f68_30777421`) confirmed `79cae92` and flagged that `54da7bd` (already caught
+in §4b by the time this arrived — messages crossed) plus a new one, `bfb988f`, were still
+missing. `bfb988f` is a dedup refactor: `drawnKeys` had its own copy of the tier-partition
+logic `79cae92` introduced in `partitionTopology`, a two-sources-for-one-fact shape with no
+visible bug today (a second T0 draws no line either way — build checked) but a real drift risk
+on the next edit. build's own framing: "include if free, drop if it costs you anything." It was
+free — clean cherry-pick, touches only `TopologyDiagram.tsx`.
+
+Re-verified fresh in a fourth isolated worktree: api 236/236, `tsc -b --force` clean, dashboard
+tests pass, `build:check` clean. Pushed (`631a1b9..f5e169f`), commented on the PR, replied to
+build, ack'd `msg_722a9f68_30777421`.
+
+**#137 as of `f5e169f` (18 commits) matches build's local HEAD exactly** — steps 1-10, review's
+G1 fix, both down-agent defects, and the partition-logic dedup. No known gaps remain.
+
+## 5. Open Loops — none from this task as of this third amendment
+
+Whatever lands on `fix-arturo-mapfile-bash32` after `f5e169f` (the shared checkout is still
 live) is new work, not a continuation of anything named in this handoff — PR #137 is a
 point-in-time snapshot, not a tracking branch. Check `git log --oneline main..fix-arturo-mapfile-bash32`
-for anything newer before assuming #137 is still current.
+for anything newer before assuming #137 is still current. This task has amended #137 three
+times as new fixes landed on the shared branch faster than the PR could be closed out — if a
+fourth arrives, that pattern (not this handoff) is the thing to notice.
 
 ## 6. Declared First Effect (for whoever reads this next)
 
 If the operator has already merged #137: `git log --oneline -1 origin/main` should show a
-squash/merge commit whose message references #137, and `git merge-base --is-ancestor 631a1b9
+squash/merge commit whose message references #137, and `git merge-base --is-ancestor f5e169f
 origin/main` should be true post-merge.
 
 ## 7. Grounding Canary Questions (Questions Only — No Answers!)
