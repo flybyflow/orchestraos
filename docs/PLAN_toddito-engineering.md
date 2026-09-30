@@ -90,6 +90,60 @@ layer on top of an org-diagnostic report), not a small addition, and
 deserves its own design pass before being built. **Recommended: flag as a
 real future feature, don't fold into this plan's "build first" scope.**
 
+## 2a. Follow-up (gm, `msg_afa7f90e_69752912`, 2026-09-30 12:02 UTC): the
+real What/So-What/Now-What content, and a correction to the rumored
+6-field structure
+
+Operator's June-era addendum said this pattern was "6-field: What / So
+What / Now What-Self / Now What-Other / Now What-Whole / Nugget" and
+lives in Koherent V2. §2 above correctly found zero trace in V1 and
+correctly deferred a design pass rather than guess. That design pass is
+now this task — read the ACTUAL V2 prompt files directly
+(`flybyflow/koherent-organizations`, `src/prompts/base/
+insight_system_prompt.md` and `unified_system_meta_prompt.md`, via `gh
+api`, not inferred from the field-name rumor), cross-checked against
+`docs/BSHR_koherent-lineage-synthesis.md`'s own independent research.
+
+**Correction: the 6-field Self/Other/Whole/Nugget structure does not
+exist as implemented code anywhere — not in V1, V2, or V3.** "Nugget"
+specifically: zero hits, confirmed by BSHR's own repo-wide grep across
+every Koherent version, and re-confirmed by this pass. What's REAL in
+V2's actual prompt output schema is simpler: a 4-field JSON —
+`{what, whatReadMore, soWhat, soWhatReadMore}` — a genuine two-stage
+narrative (What → So What), not six fields. "Now What" exists only as an
+internal ReAct reasoning step label (`<7_now_what>`) whose output feeds a
+`practices` block referenced via `{{practice_output_experiment}}`/
+`{{practice_output_control}}` template variables — no static file with
+that name exists anywhere in the repo, and the backend that would
+generate it (`koherentACE.ts`) is an explicit stub per BSHR's research.
+**So "Now What" was designed for, but never actually built out with real
+content, in the one place this pattern is real code.**
+
+**What IS real and genuinely reusable — the prose-generation craft, not a
+field structure:**
+- Explicit output rules, verbatim from the real prompt: *"Use very plain,
+  simplistic yet detailed language. Avoid complicated words, terms or
+  grammar."* / *"Do not reference specific personality types... or trait
+  names... Use plain, behavioral language to describe patterns and
+  actions instead."* / *"Avoid deterministic personality statements."* /
+  *"Present traits as neutral with contextual advantages."* / *"Maintain
+  curious, non-judgmental perspective."* / *"Offer observations not
+  evaluations."* / *"Present possibilities not singular truths."* /
+  *"Empower through questions not directives."* / *"Balance validation
+  with gentle challenge."*
+- Fixed narrative sentence-openers that give warmth and consistency
+  without becoming freeform: *"It seems you..."* / *"A specific challenge
+  to be aware of is..."* / *"It could lead to..."* / *"A specific risk to
+  be aware of is..."* — a real, working technique for staying human
+  without losing structure.
+
+§2's original conclusion stands unchanged: this is a different altitude
+(individual reflective-coaching) from Pulse's org-level diagnostic, real
+new scope deserving its own design pass, not a small fold-in. What
+changes is the operator has now explicitly lifted that hold (§9 below) —
+the corrected content above is what should ground that design pass, not
+the never-built 6-field rumor.
+
 ## 3. "Collective intelligence" — out of scope for this plan
 
 Zero trace in Pulse (`src/`, `docs/` grepped) or in `koherentai-main`.
@@ -252,6 +306,102 @@ conversation happens, not treated as settled.
    not squeezed in here as an afterthought.
 5. **Consulting Communicator (§7) — blocked on Todd (OD4).** Do not scope
    blind; flag as the next thing to unblock once his call happens.
+
+## 9. Operator priority (2026-09-30 12:02 UTC): make the diagnostic report
+less clinical — design proposal, grounded in real sources not invented
+
+### 9.1 The literal, mechanical root cause, found in code not guessed
+
+`src/lib/scoring/prompt.ts` (`brollistika/toddito`, read directly)
+contains this exact line, **twice** — once in the Full scoring prompt,
+once in the Lite scoring prompt:
+
+> `TONE: Clinical. Precise. Authoritative. Not preachy.`
+
+The JSON schema both prompts require Claude to return also names a field
+literally `clinical_observations` — which surfaces directly in the report
+UI (`src/app/report/[id]/page.tsx`) as a section with kicker **"Clinical
+observations."** Three reinforcing places — the LLM instruction, the data
+schema, and the UI label — use the literal word "clinical." **This is not
+a vague stylistic drift to diagnose; it is a direct instruction to the
+model, still in place today, doing exactly what it says.** High
+confidence this is the majority of what the operator and Todd are
+reacting to.
+
+### 9.2 What Todd's June feedback already fixed — don't re-do it
+
+Checked the live report page before assuming nothing was done. Already
+shipped: **S3a** (hook framing — `report.hook_card_copy`, a warm opening
+insight line) and **S3c** (section label renames — "Leadership pattern" /
+"Where the energy comes from", "Strategic posture" / "How the company
+places its bets", both genuinely warm, narrative titles, not the old
+"Leadership Profile"/"Strategy Profile"). The operator's complaint is real
+and current despite this — the deeper layer (the prompt's own tone
+instruction, and a couple of section *kickers* that still read clinical:
+"Clinical observations," "Critical risk") was never touched. **Not
+found/not confirmed shipped: S3b** (Major Crisis/Growth Engine context per
+stage) **and S4-text** (Todd's own explanatory paragraphs) — worth a
+direct check with whoever owns that repo before assuming either landed;
+not re-derived here since it wasn't this task's scope.
+
+### 9.3 Todd's own words, grounding the direction
+
+From `~/.gstack/projects/conductor/ceo-plans/2026-06-17-pulse-1-1-todd-
+feedback.md` (his real CEO-review call): *"it put out words that my
+system would have never used"* (academic heaviness, flagged explicitly).
+ELIMINATE: *"'Verdict' report framing that removes the consultant's room
+to add value."* CREATE: the *"hook report"* format — *"preliminary-by-
+design, engineered to create demand for the full engagement, not conclude
+it."* Todd's own 10x-Check example already shows the exact narrative
+shape wanted, unprompted: *"You're in Acceleration. That means your
+growth engine is coordination breakdown. Here's what that costs at your
+stage, and here's what the next 12 months look like if you don't address
+it."* — that is a What → So-What → Now-What shape in miniature, produced
+by the IP owner himself, months before anyone named the pattern.
+
+### 9.4 Concrete proposal, ranked by leverage
+
+1. **Rewrite the `TONE:` line in both scoring prompts.** Replace
+   "Clinical. Precise. Authoritative. Not preachy." with something
+   grounded in §2a's real Koherent rules and Todd's own framing — e.g.
+   *"Clear and direct, not clinical. Plain language over jargon or
+   assessment terms. Present observations, not a verdict — this report
+   opens a conversation, it doesn't close one. Confident, not cold."*
+   Single highest-leverage change — it's the actual instruction driving
+   generation today.
+2. **Rename `clinical_observations`** (schema field + UI kicker) to
+   something that doesn't fight its own warm title ("Three things worth
+   saying out loud" is already good copy undercut by its own label) — and
+   give "Critical risk" a softer kicker too, matching its already-warm
+   title ("If we have to pick one thing").
+3. **Fold §2a's plain-language/no-jargon output rules directly into the
+   scoring prompt's rationale-generation instructions** — not just the
+   top-level tone line, but the per-field guidance for `stage_rationale`,
+   `culture_rationale`, `leadership.rationale`, `strategy.rationale`.
+4. **Adopt the real What→So-What staged narrative shape** (§2a's
+   corrected version, not the never-built 6-field rumor) for the
+   top-level hook/insight copy specifically — this is functionally what
+   S3b (Major Crisis/Growth Engine context) was already designed to do;
+   confirm whether S3b shipped before treating this as new work.
+5. **Consider Koherent's fixed narrative openers, applied selectively —
+   not universally** ("It seems you..." adapted to org-level: "This
+   organization tends to...", "A specific risk to watch is...") — a real,
+   working technique for consistency without formula, but only where it
+   reads naturally; forcing it onto every field risks the opposite
+   problem (mechanical instead of clinical).
+
+### 9.5 What this section does not resolve
+
+**The operator referenced existing "what/so-what/now-what" mockups this
+pass could not locate** (checked `docs/`, `conductor/`, `gstack/` project
+dirs — no match). This proposal is grounded in Koherent V2's real,
+*implemented* prompt craft, which may or may not be what those mockups
+show — if real mockups exist, they should govern over this document's
+reconstruction from prompt text. gm is asking the operator directly in
+parallel. **Do not treat §9.4 as final until that pointer resolves, or is
+confirmed not to exist.** Also unresolved: whether S3b/S4-text actually
+shipped (§9.2) — needs a direct repo check this pass didn't do, since it
+wasn't the assigned scope.
 
 ## GSTACK REVIEW REPORT
 
