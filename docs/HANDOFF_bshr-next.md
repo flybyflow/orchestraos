@@ -1,9 +1,9 @@
 # Handoff: bshr -> bshr (next generation)
 
 - **Lineage:** bshr (Gen N -> Gen N+1)
-- **Timestamp:** 2026-09-30T14:43Z (second soft-handoff trigger, refreshed from the 14:28Z version)
+- **Timestamp:** 2026-09-30T14:58Z (third soft-handoff trigger, refreshed from the 14:43Z version)
 - **Working Directory:** /Users/flybyflow/orchestraos
-- **Last Commit SHA:** 37d3342 (plan's commit, not this seat's -- see hazard note below; this seat's own last commit is still 450f7ce)
+- **Last Commit SHA:** 12639c8 (this seat's own commit, current with HEAD as of this refresh)
 
 ## 1. Current Goal & Phase State
 
@@ -17,7 +17,8 @@
 - [ ] gm/plan have not yet replied to the roadmap impact/feasibility matrix (msg_0c83a385_78375884) — no action needed from this seat until they do; this is their decision to make, not a pending task of mine.
 - [ ] No other outstanding msg_store sends awaiting a reply — every other thread this session was acked/closed before this handoff was triggered.
 - [ ] docs/PLAN_toddito-engineering.md, docs/PLAN_silicon-jungle-agentic-platform.md, and docs/PLAN_od6-voice-agent.md are all live, frequently-edited documents that other seats (plan, build) are actively writing to in parallel — always re-read the current section before citing or extending it; several sections changed multiple times across this single session without this seat's own edits.
-- [ ] **NEW since the 14:28Z handoff, worth a successor's attention:** the operator retracted part of what this seat's own roadmap-matrix recommendation (msg_0c83a385_78375884) relied on. Plan's commits 4da6c06/37d3342 clarify that the Self/Other/Whole pattern is a relational *worldview/lens* for writing prose, not literal typed practice-card UI — and explicitly retract turning the main report's `recommendation` field into 3 typed cards (§9.4 item 6, previously cited as "already headed into build" in this seat's own EC recommendation). The underlying recovered content is still real; only the "already landing as practice cards" framing is now stale. Consider sending a short correction to gm/plan if not already done by the time this is read — check msg_store first, this seat may have already sent one before rotating.
+- [x] **RESOLVED since the 14:43Z handoff:** the Self/Other/Whole framing correction was already sent to both gm (msg_347eb17d_79525742) and plan (msg_f0b7d59c_79525797) before this refresh — both acked, gm confirmed relaying a one-line correction to the operator too (msg_9b18f1df_79871181). No longer an open loop.
+- [x] **RESOLVED, plan's own doc fix:** plan committed `2b1cf71` ("fix stale survey -- Executive Communicator and Investor Insight both have real decoded content"), closing the §7a.1 staleness this seat originally flagged in the roadmap matrix. No action needed.
 
 ## 3. Decisions Made & Rationale
 
@@ -87,9 +88,9 @@
     {"text": "Never edit a shared doc without re-reading its current state first.", "rationale": "plan/build/gm were concurrently editing the same doc set all session; several files changed on disk between this seat's own reads."}
   ],
   "open_loops": [
-    "gm/plan have not yet replied to the roadmap impact/feasibility matrix (msg_0c83a385_78375884) -- their decision, not a pending action for this seat.",
+    "gm/plan have not yet given a final build-dispatch decision on the roadmap impact/feasibility matrix (msg_0c83a385_78375884) -- their decision, not a pending action for this seat.",
     "No other outstanding msg_store sends await a reply as of this handoff.",
-    "Plan's commits 4da6c06/37d3342 (2026-09-30 ~14:42Z) retract part of the premise this seat's own EC recommendation cited (Self/Other/Whole 'already headed into build' as literal practice cards) -- reframed as a relational lens, not a layout pattern. Check msg_store for whether a correction was already sent before rotating; if not, send one."
+    "RESOLVED (was open in the two prior handoff refreshes): the Self/Other/Whole framing correction and the §7a.1 stale-survey fix are both closed -- see decisions/hazards below for what to watch for if this recurs."
   ],
   "file_roots_touched": [
     "docs/BSHR_koherent-lineage-synthesis.md",
