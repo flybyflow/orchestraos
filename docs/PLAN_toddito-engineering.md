@@ -633,6 +633,82 @@ not the surrounding console/nav structure, which already exists and
 should be reused. Narrower gap than originally framed, not a different
 kind of gap.
 
+## 7a.7 Three corrections from build (builder-3, 2026-10-01T01:00 UTC,
+`msg_4a0235dc_16420681`), independently re-verified before folding in —
+not just taken on trust, same standing practice as every other correction
+in this document
+
+**1. The instrument has 16 items, not 6 — §7a.2 read the wrong file.**
+§7a.2's "six-item-family" quote (*"The %1 is more comfortable influencing
+others on the basis of trust and expertise..."*) is `GPASCORE.ASF`
+output — generated Leadership Style report NARRATIVE about the CEO
+(`%1`), not a Client Relationship question item. **Re-derived
+independently, not just trusted:** read `GPAQUEST.ASF` directly at byte
+offset 42276 — a 3264-byte block splits exactly into 16 fixed-width
+204-byte records (3264 ÷ 204 = 16.0 exactly), each ending on real sentence
+punctuation; record 7 is 203 chars with one padding byte, confirming the
+boundary is real rather than a width I imposed. All 16 texts reference a
+named client contact (`%2`) and "Dialectics" (the 1987 program's own
+consulting-firm name) — e.g. *"The relationship we have with the %2 is
+close..."*, *"We have developed a good relationship with people within
+the organization who can really influence the %2."* **Consequence: §7a.2's
+"six-item-family" and §7a.5's "going from 6 known real items to Todd's
+stated 16 questions needs new item content" both dissolve — Todd said 16,
+the instrument has exactly 16, zero generation needed for the question
+set.** §7a.4's "do not expand from 6 toward 16 by invention" still stands
+for the separate What/So-What mockup (Thread A) — it was never about this
+instrument. Also stronger than previously stated: `GPAQUEST.ASF` ~offset
+4248 states the self-assessment premise directly, not as an inference —
+*"The segment of the program called THE CLIENT RELATIONSHIP MODULE
+renders a diagnosis of the extent to which YOU have managed to build
+trust and credibility with key decision makers in the client
+organization."*
+
+**2. §7a.6 pointed at the wrong route file.** The operator's real pointer,
+`getyourpulse.io/dashboard/engagements`, is `src/app/dashboard/
+engagements/page.tsx` — §7a.6 read `src/app/admin/engagements/page.tsx`
+instead, a different file for a different audience. **Re-verified
+directly:** `ConsoleLayout.tsx`'s own header comment states it plainly —
+variant `"internal"` is `/admin`, the operator back-of-house console
+(ADR 003, "visibly the back of house, never confusable with the
+consultant dashboard"); variant `"client"` is `/dashboard`, the consultant
+console. The facet's respondent is the consultant, so it belongs on
+`/dashboard`, not `/admin`. This error propagated into the build brief
+this seat sent (telling build to build at `src/app/admin/self-check/`) —
+build caught it independently and built at `src/app/dashboard/self-check/`
+instead, adding the nav item to `src/app/dashboard/layout.tsx` where the
+real dashboard nav lives. **Correct location confirmed: `/dashboard`, not
+`/admin` — any future reference to this facet's route should say
+`src/app/dashboard/self-check/`.**
+
+**3. The §9 tone fix has not landed on `main` — "dispatched" is not
+"done."** §9.5 says the TONE-line rewrite "remain[s] approved and
+dispatched to build" — true but incomplete; it has not shipped.
+**Re-verified directly against `toddito/main` (commit `fed0b43`):**
+`src/lib/scoring/prompt.ts` still contains `TONE: Clinical. Precise.
+Authoritative. Not preachy.` at both the Full and Lite prompts (lines 171
+and 326); the third instance in `GROUP_SYNTHESIS_SYSTEM_PROMPT` (§9.1a) is
+also still open. Build wrote the facet's new prompt directly from §9.4
+item 1's replacement line plus §2a's recovered Koherent rules instead of
+cloning the current (still-clinical) `prompt.ts` — the right call, and
+exactly the prompt-tone-inheritance risk §7a.5 item 1 already warned
+about. **Flagging in the doc itself, not just the commit message, so the
+next seat reads "dispatched" correctly as "not yet landed," not "done."**
+
+**Design question builder-3 raised, answered here rather than left open:**
+is this facet per-engagement (one self-assessment per named client,
+repeatable) or a single standing self-portrait of the consultant? **The
+re-derived instrument text itself answers this, not a product guess** —
+all 16 items are explicitly scoped to one named client relationship
+(`%2`, "the organization's expectations regarding our products or
+services," "people within the organization who can really influence the
+%2") and cannot be rewritten as context-free trait statements without
+exceeding what this facet is authorized to invent (OD4 cleared using
+Todd's real IP, not a rewritten version of it). **Per-engagement, one row
+per client, is correct — confirmed, not merely build's implementation
+choice.** This also matches Pulse's existing engagement-based data model
+rather than requiring a new one.
+
 ## 8. Recommended scope — what to build first, ranked
 
 1. **Resolve OD6 (privacy/terms for biometric data) + close the 6 S1
