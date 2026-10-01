@@ -1,25 +1,49 @@
 # Handoff: plan (gen1, session unknown) -> plan-g2
 
 - **Lineage:** plan (Gen 1 -> Gen 2, auto-rotated by the Lineage Daemon, canary graded PASS)
-- **Timestamp:** 2026-09-30T23:05:00Z
+- **Timestamp:** 2026-10-01T00:10:00Z
 - **Working Directory:** /Users/flybyflow/orchestraos
-- **Last Commit SHA:** 8f8b4df
+- **Last Commit SHA:** 51733e8
 
 ## 1. Current Goal & Phase State
 
-- **Goal:** no new task in this seat's inbox (`msg_store.py inbox --agent plan` →
-  0, and `msg_store.py stats` shows 0 pending for `plan`). The previous file
-  at this path was stale (dated 2026-09-29T23:35, five commits behind HEAD) —
-  this replaces it with the actual current state, reconstructed from git log,
-  memory (`~/.orchestra/memory/plan/MEMORY.md`), and `msg_store.py conversations
-  --agent plan`.
-- **Phase:** PARKED. Generation 1's last live thread was the v2 QA #4 dispatch
-  to `build` (below); nothing further is actionable on this seat until either
-  `build` replies or a new task lands.
+- **Goal:** since the last baton update, `gm` dispatched a direct, high-priority
+  operator task (`msg_fb272ce9_12597849`): design a genuinely different Pulse
+  report-redesign alternative to the other session's already-shipped What/So/
+  Now-What mockups, self-directed review, then hand to a fresh build pass.
+  Done and reported back to `gm` (`msg_11060e74_13312495`) and `ea`
+  (`msg_7a7409a2_13318209`).
+- **Phase:** PARKED again, awaiting `gm`/operator's call on the two real
+  blockers this surfaced (below) before any build pass starts. Also still
+  watching the pre-existing v2 QA #4 thread (unchanged, see below).
 - **Current Step:** None.
 
 ## 2. Open Loops & Active Callbacks
 
+- [ ] **Report redesign Alternative B — awaiting operator/gm decision, NOT
+      cleared for build.** Doc at `/Users/flybyflow/pulse/docs/
+      REPORT_REDESIGN_ALT_CONTROLROOM.md`, branch `report-redesign-alt-
+      controlroom` (pushed to pulse `origin`), own worktree at
+      `/tmp/plan-g2-report-alt` (not the shared pulse checkout). Ran a real
+      `codex exec` adversarial pass, not self-graded — it caught and this
+      seat fixed: a 6x-undersized build list, two factually wrong
+      token-reuse claims (`--vital`/`--alert` already in use elsewhere,
+      verified directly against `src/app/report/[id]/page.tsx` and
+      `ThorScoresPanel.tsx`), and a self-contradictory third archetype
+      (Congruence/Incongruence) presented as buildable while its own
+      selection logic was admittedly unsolved — pulled out entirely, kept
+      only as a documented future extension. Two real blockers surfaced,
+      escalated to `gm` rather than decided alone: (1) no respondent
+      access/consent/role model exists in the product today — who can be
+      "the facilitator," how the lower-power respondent's mark is
+      identified/protected, name visibility, >2 respondents; (2)
+      per-respondent priority matrices (needed for the stage-disagreement
+      moment, and for Alternative A's own JTBD 4 completion) don't exist in
+      the schema anywhere — a shared gap, not B-specific. A real,
+      previously-undocumented discrepancy also surfaced in passing:
+      `DESIGN.md` names Fraunces as the display face but the committed
+      `tokens.css` ships Source Serif 4; Fraunces is only used ad hoc in
+      `src/app/mockups/page.tsx`, outside the token system.
 - [ ] **QA #4 dispatch to `build`, `msg_9b14d92b_93425899`** (subject
       "PRIORITY REVERSAL + QA #4") — sent 2026-09-30T18:37, status still
       `pending`/undelivered as of this handoff. `build` was mid Toddito
