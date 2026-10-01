@@ -26,7 +26,7 @@
 ## 3. Decisions Made & Rationale
 1. **Decision:** `sessions.output_kind` column, NOT a new `tier` value — **Rationale:** `tier` selects one ElevenLabs agent per value and drives a binary lite/full prompt switch (`score.ts:22`); a new tier falls through to the ORG prompt and produces a confident report about the wrong instrument.
 2. **Decision:** facet lives at `/dashboard/self-check`, not `/admin/self-check` as the brief said — **Rationale:** `ConsoleLayout`'s own comment makes `/admin` the operator back-of-house (ADR 003) and `/dashboard` the consultant console. The respondent is the consultant. §7a.6 had mapped the operator's `/dashboard/engagements` URL to the wrong file.
-3. **Decision:** scoring prompt written from PLAN §9.4 + §2a, not from the current `prompt.ts` — **Rationale:** the brief said to inherit the post-tone-fix state, but the fix has NOT landed; `prompt.ts` still has `TONE: Clinical` at lines 171 and 326 on `origin/main` fed0b43.
+3. **Decision:** scoring prompt written from PLAN §9.4 + §2a, not from the current `prompt.ts` — **Rationale:** the brief said to inherit the post-tone-fix state, but the fix has NOT landed; `prompt.ts` still has `TONE: Clinical` at lines 171 and 326 on `toddito/main` d394cb3.
 4. **Decision:** shipped a form path alongside the voice path — **Rationale:** voice cannot run without an ElevenLabs agent that does not exist, so voice-only would ship a dead page. The 1987 instrument was a rated questionnaire anyway.
 5. **Decision:** the org-pipeline guard lives in `scoreAndPersistSession`, not at its callers — **Rationale:** three dispatch sites reach it; one guard beats three, and it rides a lookup that was already there.
 6. **Decision:** webhook fails CLOSED on an unreadable `output_kind` — **Rationale:** failing open writes a `reports` row and `/report/[id]` is unauthenticated, so "preserve old behaviour" would publish a private transcript. Not scoring is recoverable; publishing is not.
@@ -45,6 +45,6 @@
 ## 6. Grounding Canary Questions (Questions Only — No Answers!)
 1. **Q1:** Per msg_store `msg_df0f5952_14934695`, what byte offset and record geometry establish that the recovered instrument has 16 items, and which single detail about the longest record proves the boundaries are real rather than a chosen width?
 2. **Q2:** Per msg_store `msg_4a0235dc_16420681`, which two ASF files did §7a.2 confuse, and which one actually holds the question items?
-3. **Q3:** Per commit `146fb02`, what exact response set produced a "10 / 10 · On solid ground" headline before the fix, and which facet was silently excluded from that number?
-4. **Q4:** Per commit `146fb02`, which error did applying migration 034 to a clean postgres 16 produce, and what did removing the offending statement rely on instead?
+3. **Q3:** Per commit `7bb60a7`, what exact response set produced a "10 / 10 · On solid ground" headline before the fix, and which facet was silently excluded from that number?
+4. **Q4:** Per commit `7bb60a7`, which error did applying migration 034 to a clean postgres 16 produce, and what did removing the offending statement rely on instead?
 5. **Q5:** Per msg_store `msg_d2f5b495_15153018` and `msg_d9b3a8c5_18308766`, which single git command settled the repo-identity question, what did it prove about the relationship between the two remotes, and which proxy metric had misled gen1 into the wrong answer?
