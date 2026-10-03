@@ -60,6 +60,19 @@ feature**, not just open housekeeping — if the operator can't get into
 `/admin` or `/dashboard`, they can't create a single kickoff engagement
 either way.
 
+**Correction, same day (build, post-crash resume, 2026-10-03T11:55Z):**
+the single-respondent session→webhook→score→report path was proven for
+the **first time this deployment has ever completed it** at 18:39 UTC
+today — real session, real transcript, real report, verified against a
+seed-vs-real discriminator written before the result was known. Build
+explicitly confirmed this does **not** exercise founder sign-in, since the
+respondent flow is anonymous — the two preconditions stay separate, as
+Section 1 already treats them. This narrows what Section 5's QA plan
+still needs to prove: the single-session pipeline itself is no longer in
+question; what's still never-run is the **engagement/roster bulk-creation
+call, the no-email/QR-only delivery path specifically, and multi-
+respondent group-report synthesis** — updated in Section 5.
+
 ## 2. What's genuinely new to build (small, scoped, not invented)
 
 1. **Event-context report copy (optional, not blocking v1).** The existing
@@ -140,10 +153,12 @@ Neither gate blocks Section 2's build/QA work. Both block a real pilot.
 
 1. **Build (small, branch-isolated):** event-context copy variant for
    group-report synthesis (Section 2.1). Separately: write and run the
-   synthetic end-to-end dry run (Section 2.3) — a test script/fixture
-   exercising `POST /api/engagements` → N no-email sessions → simulated
-   webhook completions → `POST /api/engagements/[id]/report`, asserting
-   the group report renders sensibly for a 3-5 person team roster created
+   synthetic dry run targeting specifically what's still never been
+   run (Section 2.3's correction) — the single-session webhook→score
+   path is already proven as of today, so this dry run exercises
+   `POST /api/engagements` → N no-email sessions → simulated webhook
+   completions → `POST /api/engagements/[id]/report`, asserting the
+   group report renders sensibly for a 3-5 person team roster created
    same-day with no email channel.
 2. **Review:** normal gate on the copy-variant PR; the dry-run script
    itself gets reviewed for whether it actually proves the claim (catches
