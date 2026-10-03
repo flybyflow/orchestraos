@@ -28,6 +28,18 @@ existing `POST /api/engagements/[id]/report` triggers group-report
 synthesis (`021_group_reports_status.sql`'s `pending→scoring→scored`
 lifecycle), viewable at the existing `/group/[id]` page.
 
+**Correction (build + test, QA Check B, 2026-10-03T22:26-29Z): "no email
+round-trip" is true for the facilitator's artifact and false for the
+attendee's.** Creating a no-email roster and getting the team's shared
+group report are both genuinely QR-only end-to-end — `/group/[id]` has
+zero `EmailGate` references. But an individual attendee trying to reach
+**their own** `/report/[id]` hits a mandatory `EmailGate`
+(`PostPhase.tsx:106-114` only redirects once both scoring AND email are
+done; no skip link in any of its three modes). This doesn't block the
+feature's actual deliverable (the team report), but it means an attendee
+who wants their own result at the event hits an email wall. Flagged as a
+product decision, not a bug — see Section 6.
+
 **Mapped onto a Weekender team, nothing here is new:**
 - One team = one `organization` + one `engagement` ("Weekender Kickoff —
   <date>").
@@ -183,3 +195,6 @@ Neither gate blocks Section 2's build/QA work. Both block a real pilot.
 - Whether the event-context copy variant (Section 2.1) ships for v1 or the
   existing consulting-engagement copy is acceptable for a first real
   pilot.
+- Whether an attendee gets a skip-link to their own individual report
+  without email (Section 1's correction) — or the mandatory EmailGate is
+  acceptable/intentional for that screen at a kickoff event.
