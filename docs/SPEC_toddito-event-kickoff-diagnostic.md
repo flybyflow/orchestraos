@@ -186,6 +186,31 @@ Neither gate blocks Section 2's build/QA work. Both block a real pilot.
    SEC-01-09's surface, any real attendee data, any production run. Those
    wait on Section 3/4's gates.
 
+## 5a. Resolved during build: tier default for kickoff engagements
+
+`POST /api/engagements` defaults `tier` to `"full"` (25 probes, ~40 min)
+— correct for its real audience (a consultant creating a paid client
+engagement, workspace-gated). The repo already defaults genuinely public
+entry points to `"lite"` (8 probes) in two deliberate places
+(`StartAssessmentCTA.tsx`, with a written rationale citing TUL-21: full
+breaks friendly-user testing because nobody finishes a 40-minute voice
+call; `api/sessions/route.ts`, a real public endpoint). The kickoff use
+case is the one case where that consultant-tool path serves a public-ish
+audience (attendees scanning a QR at hour 0 of an event) — invisible to
+the CI "Tier Default Regression Check," which only greps `src/components`
+and (separately, a real but independent bug) misses the spaced
+parameter-default syntax even within its intended scope.
+
+**Resolution (gm, 2026-10-03T22:43Z): this is an implementation detail,
+not an operator product decision.** The API default itself is correct
+and does not change. **Requirement: every kickoff engagement must be
+created with `tier: "lite"` passed explicitly in the request body.**
+build's dry-run harness already does this — treat it as the reference
+implementation. Document this plainly wherever the actual kickoff
+creation step is run from (today: directly via the admin UI/API by
+whoever facilitates; §2.2's deferred bulk-create helper, if it's ever
+built, must default to `"lite"` too, not inherit the API's own default).
+
 ## 6. Open decisions for gm/operator, not answered here
 
 - SEC-02/03/04/05/06/08 remediation ruling — this feature is the reason it
