@@ -211,6 +211,17 @@ creation step is run from (today: directly via the admin UI/API by
 whoever facilitates; §2.2's deferred bulk-create helper, if it's ever
 built, must default to `"lite"` too, not inherit the API's own default).
 
+**Done (build, PR #6): `docs/RUNBOOK_kickoff-event.md`** is the
+operator-facing instruction — covers both creation paths (v1 has no
+dedicated facilitator UI), plus a comment at `EngagementFlow.tsx:63`
+(the admin form's own `useState<Tier>("full")` default — a second,
+UI-level instance of the same trap, correctly left as a documented
+default rather than a code change, per this same ruling). The runbook
+also folds in three operational facts QA established: blank-email roster
+rows reading "Draft" are correct, not an error; group synthesis needs
+≥2 scored sessions; an attendee's own `/report/[id]` requires email even
+though the team's shared report doesn't — tell attendees this up front.
+
 ## 6. Open decisions for gm/operator, not answered here
 
 - SEC-02/03/04/05/06/08 remediation ruling — this feature is the reason it
