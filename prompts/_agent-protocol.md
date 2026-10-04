@@ -149,3 +149,126 @@ Triggers: "seek congruence", "get consensus", "congruence check".
    another seat's concurrently staged files or land under a misleading message (hit
    live 2026-09-29). Wrap your full add+commit sequence through `scripts/git-lock.sh`
    instead: `scripts/git-lock.sh bash -c 'git add <files> && git commit -m "..."'`.
+8. **One worktree per seat, always — never share an ad hoc `/tmp/...` path with
+   another seat.** Two seats independently working in the same ad hoc worktree (hit
+   live 2026-09-30, `/private/tmp/2dv2`, build + review) moved HEAD under each other
+   silently — one seat's commits landed detached with the branch ref still pointing
+   at the old commit (recovered cleanly via reflog + `git branch -f`, verified
+   fast-forward both directions before forcing), and the other's bisect ran against
+   an unreconstructable tree at the moment HEAD moved. Both seats followed every
+   other rule correctly; nothing in the protocol said which *directory* a seat was
+   in, and a commit SHA silently assumes everyone gating it is looking at the same
+   tree. Fix, cheap and total: `git worktree add /tmp/<seat>-<branch> <branch>`
+   before starting any multi-commit work outside the shared checkout — costs
+   seconds, removes the whole class of bug. If you're ever handed a SHA to gate,
+   also get the worktree path it lives in, not just the SHA — and if
+   `git rev-parse --abbrev-ref HEAD` ever prints `HEAD` (detached) in a tree you
+   didn't intentionally detach, stop and find out why before committing further.
+9. **Shared tooling daemons (the gstack browse CDP driver) have the same
+   collision class as shared worktrees.** Hit live 2026-09-30: `test` and `build`
+   drove the same browse daemon concurrently to visually verify different things —
+   `test`'s tab kept getting redirected to `build`'s live dev server even after a
+   fresh tab and a full daemon restart, pure resource contention, not a bug in
+   either seat's setup. Fourth shared-resource collision the same day (after the
+   main-checkout git race, the ad hoc worktree collision, and TMUX env
+   inheritance) — the pattern is "one shared mutable thing, two seats, no
+   isolation," not specific to git. No structural fix shipped for this one yet
+   (unlike worktrees). Until one exists: if two seats need to visually verify
+   concurrently, coordinate/stagger rather than assume the daemon multiplexes
+   cleanly, and if a browser tab keeps landing on the wrong page after a fresh
+   tab + daemon restart, suspect contention before suspecting your own setup.
+   **Concrete mitigation, adopt now:** every rendered-page claim (a screenshot, a
+   measurement, a "it renders") must assert the actual `location.href`/port in the
+   same call that produces the result — not a separate check beforehand. Two
+   independent seats hit silent tab-hijacking from a concurrent seat tonight
+   (`build`, `test`) and both only caught it because they'd already adopted this
+   habit; without it, a wrong-port reading goes into a report as verified fact.
+10. **Re-check current HEAD before dispatching work from any report on a
+    multi-agent branch — a report naming the commit it ran against is not enough
+    on its own.** On a branch with several agents committing, HEAD moves faster
+    than any report describing it. Hit live 2026-09-30/10-01 four times in one
+    night in different forms (stale operator QA re-raising already-fixed items,
+    `build` dispatching `builder-1-g2` onto two already-fixed defects by
+    redirecting straight from a report without re-reading HEAD first, the speed
+    control and arrow-sprites items each getting re-asked after landing). Cheap
+    fix, adopt before any dispatch sourced from a report rather than live
+    observation: `git log --oneline <report's-commit>..HEAD`, plus a grep for the
+    symbol/function the fix would introduce, to confirm the work doesn't already
+    exist before assigning it.
+11. **Never run bare `git add -A`/`git add .` in any shared or ad hoc clone —
+    always add by explicit pathspec, and verify what's staged before committing.**
+    Second occurrence of the same failure mode (first was rule 8's root cause):
+    hit live 2026-10-03 on toddito, `build` working in a `/tmp` clone `test` was
+    also using — a bare `git add -A` swept in 392 lines of `test`'s uncommitted
+    local workaround, including a silent RENAME of two migration files, under a
+    commit `build` reported as "docs-only." `build` caught it themselves (by
+    checking `git diff --cached --name-status` instead of trusting their own
+    prior characterization of the commit) and reverted cleanly before anything
+    reached main — but the near-miss is the second time a shared ad hoc clone has
+    caused this class of damage, and this time a per-seat worktree (rule 8)
+    wasn't even the gap — two seats were in the *same* `/tmp` clone, which rule 8
+    already forbids but didn't prevent in practice. Concrete habit: `git add
+    <file> <file>...` by name, never a wildcard add, in anything other than your
+    own dedicated worktree; and before any commit whose message doesn't
+    exhaustively list every changed file, run `git diff --cached --name-status`
+    and confirm the list matches what you meant to change.
+12. **Bare `/tmp/<filename>` is fleet-global — put ALL scratch under
+    `/tmp/<your-seat>/`, not just worktrees.** Third confirmed instance of the
+    same root cause as rules 8 and 11 (2026-10-03): `build`'s own mutation-proof
+    workflow copied source to unnamespaced gold paths (`e.bak`, `s.bak`) and
+    restored from them all night — a write from another seat between copy-out
+    and copy-back would silently corrupt the restore, with no unexpected
+    filename to notice (unlike the `git add -A` case). What actually caught it
+    wasn't naming discipline, it was an independent reference check (a
+    pre-copy shasum / clean `git status`) that happened to already be there for
+    other reasons — "luck wearing discipline's clothes," in `build`'s words.
+    The pattern generalizes past git: `/tmp` and shared checkouts are
+    fleet-global, every seat reaches for the same obvious filename, and nothing
+    in `cp`, `git add -A`, or `msg_store.py send --body-file` knows a path is
+    shared. **Convention, adopt now, costs nothing**: every seat's scratch —
+    worktrees, `.bak`/gold-copy files, message bodies passed via `--body-file`,
+    anything written to `/tmp` — goes under `/tmp/<seat>/...`, never bare
+    `/tmp/<filename>`.
+    **Correction (retracted same night): for gold/restore-reference files,
+    checksum verification is NOT blind and namespacing there is cheap-but-
+    redundant, not load-bearing.** `build` and `review` once had byte-identical
+    gold copies (filenames three characters apart) in an interleaved window —
+    initially reported as a case where a shasum check would falsely report
+    "restored" after reading the wrong seat's file. Retracted on re-derivation:
+    if two files are byte-identical, restoring from either writes the exact
+    same correct bytes — nothing is corrupted, and the shasum match is a TRUE
+    positive. A mix-up only causes damage when the copies have *diverged*, and
+    that's exactly the case where a shasum mismatch fires loudly. There is no
+    window where a gold-copy mix-up causes harm AND the checksum misses it.
+    Namespace these anyway (it's free), but don't treat it as closing a real
+    gap — the checksum already does.
+    **What's actually load-bearing, and sharper for the correction**: message
+    bodies passed via `--body-file` have no check available BEFORE they go
+    out — narrower than "no safety net at all": `msg_store.py get --message-id
+    <id>` returns the sent body after the fact, so a verification path exists,
+    it's just post-hoc. Of every file-based near-miss this family of incidents
+    produced, this is the only one with no PRE-send check. That asymmetry —
+    not "namespacing beats checksums" — is the real argument for namespacing
+    `--body-file` paths under `/tmp/<seat>/`.
+    **Concrete interim practice, adopt now, live-demonstrated the same night**:
+    after any `--body-file` send, read back the returned message id
+    (`msg_store.py get --message-id <id>`) before considering the send done.
+    One command. It was proposed for the wrong-content case but caught a
+    different, equally real one in practice minutes after being proposed: a
+    send inside a `$(...)` command substitution executed for real while the
+    next line's narration claimed it had been skipped — the read-back caught
+    the stray send inside a minute. Your own narration of what your shell did
+    is not evidence; the read-back is.
+    **Narrowing, costs nothing**: "our core 2 repos" interpretations and other
+    low-stakes ambiguities aside, when in doubt about whether an uncommitted
+    change in the shared checkout is safe to reset/discard, it is not yours to
+    judge — `git stash` it (never `git reset --hard`) before any experimental
+    commit-then-reset cycle in the shared checkout, and pop the stash back
+    immediately after. Hit live 2026-10-04: an experimental probe-commit/reset
+    cycle (testing a pre-commit hook) wiped an unrelated uncommitted edit to
+    this very file sitting in the shared checkout at the time — nobody's `git
+    add -A` this time, a bare `git reset --hard` during unrelated testing is
+    the same class of damage by a different command. Reconstructed from a
+    seat's own prior context since no stash existed to recover it from;
+    costs nothing to stash first and would have made this recoverable in
+    seconds instead of requiring reconstruction.
