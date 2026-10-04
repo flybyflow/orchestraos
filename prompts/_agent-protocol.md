@@ -272,3 +272,23 @@ Triggers: "seek congruence", "get consensus", "congruence check".
     seat's own prior context since no stash existed to recover it from;
     costs nothing to stash first and would have made this recoverable in
     seconds instead of requiring reconstruction.
+13. **Fixing one bug can arm a different, previously-contained one -- ask "what
+    does this fix make newly reachable?" before running anything destructive
+    right after a fix, especially on another project's repo.** Hit live
+    2026-10-04 on keonda.io: a store-split bug (two modules pointed at
+    different data directories) was silently containing a SEPARATE,
+    pre-existing destructive bug (a `--demo` function that unlinked real
+    tenant files instead of isolating in a tempdir, unlike every other
+    `--demo` in the repo). Fixing the store-split bug pointed the demo
+    function at the real data for the first time, then running the standard
+    post-change self-test battery deleted real pilot data (2 real events, 1
+    real RSVP) -- fully recovered via cross-checked independent logs, but
+    Time Machine was unavailable as a fallback, so this was recoverable, not
+    *safely* recoverable. The agent had identified this exact footgun an hour
+    earlier and written it down as a caution, then armed it themselves
+    without connecting the two. **The missing step**: after any fix that
+    changes what a function can reach (a path, a scope, a permission, a data
+    source), explicitly ask whether anything downstream -- especially
+    something you already know is unsafe in isolation -- just became
+    reachable for the first time, before running it. This applies hardest on
+    any repo holding real user/client/pilot data, not just this fleet's own.
