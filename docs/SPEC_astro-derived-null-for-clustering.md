@@ -8,6 +8,15 @@
   draw, and two repairs of that). All three are wrong. The failure mode is
   that a permutation null here is *tunable*, and tuning it is what produced
   the original defect. A derived null cannot be tuned, which is the point.
+- **Revision 4** (after third review). The third review verified every
+  revision-3 correction as independently correct — the first revision in this
+  sequence to introduce no new wrong number — and returned "sound, build it"
+  subject to four prose fixes, all applied here: the results table still
+  carried revision 2's gate (two time cells marked "scored" that the new rule
+  gates), the cell counts were off by one, the period-span gate condition
+  existed only in a superseded commit, and C5 pointed at the withdrawn
+  section while being unsatisfiable on its own measured p=0.125.
+  **Status: buildable.**
 - **Revision 3** (after second review). Two blockers from revision 2, both of
   them the defect this spec exists to eliminate, hiding one level deeper than
   it was looking: the new GATE had an undeclared tunable constant, and the
@@ -93,12 +102,12 @@ against a number the system does not produce.
 |---|---|---|---|---|---|---|
 | SPX price IN | 18,330 | 20 | 2,034 | **z=−2.02, clusters=TRUE** | **z=+0.91** | scored |
 | SPX price OUT | 6,287 | 30 | 5,513 | z=+0.51, False | z=+0.12 | scored |
-| SPX time IN | 53,075 | 28 | **55** | z=−0.24, False | z=+0.06 | scored, no power |
+| SPX time IN | 53,075 | 28 | 55 | z=−0.24, False | z=+0.06 | **GATED** |
 | SPX time OUT | 18,450 | 9 | **21** | **z=−1.59, clusters=TRUE** | z=−0.03 | **GATED** |
 | gold price IN | 84 | **1** | 32 | z=nan (guard fires) | z=−2.42 | **GATED** |
 | gold price OUT | 6,275 | 27 | 5,449 | **z=−3.14, clusters=TRUE** | **z=+0.55** | scored |
 | gold time IN | 45 | **1** | 3 | z=nan | z=+0.14 | **GATED** |
-| gold time OUT | 18,525 | 9 | 36 | z=−0.39, False | z=−0.00 | scored, no power |
+| gold time OUT | 18,525 | 9 | 36 | z=−0.39, False | z=−0.00 | **GATED** |
 
 ### The headline: this retracts all three published positives
 
@@ -144,11 +153,42 @@ decay, the ACF summary is not a usable variance estimate for that sample.
 | gold time OUT | 18,525 | 1,628 | **0.0879** | 36 |
 | SPX time IN | 53,075 | 4,860 | **0.0916** | 55 |
 | SPX time OUT | 18,450 | 1,988 | **0.1078** | 21 |
+| gold time IN | 45 | 16 | **0.3556** | 3 |
 
-The separation is **two orders of magnitude**, not a knife edge.
+The gap between the highest scored cell (0.0020) and the lowest gated one
+(0.0833) is **41.6x**, i.e. 1.6 orders of magnitude. Relative to the 0.01
+threshold the margins are **5.0x below and 8.3x above** — comfortable, but
+state it honestly: an earlier draft of this line said "40x either side",
+which conflated the whole gap with the margin on each side.
 
-**Gate: `truncation_lag / n ≤ 0.01`.** Scoring three cells, gating four, with
-no constant to tune and a 40x margin either side of the boundary.
+**Gate: `truncation_lag / n ≤ 0.01`.** Scoring three cells, gating five, with
+the threshold sitting 5.0x above the highest scored cell and 8.3x below
+the lowest gated one.
+
+### THE GATE, stated once and completely
+
+A cell is **scored** only if all three hold; otherwise it returns `nan`:
+
+1. **`truncation_lag / n ≤ 0.01`** — IPS run to `n/2` uncapped. The ACF must
+   decay within 1% of the sample, or its summary is not a usable variance
+   estimate for that sample.
+2. **`v/m` spans ≥ 2 full periods** — so the circular residual actually wraps.
+   (This condition was stated in revision 2 and then existed only in a
+   superseded commit; restated here because a gate scattered across three
+   places gets implemented from whichever part the reader found.)
+3. **`n_eff ≥ 30`** — a backstop only, see below.
+
+**What the lag/n rule is actually gating is ESTIMATOR VALIDITY, not
+dependence**, and the two readings disagree in a way worth stating. Because
+the truncation lag is ≥ 1 by construction, `lag/n ≤ 0.01` is an `n ≥ 100`
+requirement in disguise: white noise at n=84 is gated. So gold price IN is
+gated by its *sample size*, not by its autocorrelation — the right outcome
+via a different mechanism than "it independently catches dependence". And on
+synthetic AR(1), ρ=0.70 at n=500 gates (n_eff inflation 3.1x) while SPX price
+IN scores at 9.0x inflation, so the rule is not monotone in the quantity that
+actually decides whether the SE is usable. Under the estimator-validity
+reading that is conservative rather than wrong, but the spec should not claim
+it measures dependence.
 
 ### What that fixes beyond the cap
 
@@ -178,26 +218,30 @@ period-span requirement, which together target coverage rather than variety.
 
 ## Why this is better than any permutation here
 
-- **It has no tuning parameters.** No `block_size`, no `seed`, no trial count.
-  The dominant failure mode of every previous attempt is removed by
-  construction rather than guarded against.
+- **Its parameters are declared, not hidden.** No `block_size`, no `seed`, no
+  trial count — the permutation knobs are gone by construction. The gate does
+  introduce three constants (the 0.01 lag ratio, `n_eff ≥ 30`, the 2-period
+  span), and an earlier draft claimed "no tuning parameters" flatly, which is
+  not the same thing. The thesis that survives is narrower and still the
+  point: **every remaining constant is stated in one place with its measured
+  margin**, and none of them is reachable by tuning against a criterion that
+  rewards degeneracy.
 - **It is falsifiable in the right place.** The only judgement left is the
   `n_eff` estimator, which is an explicit, standard, separately-checkable
   choice rather than a buried constant.
-- **The dispersion-floor claim in the first draft was WRONG.**
+- **The dispersion floor: arithmetic corrected, and NO carve-out is needed.**
   `tests/test_null_dispersion_floor.py` uses `0.5/sqrt(n)`, which is
-  `sqrt(12) = 3.46x` SD[d] — not "this same theoretical SE". With
-  `MIN_DISPERSION_RATIO = 0.25` the real margin is **13%**, not the "factor of
-  4, generous" the file's own comment claims. It remains a valid floor, but
-  the arithmetic and the comment both need correcting, and it would **reject a
-  correct conditional null** (an exact phase-randomisation reference on gold
-  has SD 0.09x the derived SE), and the claim in revision 2 that it
-  would "reject a correct conditional null" rested on a phase-randomisation SD
-  of 0.09x the derived SE. **That figure was wrong by ~10x** — measured 0.86
-  to 0.98 across three standard surrogate constructions, which the floor
-  ACCEPTS. No carve-out is needed, though the 7% margin is worth stating.
-  Revision 2 corrected revision 1's floor arithmetic and introduced a new
-  wrong number in the same bullet.
+  `sqrt(12) = 3.4641x` SD[d] — not "the same theoretical SE" the first draft
+  claimed. At `MIN_DISPERSION_RATIO = 0.25` the margin is **13.4%**, not the
+  "factor of 4, generous" the file's own comment states; both the comment and
+  that claim need fixing. **Revision 2 then asserted the floor would reject a
+  correct conditional null, on the strength of a phase-randomisation SD of
+  0.09x the derived SE. That figure was wrong by ~10x** — measured 0.86 to
+  0.98, and 0.959 for FT phase randomisation of log-price. The floor
+  **accepts** those, by 6.6%. So: the floor is valid, the margin is thin and
+  should be stated, and the carve-out revision 2 called for is not required.
+  (This bullet has now been defective in three consecutive revisions — twice
+  numerically, once editorially. Rewritten whole rather than patched again.)
 
 ## How to validate it — NOT with `|z| < 3`, and NOT with the first draft's checks either
 
@@ -227,10 +271,23 @@ Five assertions, each catching something the previous set missed:
   spec exists to kill. This is the single assertion that would have
   stopped the time claim being reported.
 - **C4. Pin the centre conditionally, not by simulation**: assert a
-  phase-randomisation reference mean is within 3e-04 of 0.25 at each call
-  site. Exact, model-free, independent of any price model.
-- **C5. Require the real grid to be an outlier in its own placebo family**
-  (below), not merely against the theoretical null.
+  phase-randomisation reference mean is within 3e-04 of 0.25 at each scored
+  cell. **Use FT phase randomisation of the LOG-PRICE series** (measured:
+  SD/derived-SE = 0.959, mean(d) = 0.25004). Naming the construction is
+  load-bearing, not pedantry: `mean(d)` is permutation-invariant in the
+  values, so **AAFT and iAAFT — the obvious standard choices — are exactly
+  degenerate here** (surrogate SD 5.5e-17, mean(d) identical to the real
+  statistic). With AAFT this assertion silently becomes the tautology
+  "|real mean(d) − 0.25| < 3e-04", which every real cell fails, and the
+  failure would read as a defect in the null rather than in the surrogate.
+- **C5 — REMOVED.** It required the real grid to be an outlier in its own
+  placebo family, and pointed "(below)" at a section that is now the
+  WITHDRAWAL. It is also unsatisfiable on its own terms: a 7-member family
+  gives a best achievable p of 0.125, measured 150 lines later in this very
+  document. And it was the only one of the five that asserted something about
+  the DATA rather than about the null's calibration, which is not what this
+  list is for. A placebo-family rank needs **≥ 20 members** before it can
+  reach p < 0.05; if one is ever used elsewhere, that is the condition.
 
 ### C6 — the one assertion that needs no generator and no seed
 
@@ -239,10 +296,20 @@ the hole revision 1 fell through: choose the generator and you choose the
 false-positive rate. One check escapes that entirely.
 
 **Deterministic ramp.** Take `v` linear, `m = rung(v)`, assert
-`mean(d) = 0.25`. No market model, no randomness, no seed. Verified:
-0.250193 / 0.250237 / 0.250053 across three ramps, all within 0.21 iid-SE.
-It isolates the grid arithmetic from any price-process assumption, and it is
-the only check here that cannot be gamed by choice of generator.
+`|mean(d) − 0.25| < 1e-3` **with a minimum-full-cycles condition on the
+ramp**. No market model, no randomness, no seed. Verified: 0.250193 /
+0.250237 / 0.250053.
+
+Two corrections to how an earlier draft stated this. Expressing the tolerance
+in **iid-SE units was a category error** — a deterministic sequence has no
+sampling distribution, and phrasing it that way smuggles `n` back in as a
+knob; hence the absolute bound. And it is **not** ungameable: `mean(d)` on a
+ramp is an equidistribution residual determined by (start, stop, n), so a
+badly chosen ramp gives 0.2391 — off by 0.011 — with a perfectly correct
+implementation. It removes the *seed* and the *market model*, and replaces
+the generator choice with a ramp choice. Keep it (it is nearly free) but it
+pins only the CENTRE, which was already provable algebraically; it says
+nothing about SD or n_eff, which are the actual defect class.
 
 ### Live evidence that the runtime floor is needed
 
