@@ -1,12 +1,27 @@
 # SPEC — AstroBoys (operator's TradingView script) as a testable claim
 
-**Status:** revision 1, awaiting review. **Nothing is built against this yet.**
+**Status:** revision 2 — review ruling applied, all five fixes in.
+**Nothing is built against this yet.**
 **Source:** `docs/reference/AstroBoys_source.pine` @ `7fbea93`, 1308 lines,
 Pine v5, operator's own published script. Ported **as published, bugs
 included** — per gm's explicit instruction, because a silently-corrected
 version tests a script that does not exist.
 
 ---
+
+> ## RULING, 2026-10-05 — SPLIT A/B
+>
+> Review ruled: **Claim A (fixed num) is descriptive-only, no verdict** — the
+> matched residual is +0.0131 (SE 0.0082, z=1.60), not distinguishable from
+> zero, and I have already seen it. **Claim B (solar nudge) remains
+> pre-registrable**, because no *outcome* data exists for it at any num.
+>
+> Correction to the ruling's stated basis, confirmed against disk: there are
+> **five** AstroBoys scripts, not four, and `astroboys_nudge.py` **does** call
+> `all24` at num ∈ {1,2,5,9,25,100,180,290,361}. It measures **firing rate
+> only** — no outcome — so the split holds, but on "no B outcome data" rather
+> than "no script touched B". The nine-num firing-rate sweep is disclosed in
+> §0 below.
 
 ## 0. DISCLOSURE FIRST — what I have already seen
 
@@ -17,11 +32,20 @@ discount accordingly:
 
 **Firing rates** (no outcomes): SPX 0.2146, gold 0.4314, silver 0.0451. By SPX
 price era: 0.0000 (<10), 0.0444 (10–100), 0.2283 (100–1000), 0.5166 (1000+).
-Across spiral offsets num ∈ {1,2,5,9,25,100,180,290,361}: 0.1913–0.2214.
+Across spiral offsets num ∈ {1,2,5,9,25,100,180,290,361}, SPX only:
+0.1913–0.2214. **This last item is the one piece of num≠1 data I have seen.**
+It is the magnitude of Confound 3, not an outcome — it says how large the
+nuisance term is, not whether the signal predicts anything.
+
+**Structural counts** (not association data, listed because "everything" should
+mean everything): 5282 cross events, 2887 ground-truth turns, 24617 bars;
+743 cross dates are themselves turns (14.07%) against an 11.73% unconditional
+rate — the tautology check, which came back negative.
 
 **Outcomes — this is the contaminating part.** P(price turn within ±4d | cross)
 = 0.6335 against 0.5982 unconditional, lift **+0.0353** (≈5.2 binomial SD at
-n=5282). After matching cross against non-cross days **within |Δclose| decile**,
+n=5282) — note this unconditional baseline is the wrong comparison, see §4
+Control 1; the correct cross-vs-non-cross figure is +0.0449. After matching cross against non-cross days **within |Δclose| decile**,
 the lift falls to **+0.0131**, inconsistently signed across deciles (4 of 10
 negative, the largest positive being n=44).
 
@@ -103,21 +127,40 @@ confound below, cancel.
 
 ---
 
-## 4. Pre-committed claim and the two controls it REQUIRES
+## 4. Claim A is descriptive-only. Claim B is pre-registered here.
 
-> **Claim.** A cross event predicts a price turn (`turns.price_turns`) within
-> ±4 calendar days at a rate exceeding a matched control, where the control
-> holds constant both the price era and the size of the move that produced the
-> cross.
+**CLAIM A (fixed num) — NO VERDICT, descriptive findings only.** I have already
+seen its answer: matched residual **+0.0131, SE 0.0082, z=1.60**, not
+distinguishable from zero. A has no confirmatory test and will not be given
+one. Report the numbers with their standard errors and stop. The four confounds
+below are reported as **descriptions of why A's naive lift is not evidence**,
+not as controls for a test A will not receive.
 
-Both controls are mandatory, and each is justified by a measured confound:
+**CLAIM B (solar num) — pre-registered below, before any B outcome exists.**
+
+> **Claim B.** With `num = ceil(sun ecliptic longitude)`, a cross event
+> predicts a price turn (`turns.price_turns`) within ±4 calendar days at a rate
+> exceeding a **phase-rotation** control, which holds the entire construction —
+> including the radius path and the cycle-step machinery — exactly as the solar
+> variant generates it, and randomises only angular position.
+
+All four confounds below are mandatory controls for B, each justified by a
+measured quantity:
 
 **Control 1 — move size.** A cross *requires* `|Δclose|` to exceed the distance
 to the nearest level, so crosses select for large moves, and large moves sit
 near turns for reasons unrelated to Gann. Measured: median `|Δclose|` is
-**2.5× larger** on cross days. Matching on `|Δclose|` decile already removed
-~63% of the naive lift. Not controlling for this measures "big days happen near
-turns."
+**2.5× larger** on cross days.
+
+The correct baseline is cross vs **non-cross**, not cross vs all bars — the
+unconditional group *contains* the cross days, which understates the effect
+being removed. Cross 0.6335 vs non-cross 0.5886 = **+0.0449** (SE 0.0075,
+z=5.97). Against that, the decile-matched residual of +0.0131 is a **70.8%**
+removal, not the 63% an earlier revision claimed.
+
+**Every residual is reported with its SE from here on.** A bare point estimate
+of +0.0131 reads as "small but present"; with SE 0.0082 (z=1.60) it is not
+distinguishable from absent, and those are different claims.
 
 **Control 2 — price era.** Firing rate runs 0.0000 → 0.5166 monotonically
 across SPX's own price bands. The relative level gap is `0.5/sqrt(price)`, so
@@ -129,16 +172,61 @@ SPX is overwhelmingly the sub-1400 regime and post-2001 above it, so an
 in/out-of-sample comparison measures price era rather than time stability.
 Report the split **stratified by price band**, or not at all.
 
-### 4.1 A third confound, specific to Claim B
+### 4.1 Confound 3 — the Ulam annual cycle, specific to Claim B
 
 Spiral ring radius is a deterministic function of num, and num is the sun's
 longitude — so **the solar variant has a built-in annual cycle in its own
-firing rate, generated by Ulam geometry and containing no astronomy.** Measured
-spread across num: 0.1913–0.2214, ≈11.5 binomial SD.
+firing rate, generated by Ulam geometry and containing no astronomy.**
+
+The argument is structural and needs no statistic. (An earlier revision quoted
+"≈11.5 binomial SD" across the num sweep; **withdrawn** — it compares
+correlated rates computed on the same series against a single-rate binomial SD,
+which is not a valid test. The measured spread 0.1913–0.2214 stands as a
+description; the inference drawn from it does not.)
 
 A naive test would find seasonal structure in Claim B, correctly, and it would
-be arithmetic. **The fixed-num control must therefore be matched on offset
-magnitude**, not merely set to num=1.
+be arithmetic.
+
+**The control is phase rotation, and it is the same object as §5's.** An
+earlier revision proposed a fixed-num control "matched on offset magnitude on
+average" — that does **not** close the confound, because it leaves the annual
+cycle intact. The control that works holds the radius path exactly as the solar
+variant generates it and randomises only angular position: **phase-rotate the
+sun-longitude series**. §4.1 and §5 therefore specify one control, not two.
+
+### 4.2 Confound 4 — the cycle-count step (found in review, not by me)
+
+`cycle_count(close)` is a **step function**. When close crosses an odd square
+the count increments, all 24 levels jump ~2 in root space (~8 gaps at once),
+and a cross becomes near-certain regardless of how large the price move was.
+Measured: **P(cross | step day) = 0.9330** (n=851) against
+**P(cross | no step) = 0.1888**, and **15.0% of all cross events are
+step-driven**.
+
+Control 1's decile matching does **not** close this — step-days correlate with
+move size but are not matched on it (23% step-driven in decile 9, ~0% on
+non-cross days by construction). Two acceptable closures, and the spec requires
+one of them explicitly:
+
+- the phase-rotation null of §5, **provided "hold the construction fixed"
+  explicitly includes the cycle-step machinery and not merely the level
+  formula**; or
+- excluding step days outright, as a third mandatory control.
+
+Silence on this point is not acceptable: a null that re-randomises levels but
+regenerates the step pattern freely would leave the confound in place.
+
+### 4.3 Resolution ceiling on the outcome variable
+
+**59.8% of all bars** are already within ±4 days of a turn, so the maximum
+possible lift is 0.40 against a naive observed 0.035. The test is largely
+**resolution-limited by window width**.
+
+The ±4d window is a project standard, not a per-signal dial, so it is **not**
+changed here. But the ceiling is recorded so that a small lift is not read as a
+small effect when it may be a saturated measurement. **Flagged as a
+project-wide question, out of scope for this spec:** does the standard ±4d
+window saturate for other signals too? The same arithmetic applies to Claim B.
 
 ---
 
@@ -161,6 +249,25 @@ statistic's own sampling floor.
 on noise. That criterion is satisfied most easily by the most degenerate null
 and has already produced three defective scorers here.
 
+### 5.1 The null is phase rotation, and "hold the construction fixed" is defined
+
+The null for Claim B is **phase rotation of the sun-longitude series**: keep
+the real `num` trajectory's shape and therefore its radius path, and shift only
+where in the year it starts. This is the same object as §4.1's control — one
+mechanism, not two.
+
+**"Hold the construction fixed" explicitly includes the cycle-step machinery**
+(§4.2), not merely the level formula. A null that re-randomises levels while
+regenerating `cycle_count` steps freely would leave Confound 4 wide open, since
+step days carry P(cross)=0.9330 on their own. Under phase rotation the step
+pattern is a function of the price path alone and is therefore held fixed by
+construction — which is the reason this null is chosen over any that
+re-derives levels independently.
+
+If an implementation cannot preserve the step pattern, the fallback is
+**excluding step days outright** as a third mandatory control. One or the other
+must be in place; neither being present is a defect, not a judgement call.
+
 ---
 
 ## 6. Scope and reporting
@@ -177,13 +284,16 @@ and has already produced three defective scorers here.
 
 ## 7. What review should decide
 
-1. **Is §0's contamination acceptable?** I have seen both the naive and the
-   volatility-matched lift. A reviewer may hold that no pre-registration by me
-   is now meaningful for this question and that the honest output is the
-   descriptive findings (§2, §4's confounds) with no verdict. That is a
-   legitimate call and costs little, since §2 stands on its own.
-2. Are two controls enough, or does the residual +0.0131 have a further
-   explanation that should be controlled before anything is scored?
+1. **RESOLVED by the ruling:** Claim A is descriptive-only; Claim B stays
+   pre-registrable. One correction to the ruling's basis is recorded in the
+   banner — `astroboys_nudge.py` did run num≠1, but firing-rate only. **Open
+   sub-question for the reviewer:** does having seen the nine-num firing-rate
+   sweep (i.e. Confound 3's magnitude) contaminate B? My read is no — knowing a
+   nuisance term's size is not knowing the answer — but it is their call, and
+   if yes, B collapses to descriptive-only alongside A.
+2. Are the four confounds enough for Claim B, or is there a fifth? Confound 4
+   was found in review and not by me, which is evidence the list may not be
+   closed.
 3. Is "turn within ±4d" the right outcome at all, given the script makes no
    directional claim and `±4d` is inherited from other signals rather than
    derived from this one?
