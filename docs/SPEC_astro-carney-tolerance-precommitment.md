@@ -1,6 +1,26 @@
 # SPEC — Carney harmonic family: ratio-tolerance pre-commitment
 
-**Status:** revision 1. Written **before any outcome is scored**.
+> ## ⚠️ REVISION 2 — REVISION 1'S HEADLINE CLAIM WAS WRONG
+>
+> Revision 1 concluded "no valid tolerance exists". **That was an error of
+> mine, caught by my own distinguishability test**, which returned zero
+> overlapping detections at 10% where revision 1 predicted some.
+>
+> **The mistake:** I computed the distinguishability ceiling on the D ratio
+> ALONE (Gartley 0.786 vs Bat 0.886 → 5.98%). But a run is double-counted
+> only if **both** its B and D windows overlap. Gartley's B (0.618) and Bat's
+> B (0.382–0.5) do not overlap until **10.55%**. I had reasoned "B doesn't
+> discriminate" from the fact that Crab's wide 0.382–0.618 range contains
+> Bat's — and over-generalised one pair's property to the whole family.
+>
+> **True ceiling = 10.55%** (Gartley vs Bat, both ratios). Power needs 10%.
+> **10% < 10.55%, so a valid tolerance DOES exist**, in the narrow window
+> [10%, 10.55%). The §2 impossibility result is withdrawn. §1's rarity
+> result is unaffected and still stands on its own.
+>
+> Pre-commitment revised accordingly in §3.
+
+**Status:** revision 2. Written **before any outcome is scored**.
 **Supersedes the Layer-1 design in** `PLAN_astro-trading-mvp-carney-harmonic-family.md`,
 which carries a live ⛔ DO-NOT-BUILD banner ("needs a rewrite, not a patch").
 
@@ -33,76 +53,97 @@ inference — it needs no chance baseline, no split, and no verdict. gm's relaye
 figure of "~1–2 per century at full precision" corresponds to roughly 1–2%
 tolerance; at genuinely full precision it is nothing at all.
 
-## 2. The structural result: no valid tolerance exists
+## 2. The structural result: a valid tolerance exists, but the window is narrow
 
-Tolerance is bounded from **above** and **below**, and the bounds do not meet.
-
-**Upper bound — pattern distinguishability.** D is the discriminator between
-the four patterns (the B ranges already overlap at 0% tolerance: Crab's
-0.382–0.618 fully contains Bat's 0.382–0.5 and touches Gartley's 0.618). The
-tightest adjacent D pair is Gartley 0.786 vs Bat 0.886, whose windows collide at
-
-    t = (0.886 − 0.786) / (0.886 + 0.786) = 5.98%
-
-Above that, a detected pattern cannot be attributed to one Carney pattern
-rather than another, so "which pattern fired" stops being a well-posed question.
+Tolerance is bounded from **above** by distinguishability and from **below** by
+power. Revision 1 claimed the bounds did not meet; that was wrong.
 
 **Lower bound — power.** This project's own precedent (Gartley) called SPX
 in-sample **n=20** "the one adequately-powered cell" and ruled n=2 and n=6
 cells not-findings. Reaching n≈20 on all three instruments requires **t=10%**.
 
-**5.98% < 10%. There is no tolerance that is both distinguishable and
-adequately powered.**
+**Upper bound — pattern distinguishability.**
+~~D is the discriminator; the tightest adjacent D pair is Gartley 0.786 vs Bat
+0.886, colliding at t = 5.98%.~~ **Struck — this was revision 1's error.** The 5.98% figure is the ceiling on
+the D ratio alone. Distinguishability requires BOTH B and D to overlap, and the
+binding pair is Gartley vs Bat at **10.55%**:
 
-At the largest distinguishable tolerance (t = 5.9%):
+| pair | D overlaps at | B overlaps at | BOTH (binding) |
+|---|---|---|---|
+| **Gartley vs Bat** | 5.98% | 10.55% | **10.55%** |
+| Butterfly vs Crab | 12.05% | 11.97% | 12.05% |
+| Bat vs Butterfly | 17.81% | 22.24% | 22.24% |
+| Gartley vs Butterfly | 23.54% | 11.97% | 23.54% |
+| Bat vs Crab | 29.23% | never (Crab contains Bat) | 29.23% |
+| Gartley vs Crab | 34.61% | never | 34.61% |
 
-| instrument | Gartley | Bat | Butterfly | Crab | total |
+**10% < 10.55%, so the admissible window is [10%, 10.55%).** Verified
+empirically: `overlapping_detections` returns 0 at both 10% and 10.5% on all
+three instruments.
+
+For the record, counts at revision 1's withdrawn 5.9% — kept because it shows
+what the error would have cost: every per-pattern cell ≤8, gold at 4 total, and
+a false conclusion that the signal could not be tested at all.
+
+| instrument (t=5.9%, superseded) | Gartley | Bat | Butterfly | Crab | total |
 |---|---|---|---|---|---|
 | SPX | 3 | 8 | 5 | 8 | 24 |
 | gold | 2 | 1 | 0 | 1 | 4 |
 | silver | 3 | 4 | 1 | 2 | 10 |
 
-**No single pattern on any instrument reaches n=20; the maximum is 8.** Only
-pooled SPX (n=24) clears the bar, and pooling is precisely what the
-distinguishability constraint exists to protect.
-
 ---
 
 ## 3. THE PRE-COMMITMENT
 
-**Tolerance = 5.9%**, fixed, applied symmetrically to every ratio bound.
+**Tolerance = 10.0%**, fixed, applied symmetrically to every ratio bound.
+(Revision 1 said 5.9%, on the withdrawn ceiling.)
 
 Grounds, in order:
 
-1. It is the **largest** value that keeps the four patterns distinguishable
-   (ceiling 5.98%). Anything larger answers a different question than the one
-   Carney's method poses.
-2. It is chosen as a **maximum under a hard constraint**, not tuned. There is
-   exactly one defensible value in [0, 5.98%) once the goal is "most data while
-   the patterns remain distinct", and this is it. No search, no optimisation.
-3. Lower values are strictly worse on power with no offsetting gain: 0% gives
-   n=0 everywhere, 1% leaves gold at 0, 2% leaves gold at 0.
+1. It is the **smallest** value that reaches adequate power while the patterns
+   remain distinguishable — the admissible window is [10%, 10.55%), and 10% is
+   its floor. Choosing the floor keeps fidelity to Carney's ratios maximal
+   subject to the power constraint, rather than harvesting the extra
+   detections available at 10.5%.
+2. It is therefore a **minimum under a hard constraint**, not a tuned value:
+   "smallest tolerance that is both adequately powered and distinguishable" has
+   exactly one answer. No search, no optimisation.
+3. Everything below 10% fails power: 0% gives n=0 everywhere, 1% and 2% leave
+   gold at 0, 5% leaves gold at 4, 5.9% leaves gold at 4 and every per-pattern
+   cell at ≤8.
 
-**Why 10% is rejected despite being the only adequately-powered option:** at 10%
-the Gartley and Bat D-windows overlap, so the four "patterns" are no longer four
-patterns. Loosening to reach n would be answering an easier question and
-reporting it as the hard one — and gm's standing instruction is that rarity is
-a finding, not a reason to loosen the rules.
+Counts at the pre-committed 10% (0 overlapping detections on all three):
+
+| instrument | Gartley | Bat | Butterfly | Crab | total |
+|---|---|---|---|---|---|
+| SPX | 12 | 16 | 11 | 15 | 54 |
+| gold | 6 | 6 | 4 | 5 | 21 |
+| silver | 7 | 7 | 4 | 4 | 22 |
+
+**On loosening:** gm's standing instruction is that rarity is a finding, not a
+reason to loosen the rules, and that still binds. 10% is not chosen to harvest
+detections — it is the floor of the admissible window, and the §1 rarity result
+is reported as the headline regardless of what the 10% cells show. What changed
+between revisions is a fact about where the ceiling is, not a decision to relax
+anything.
 
 ### 3.1 The verdict, pre-committed now rather than discovered later
 
-**Expected outcome: underpowered, no per-pattern verdict.** With per-pattern
-n ≤ 8, no individual pattern can be tested on any instrument. This is stated
+**Expected outcome: weakly powered; treat any per-pattern result as
+provisional.** At 10%, per-pattern n is 11–16 on SPX and 4–7 on gold/silver,
+against this project's n≈20 precedent. SPX per-pattern cells are now within
+reach of a verdict where revision 1 said none was possible; gold and silver
+remain under-powered per pattern. This is stated
 here, before scoring, so that a post-hoc "promising but not significant" framing
 is unavailable.
 
-The **only** cell with arguable power is pooled SPX (n=24), and it answers a
-strictly weaker question: *did the ratio family as a whole do anything*, not
-*does the Gartley pattern work*. Precedent from `jenkins_triangle`: a pooled
-test across 7 ratios had **no power** against a single-ratio alternative
-(planted one-ratio effect, 0/20 detections). The same dilution applies here with
-4 patterns, so a null pooled result must not be reported as evidence against any
-individual pattern.
+Pooled cells (SPX 54, gold 21, silver 22) clear the n≈20 bar comfortably, but
+they answer a strictly weaker question: *did the ratio family as a whole do
+anything*, not *does the Gartley pattern work*. Precedent from
+`jenkins_triangle`: a pooled test across 7 ratios had **no power** against a
+single-ratio alternative (planted one-ratio effect, 0/20 detections). The same
+dilution applies here with 4 patterns, so a null pooled result must not be
+reported as evidence against any individual pattern.
 
 ---
 
