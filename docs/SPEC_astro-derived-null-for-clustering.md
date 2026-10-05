@@ -8,10 +8,18 @@
   draw, and two repairs of that). All three are wrong. The failure mode is
   that a permutation null here is *tunable*, and tuning it is what produced
   the original defect. A derived null cannot be tuned, which is the point.
-- **Revision 2** (after review). The first draft was wrong in the direction
+- **Revision 3** (after second review). Two blockers from revision 2, both of
+  them the defect this spec exists to eliminate, hiding one level deeper than
+  it was looking: the new GATE had an undeclared tunable constant, and the
+  promoted HEADLINE was a full-series number the pipeline never computes whose
+  measured p-value is 0.125 and which does not replicate out of sample. The
+  gate is rebuilt around a criterion with no knob; the headline is withdrawn
+  entirely and nothing replaces it. The derived null underneath both was
+  independently verified sound.
+- **Revision 2** (after first review). The first draft was wrong in the direction
   of UNDERSTATING its own finding: it claimed "the verdict does not change"
   on the strength of a full-series statistic the pipeline never computes.
-  Scored across the seven cells the pipeline actually produces, **it retracts
+  Scored across the eight cells the pipeline actually produces, **it retracts
   all three published positive results.** It also needed a degeneracy gate it
   did not have, without which it manufactures a new false positive of its own.
   Both corrections are recorded in place rather than silently folded in.
@@ -73,11 +81,11 @@ z  = (mean(d) - 0.25) / SE
 Negative `z` means more clustered than chance; the signal's claim is a
 one-sided test on that tail.
 
-## What it gives on the real data — ALL SEVEN LIVE CELLS
+## What it gives on the real data — ALL EIGHT LIVE CELLS
 
 **Correction to the first draft of this spec.** It quoted a full-series
 `z = +0.32 → +0.91` and claimed *"the verdict does not change."* Both were
-wrong. `scripts/run_jenkins_rung.py` splits at 2001-01-01 and scores seven
+wrong. `scripts/run_jenkins_rung.py` splits at 2001-01-01 and scores eight
 cells; it never computes the full series, so the first draft validated
 against a number the system does not produce.
 
@@ -106,33 +114,67 @@ The degeneracy is visible in the shipped output and was read by six review
 passes without anyone checking it: `chance_mean` tracks `mean_dist` to four
 decimals in every row (0.2529 vs 0.2531, 0.2513 vs 0.2513, 0.2499 vs 0.2499).
 
-## MANDATORY: a degeneracy gate, or this spec manufactures its own positive
+## MANDATORY gate — and the criterion is the ACF TRUNCATION LAG, not a cap
 
-The first draft had no analogue of the existing `chance_std == 0` guard, and
-would therefore have **created a new false positive where the current code
-correctly refuses one**: gold price IN is 84 consecutive closes with **one
-distinct modulus**, for which the shipped scorer returns `nan` and this
-spec's formula returns **z = −2.42**, past the bar.
+**Revision 2 had a hidden tunable in the gate it introduced.** For the time
+cells the autocorrelation does not decay quickly, so `n_eff` was being set by
+an undeclared max-lag cap. Measured on SPX time OUT:
 
-Required preconditions, returning `nan` rather than a number:
+| cap | 50 | 500 | 1000 | 2000 |
+|---|---|---|---|---|
+| n_eff | 443.1 | 55.4 | **30.5** | **21.4** |
 
-- **≥ 2 distinct moduli.** With one modulus there is no grid variety to test.
-- **`v/m` spanning ≥ 2 full periods**, so the circular residual actually wraps.
-- **`n_eff ≥ 30`**, below which the normal z→p mapping is not available.
+That straddles revision 2's `n_eff ≥ 30` gate, so **one of the three claimed
+retractions flipped on a constant the spec never declared** — inside a
+document whose selling point is "it has no tuning parameters". The defect this
+spec exists to retract, one level deeper than it was looking.
 
-Replacing a permutation with a formula silently removed a safety the
-permutation had. Any derived null must re-create the guard it displaces.
+### The fix removes the knob rather than declaring a value for it
 
-## The time claim must be gated out, not given a number
+Run IPS to `n/2` with **no cap**, and **report the truncation lag**. The lag
+itself is the diagnostic: if the ACF needs a large fraction of the sample to
+decay, the ACF summary is not a usable variance estimate for that sample.
 
-Its `n_eff` collapses to **21–55** from n of 18k–53k, and the derived z's are
-+0.06, −0.03, −0.00 — a test with no resolution in either direction. The
-dependence is structural overlap across the concatenated k-step blocks
-(k=1..25), not serial along the array, so **no stationary-series variance
-estimator can fix it**, ACF or block bootstrap alike.
+| cell | n | truncation lag | lag / n | n_eff |
+|---|---|---|---|---|
+| SPX price OUT | 6,287 | 2 | **0.0003** | 5,513 |
+| gold price OUT | 6,275 | 3 | **0.0005** | 5,449 |
+| SPX price IN | 18,330 | 36 | **0.0020** | 2,034 |
+| gold price IN | 84 | 7 | **0.0833** | 32 |
+| gold time OUT | 18,525 | 1,628 | **0.0879** | 36 |
+| SPX time IN | 53,075 | 4,860 | **0.0916** | 55 |
+| SPX time OUT | 18,450 | 1,988 | **0.1078** | 21 |
 
-Gate it. A z computed on 21 effective observations is not a weak result, it
-is not a result.
+The separation is **two orders of magnitude**, not a knife edge.
+
+**Gate: `truncation_lag / n ≤ 0.01`.** Scoring three cells, gating four, with
+no constant to tune and a 40x margin either side of the boundary.
+
+### What that fixes beyond the cap
+
+- **It gates the whole time claim**, resolving revision 2's internal
+  contradiction: that revision's heading said the time claim "must be gated
+  out" while its `n_eff ≥ 30` gate admitted two time cells.
+- **It independently catches gold price IN** (lag/n = 0.083), which revision
+  2 caught only via the period-span criterion. Revision 2's `n_eff ≥ 30` did
+  **zero work** on the cell it was built for: that cell's `n_eff` is 31.9 and
+  passes.
+- `n_eff ≥ 30` is retained only as a backstop, and **not** on revision 2's
+  stated grounds. The claim "below which the normal z→p mapping is not
+  available" was wrong — the mean of bounded symmetric `U(0,0.5)` variates is
+  near-normal well below 30. The real issue is power: at `n_eff = 30` the
+  minimum detectable effect is a 17% shift in `mean(d)`. **Any scored cell
+  must report its minimum detectable effect alongside z**, or a "False"
+  reads as evidence of absence when it is absence of evidence.
+
+### The ≥2-distinct-moduli criterion was the wrong diagnosis, and is dropped
+
+Under the derived null, grid variety is irrelevant: `d ~ U(0,0.5)` holds for a
+single fixed modulus too. What actually breaks gold price IN is **coverage** —
+84 serially-correlated closes sweeping `v/m` over less than two periods. A
+cell with 2 moduli, 2.1 periods and `n_eff = 32` would pass all of revision
+2's criteria and fail identically. Replaced by the lag/n rule above plus the
+period-span requirement, which together target coverage rather than variety.
 
 ## Why this is better than any permutation here
 
@@ -149,8 +191,13 @@ is not a result.
   4, generous" the file's own comment claims. It remains a valid floor, but
   the arithmetic and the comment both need correcting, and it would **reject a
   correct conditional null** (an exact phase-randomisation reference on gold
-  has SD 0.09x the derived SE), so it needs a carve-out before any exact
-  randomisation test can coexist with it.
+  has SD 0.09x the derived SE), and the claim in revision 2 that it
+  would "reject a correct conditional null" rested on a phase-randomisation SD
+  of 0.09x the derived SE. **That figure was wrong by ~10x** — measured 0.86
+  to 0.98 across three standard surrogate constructions, which the floor
+  ACCEPTS. No carve-out is needed, though the 7% margin is worth stating.
+  Revision 2 corrected revision 1's floor arithmetic and introduced a new
+  wrong number in the same bullet.
 
 ## How to validate it — NOT with `|z| < 3`, and NOT with the first draft's checks either
 
@@ -164,7 +211,7 @@ nothing.
 Five assertions, each catching something the previous set missed:
 
 - **C1. Calibrate at every real call-site configuration**, not one generic
-  series. There are seven: {SPX, gold} × {price, time} × {in, out}. Only this
+  series. There are eight: {SPX, gold} × {price, time} × {in, out}. Only this
   catches the time claim, whose SE is 30x wrong while a generic series looks
   fine.
 - **C2. Assert both tails and the centre**: `|mean(z)| < 0.2`, and *both*
@@ -172,8 +219,12 @@ Five assertions, each catching something the previous set missed:
   shift — the upper-tail rate here runs 0.090–0.125, 2–2.5x nominal, and the
   first draft's check never looked.
 - **C3. Assert the SE estimator tracks the truth, per call site**:
-  `0.7 < SE_est / MonteCarlo-SD < 1.4`. IPS scores 1.0 on the price claim and
-  **29.7 on the time claim**. This is the single assertion that would have
+  `0.85 < SE_est / MonteCarlo-SD < 1.2`. IPS scores 1.0 on the price claim and
+  **29.7 on the time claim**. Revision 2 proposed [0.7, 1.4]; that band is
+  both non-binding (C2 already implies [0.854, 1.19], strictly tighter) and
+  wrong on the dangerous side — a ratio of 0.7 means the SE is 30% too small,
+  running a nominal 5% test at 12.5%, which is the exact defect class this
+  spec exists to kill. This is the single assertion that would have
   stopped the time claim being reported.
 - **C4. Pin the centre conditionally, not by simulation**: assert a
   phase-randomisation reference mean is within 3e-04 of 0.25 at each call
@@ -181,33 +232,86 @@ Five assertions, each catching something the previous set missed:
 - **C5. Require the real grid to be an outlier in its own placebo family**
   (below), not merely against the theoretical null.
 
+### C6 — the one assertion that needs no generator and no seed
+
+C1–C3 all calibrate against a no-structure DGP that is never named, which is
+the hole revision 1 fell through: choose the generator and you choose the
+false-positive rate. One check escapes that entirely.
+
+**Deterministic ramp.** Take `v` linear, `m = rung(v)`, assert
+`mean(d) = 0.25`. No market model, no randomness, no seed. Verified:
+0.250193 / 0.250237 / 0.250053 across three ramps, all within 0.21 iid-SE.
+It isolates the grid arithmetic from any price-process assumption, and it is
+the only check here that cannot be gamed by choice of generator.
+
+### Live evidence that the runtime floor is needed
+
+The identity detector shipped in `ce1a9cb` does **not** catch SPX time OUT:
+its `chance_std` is `2.22e-06`, which is **0.0021x** the iid SE — 475x too
+narrow — and it still reports `degenerate=False`, because the detector tests
+float-identity (`NULL_IDENTITY_ATOL = 1e-12`) and near-identity slips through.
+The dispersion floor rejects it (floor `9.20e-04`).
+
+That is the concrete case for running the floor at runtime rather than only
+against synthetic data in tests, and it is also the strongest single piece of
+evidence that a published positive was manufactured by a degenerate baseline.
+
 ## Multiplicity — absent from the first draft entirely
 
-Seven live z-scores, no correction anywhere in the repo. gold price OUT
-currently ships p=8e-04 uncorrected, p=6e-03 after a 7-way Bonferroni. Any
+Eight live z-scores, no correction anywhere in the repo. gold price OUT
+currently ships p=8e-04 uncorrected, p=6e-03 after an 8-way Bonferroni. Any
 rewrite must state the family size. This project already applies Bonferroni to
 jenkins-triangle's seven ratios, so the precedent exists and was simply not
 carried across.
 
-## Two-sided, with neighbour-rank as the PRIMARY report
+## WITHDRAWN: the neighbour-rank "headline" is not a finding
 
-The one-sided framing cannot express the strongest evidence available. Sweeping
-the modulus by k (scale-exact, deterministic, no seeds):
+Revision 2 promoted "the real rung ranks 7 of 7, worst in its own
+neighbourhood" to the primary result. **It is withdrawn, on three independent
+grounds, any one of which is sufficient.**
 
-| k | −3 | −2 | −1 | **0 (real)** | +1 | +2 | +3 |
-|---|---|---|---|---|---|---|---|
-| mean(d) | 0.24604 | 0.24544 | 0.24804 | **0.25222** | 0.24521 | 0.24887 | 0.24177 |
+**1. It is not significant. p = 0.125, measured.** 200 GBM surrogates matched
+to SPX's n, μ, σ and start: `P(rank == 1) = 0.125`, against `1/7 = 0.143`
+under exchangeability. The neighbours are close to exchangeable, so the naive
+combinatorial answer was right all along — rank-1-of-7 is one-in-seven.
+Against this spec's own multiplicity requirement it is p ≈ 1.
 
-**The real rung is the only grid above 0.25, and ranks 7 of 7 — worst in its
-own neighbourhood**, deterministically and independently of which SE is used.
-This supersedes the unstable ±1 figure the first draft carried as "indicative";
-it is now a result. Make neighbour-rank the headline and the theoretical z a
-supporting statistic.
+Revision 2 called it "the strongest evidence available", "a result", and
+"quotable", and **never computed its null**. The promotion rested on the
+statistic being *deterministic* and *scale-exact*. Both are true and neither
+is relevant: deterministic means no seed dependence, which says nothing about
+how often chance produces the same arrangement.
 
-Second-order caution from the same table: 6 of 6 neighbour grids sit *below*
-0.25, and two clear the one-sided bar under the derived SE. So "mean(d) < 0.25"
-is reachable by generic sqrt-scaled grids on this series, and a negative z
-alone is not evidence for *this* formula.
+**2. It is a full-series statistic the pipeline never computes.** The sweep
+runs on the full SPX series (`mean(d) = 0.25222`); no pipeline cell has that
+value (SPX price IN is 0.25290). **This is the exact defect revision 2 was
+written to retract**, relocated from a supporting number to the primary
+finding.
+
+**3. It does not replicate out of sample.**
+
+| cell | rank |
+|---|---|
+| SPX price FULL | 1 / 7 |
+| SPX price IN | 1 / 7 |
+| **SPX price OUT** | **3 / 7** |
+| **gold price OUT** | **4 / 7** |
+
+The arrangement exists only in the 1927–2001 in-sample span.
+
+**"Scale-exact" was also wrong.** Price-claim moduli run 1–20 in-sample, so a
+±3 shift is a 15%-to-300% perturbation per observation, and `k = −2, −3`
+produce non-positive moduli requiring an undisclosed clip-to-1 that generates
+the quoted values (dropping instead of clipping moves them by ~0.002, which is
+the size of the whole claimed effect).
+
+### What replaces it: nothing, and that is the finding
+
+There is no headline for this signal. The honest statement is:
+
+> Three published positive clustering verdicts are retracted. No surviving
+> evidence for the rung formula in either direction, and the one piece of
+> apparently-strong counter-evidence does not survive examination either.
 
 ## Resolved — the first draft's three open questions
 
@@ -243,12 +347,15 @@ Roughly 40–50% of a reported +0.91 is therefore ensemble artifact;
 bias-corrected, SPX price IN reads ≈ +0.5. Whether to report the conditional
 or the unconditional figure is a real choice and I have not made it.
 
-## Supersedes the first draft's "indicative, not a result"
+## On the ±1 perturbation figure, finally
 
-The first draft carried a ±1 perturbation figure of z=+8.86 with an explicit
-caveat that the ±1 null was itself unstable on noise (+1.79, −6.54, +2.09),
-and instructed that it not be cited as more than indicative. The
-neighbour-rank sweep above replaces it: **rank 7 of 7, deterministic,
-scale-exact, no seeds, no SE dependence.** The caveat is discharged, and the
-underlying claim — the real rung clusters *worse* than its own neighbours —
-survives in a quotable form.
+The first draft carried `z = +8.86` as "indicative, not a result" because its
+null was unstable on noise. Revision 2 claimed the neighbour-rank sweep
+discharged that caveat. **It did not** — see the withdrawal above. Both the
+±1 figure and the rank sweep are now retired. Neither is evidence.
+
+This is the third framing of the same underlying observation (the real rung
+clusters no better than its neighbours), and each framing has been weaker than
+the last on examination. That pattern is itself worth noting: an observation
+that needs reframing three times to look like evidence is probably not
+evidence.
