@@ -1,6 +1,7 @@
 # SPEC — AstroBoys (operator's TradingView script) as a testable claim
 
-**Status:** revision 2 — review ruling applied, all five fixes in.
+**Status:** revision 3 — **CLAIM B IS LOCKED.** Pre-registered 2026-10-05
+before any B outcome existed. Claim A is descriptive-only.
 **Nothing is built against this yet.**
 **Source:** `docs/reference/AstroBoys_source.pine` @ `7fbea93`, 1308 lines,
 Pine v5, operator's own published script. Ported **as published, bugs
@@ -121,9 +122,9 @@ scale-driven effect masquerade as solar.
 - **Claim B (solar num).** `num = ceil(sun ecliptic longitude)`, so the offset
   changes daily. This is the only astrological claim in the script.
 
-**B must be tested against A as its control, not against an unconditional
-baseline** — that is the only comparison in which the wheel, and the price-scale
-confound below, cancel.
+**B's control is PHASE ROTATION, not Claim A and not any fixed num.** An
+earlier revision proposed testing B against a fixed-num control matched on
+offset magnitude. That is withdrawn as *not implementable* — see §4.1.
 
 ---
 
@@ -187,12 +188,40 @@ description; the inference drawn from it does not.)
 A naive test would find seasonal structure in Claim B, correctly, and it would
 be arithmetic.
 
-**The control is phase rotation, and it is the same object as §5's.** An
-earlier revision proposed a fixed-num control "matched on offset magnitude on
-average" — that does **not** close the confound, because it leaves the annual
-cycle intact. The control that works holds the radius path exactly as the solar
-variant generates it and randomises only angular position: **phase-rotate the
-sun-longitude series**. §4.1 and §5 therefore specify one control, not two.
+**The control is phase rotation, and it is the same object as §5's.**
+
+An earlier revision proposed a fixed-num control "matched on offset magnitude".
+That is withdrawn for two reasons, the first fatal:
+
+**1. It is not implementable — there is no well-defined target to match on.**
+Firing rate is not a function of |offset|. My own nine-num sweep is the dataset
+that refutes it:
+
+| num | offset | \|offset\| | firing rate |
+|---|---|---|---|
+| 5 | (1,1) | **1.41** | **0.2178** |
+| 9 | (−1,−1) | **1.41** | **0.2148** |
+| 1 | (0,0) | 0.00 | **0.2146** |
+| 25 | (−2,−2) | 2.83 | **0.2146** |
+| 100 | (5,4) | 6.40 | 0.2123 |
+| 180 | (4,−7) | 8.06 | 0.2200 |
+| 290 | (−8,−9) | 12.04 | 0.2000 |
+
+Same magnitude, different rate (rows 1–2) means rate is not a function of
+|offset| at all. Same rate, different magnitude (rows 3–4) means the inverse
+map is not defined either. And rate is not even monotone in magnitude
+(6.40→0.2123, 8.06→0.2200, 12.04→0.2000). "Match the control on offset
+magnitude" therefore names no procedure.
+
+**2. Choosing any fixed num at all is a selection risk.** All nine candidate
+nums have measured firing rates, so picking one — even unintentionally — could
+favour B, since rate correlates with move-size mix and that projects onto the
+B-minus-A contrast at an order comparable to the whole effect that killed
+Claim A. Phase rotation makes this moot: **no num is ever chosen.**
+
+The control that works holds the radius path exactly as the solar variant
+generates it and randomises only angular position: **phase-rotate the
+sun-longitude series**. §4.1 and §5 specify one control, not two.
 
 ### 4.2 Confound 4 — the cycle-count step (found in review, not by me)
 
@@ -284,7 +313,15 @@ must be in place; neither being present is a defect, not a judgement call.
 
 ## 7. What review should decide
 
-1. **RESOLVED by the ruling:** Claim A is descriptive-only; Claim B stays
+1. **RESOLVED — B does not contaminate; B is LOCKED.** Review's reasoning,
+   worth keeping: the test is whether what I learned was derivable *a priori*.
+   The Ulam construction predicts rate variation from no data at all, unlike
+   Claim A's measured +0.0131, which is derivable from nothing. Sharper form:
+   firing rate is **exposure**; the claim is about **outcome conditional on
+   exposure**; and no amount of P(cross) constrains P(turn | cross).
+   Superseded detail below.
+
+   **(superseded)** Claim A is descriptive-only; Claim B stays
    pre-registrable. One correction to the ruling's basis is recorded in the
    banner — `astroboys_nudge.py` did run num≠1, but firing-rate only. **Open
    sub-question for the reviewer:** does having seen the nine-num firing-rate
