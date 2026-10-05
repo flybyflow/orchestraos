@@ -234,16 +234,22 @@ step-driven**.
 
 Control 1's decile matching does **not** close this — step-days correlate with
 move size but are not matched on it (23% step-driven in decile 9, ~0% on
-non-cross days by construction). Two acceptable closures, and the spec requires
-one of them explicitly:
+non-cross days by construction).
 
-- the phase-rotation null of §5, **provided "hold the construction fixed"
-  explicitly includes the cycle-step machinery and not merely the level
-  formula**; or
-- excluding step days outright, as a third mandatory control.
+**WHO CLOSES IT: §5, not §4.** Responsibility is assigned, not left open.
+The phase-rotation null of §5.1 is the mechanism, and it closes Confound 4
+because under phase rotation the `cycle_count` step pattern is a function of
+the price path alone and is therefore held fixed by construction. §5.1's
+definition of "hold the construction fixed" explicitly names the cycle-step
+machinery for exactly this reason.
 
-Silence on this point is not acceptable: a null that re-randomises levels but
-regenerates the step pattern freely would leave the confound in place.
+§4's controls (move size, price era) do **not** close it and are not expected
+to. Excluding step days outright is a **fallback only**, engaged if and only if
+an implementation cannot preserve the step pattern under rotation — it is not a
+co-equal option to choose between.
+
+Silence on this point would not be acceptable: a null that re-randomises levels
+but regenerates the step pattern freely would leave the confound in place.
 
 ### 4.3 Resolution ceiling on the outcome variable
 
