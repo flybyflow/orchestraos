@@ -166,6 +166,19 @@ rather than reframed.
   plan. If a future pass wants to test whether the formula choice itself
   matters, that's a separate, explicitly-scoped comparison, not a silent
   substitution here.
+- **Jenkins' IPO-date "origin point" as the pivot rule** — bshr-2 (chasing
+  the separate "ipcycle" identification question) confirmed this is real,
+  documented Jenkins terminology: his material describes using a stock's
+  IPO date as the origin point for projecting planetary/Gann cycles. It's
+  exactly the kind of objective, mechanical pivot rule Constraint 2 above
+  needs — but it doesn't solve that constraint for any instrument actually
+  in this plan, since none of SPX/gold/EUR-USD has an IPO date. Worth
+  recording as the natural pivot rule IF this ever extends to individual
+  stocks, not adopted here. Also worth naming the same caveat that applies
+  to the rest of Jenkins' material: his exact origin-point definition is
+  likely proprietary and undocumented, so — unlike the global-low pivot
+  used above — it may not be independently verifiable against open source
+  the way Bradley's reference was.
 
 ## What to tell the operator, in the morning
 
