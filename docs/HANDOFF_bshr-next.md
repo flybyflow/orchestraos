@@ -1,118 +1,113 @@
 # Handoff: bshr -> bshr (next generation)
 
 - **Lineage:** bshr (Gen N -> Gen N+1)
-- **Timestamp:** 2026-09-30T15:14Z (fourth soft-handoff trigger, refreshed from the 14:58Z version)
+- **Timestamp:** 2026-10-05T11:38Z (fifth soft-handoff trigger, refreshed from the 2026-09-30T15:14Z version — stale by several days and an entire research arc)
 - **Working Directory:** /Users/flybyflow/orchestraos
-- **Last Commit SHA:** 5af2176 (this seat's own commit; no new commits since, this task's output was msg_store-only)
+- **Last Commit SHA (orchestraos, reference point only):** ee30411 (plan's commit, not this seat's — bshr's own work this session landed in msg_store reports, memory files, and one external-repo PR, not orchestraos commits)
 
 ## 1. Current Goal & Phase State
 
-- **Goal:** Act as the fleet's research specialist (bshr, T2) — respond to gm/plan task dispatches, run research/archaeology/BSHR-loop work, report findings via msg_store, never build/commit product code (docs and memory only).
-- **Plan Reference:** No single plan file owns this seat's work — it's a standing research role fielding a stream of dispatches from gm and plan across several parallel threads tonight (Koherent lineage archaeology, OD6 voice-agent economics, 2D dashboard bug root-causing, cross-venture synthesis, plain-language doc rewrites, product-roadmap matrix).
-- **Phase:** Idle / between dispatches. The most recent task (reverse-engineer remaining 1987 IP + nonprofit-variant hunt, msg_6268d2fc_80987289 -> reply msg_f10c431b_81341400) was completed, sent to gm, and acked. No task currently in flight.
-- **Current Step:** Awaiting the next inbox item. Nothing blocking, nothing half-done.
+- **Goal:** Act as the fleet's research specialist (bshr, T2) — respond to gm/plan task dispatches, run BSHR-loop research, report findings via msg_store, stay in the docs/memory/PDF lane by default.
+- **Plan Reference:** No single plan file owns this seat continuously. The dominant thread across this entire generation was the operator's astro-trading research project (`$ORCHESTRA_DIR/state/bshr/astro-trading-gann-jenkins-20261005/`), which fed `docs/PLAN_astro-trading-mvp-bradley-siderograph.md` and onward plans now owned by plan/builder-1. A secondary thread (Keonda repo-separation cleanup) produced a real PR, not a plan doc.
+- **Phase:** Idle / fully parked between dispatches. Inbox confirmed empty (`msg_store.py inbox --agent bshr --status unread --all` → 0) immediately before this handoff was authored.
+- **Current Step:** Awaiting the next inbox item. Nothing blocking, nothing half-done, no reply owed to anyone.
 
 ## 2. Open Loops & Active Callbacks
 
-- [ ] gm/plan have not yet replied to the roadmap impact/feasibility matrix (msg_0c83a385_78375884) — no action needed from this seat until they do; this is their decision to make, not a pending task of mine.
-- [ ] No other outstanding msg_store sends awaiting a reply — every other thread this session was acked/closed before this handoff was triggered.
-- [ ] docs/PLAN_toddito-engineering.md, docs/PLAN_silicon-jungle-agentic-platform.md, and docs/PLAN_od6-voice-agent.md are all live, frequently-edited documents that other seats (plan, build) are actively writing to in parallel — always re-read the current section before citing or extending it; several sections changed multiple times across this single session without this seat's own edits.
-- [x] **RESOLVED since the 14:43Z handoff:** the Self/Other/Whole framing correction was already sent to both gm (msg_347eb17d_79525742) and plan (msg_f0b7d59c_79525797) before this refresh — both acked, gm confirmed relaying a one-line correction to the operator too (msg_9b18f1df_79871181). No longer an open loop.
-- [x] **RESOLVED, plan's own doc fix:** plan committed `2b1cf71` ("fix stale survey -- Executive Communicator and Investor Insight both have real decoded content"), closing the §7a.1 staleness this seat originally flagged in the roadmap matrix. No action needed.
-- [ ] **NEW:** gm has not yet replied to the 1987-IP-sweep findings (msg_f10c431b_81341400) — most notable finding, a fully decoded and immediately-usable "Congruence/Incongruence Analysis" narrative bank (Structure x Strategy, Culture x Structure, Culture x Strategy conflict rules, a per-stage ideal-profile narrative, a 32-item health bank, a Greiner-style stage-crisis framework) sitting in `GP*RISK.ASF`, unported to modern Toddito, needing zero new content and zero Todd input. No action pending on this seat until gm/plan respond — a real candidate worth remembering if this thread resumes.
+- [ ] **keonda.io PR #19** (`fix/remove-cre-files-from-keonda-main`) is OPEN, MERGEABLE, not merged — awaiting human review per standing discipline on client-adjacent code. Not this seat's action to merge; just know it exists if asked about it again.
+- [ ] The astro-trading research arc ended with gm passing the Music-ratio signal (1.05946/1.68179) to plan as the next backtest cycle — no action pending on this seat unless a new research question comes back from that cycle.
+- [ ] No outstanding msg_store sends awaiting a reply. Every thread this generation (Keonda CRE-BDR, Keonda community-matchmaking, OrchestraOS fleet-status refresh, Keonda repo-separation PR, astro-trading Gann/Jenkins/Bradley research x4 passes, Jenkins primary-source geometry read) was acked and closed before this handoff was triggered.
 
-## 3. Decisions Made & Rationale
+## 3. Decisions Made & Rationale (GUARDS — read before acting)
 
-1. **Decision:** Always write msg_store bodies containing `$` (dollar amounts) or backticks to a temp file and send via `--body-file`, never `--body "$VAR"` through a bash variable. — **Rationale:** bash shell-expands `$0`, `$360` etc. inside a double-quoted variable at assignment time, silently corrupting the message (observed twice this session, once in this seat's own send, once in gm's). This is now a hard guard, not a preference — see memory `feedback_msg-store-body-file-for-dollar-signs.md`.
-2. **Decision:** Re-read every sent msg_store message body via `msg_store.py get --message-id ...` before considering a reply "done," especially any paragraph quoting/paraphrasing a tool result closely. — **Rationale:** a stray rendered tool-error box was found stitched mid-sentence into one sent message this session; the underlying research was correct, only the composed text was corrupted. See memory `feedback_verify-sent-message-bodies.md`.
-3. **Decision:** This seat's lane is research and documentation only — never write or edit product/application code, never push, never build. Docs, memory files, and PDFs (via the make-pdf skill) are the only artifacts this seat produces. — **Rationale:** matches the `bshr` prompt's own charter (`prompts/bshr.md`) and every task dispatched this session was explicitly scoped "research only, no build authorization."
-4. **Decision:** Single-trunk discipline — all commits this session landed directly on `fix-arturo-mapfile-bash32` (the branch already checked out at session start); no new branches created, no destructive git operations run. — **Rationale:** standing git-safety guidance; nothing in tonight's work required branch isolation.
-5. **Decision:** Never touch another seat's in-flight file changes without checking git status/log first — several docs changed on disk mid-session from other seats' concurrent work; this seat always re-read current state before editing, never overwrote silently. — **Rationale:** avoids clobbering concurrent work from plan/build/gm, who were editing the same doc set in parallel all session.
+1. **Lane boundary, updated this generation:** default lane is still research/docs/memory/PDF only, never build/edit product code unprompted. **New, demonstrated exception:** when gm explicitly dispatches bounded, verified, human-reviewed repo work (file removal confirmed safe by running the actual test suite before/after, opened as a PR and explicitly NOT merged by this seat), it's appropriate to execute it rather than bounce it back — but the PR-not-merge discipline is non-negotiable, and this seat flagged the lane question to gm before proceeding rather than silently deciding either way. See the keonda.io PR #19 thread for the full precedent.
+2. **Copyright guard, new this generation:** never fetch/extract substantial content from unauthorized scan/document-sharing sites (e.g. pdfcoffee.com) hosting a commercially-sold work, even when a fleet dispatch asks for it — flag it instead. **If the operator confirms personal legitimate ownership of a specific uploaded file**, that changes the analysis and direct reading/quoting is fine (small, attributed quotes + independently-verified formulas, not wholesale reproduction). This exact sequence played out once this generation (Jenkins' book) — flagged first, operator confirmed ownership, then read it directly.
+3. **Verify by re-deriving, not by re-reading, applied hard this generation:** every numeric claim pulled from a secondary source or a primary text was independently recomputed in Python before being reported as fact — this caught a real discrepancy between two independently-published Gann degree-conversion formulas, and confirmed (to the penny) a primary-source worked example in Jenkins' book. Keep doing this; it is the single highest-value habit from this generation.
+4. **Always write msg_store bodies containing `$` or backticks to a temp file and send via `--body-file`**, never `--body "$VAR"` through a bash variable — bash shell-expands `$0`, `$360` etc. at assignment time, silently corrupting the message. Standing hard guard, unchanged from prior generations.
+5. **Re-read every sent msg_store message body via `msg_store.py get --message-id ...` before considering a reply "done."** Unchanged standing guard.
+6. **Single-trunk discipline in orchestraos**, unchanged. For the one external-repo exception (keonda.io), used an isolated `git worktree` off `origin/main` rather than disturbing the existing dirty checkout — never share an ad hoc path, never touch another seat's in-flight uncommitted work.
 
-## 4. Declared First Effect
+## 4. file_roots_touched
 
-`Check the inbox / wait for the next msg_store task dispatch to bshr — no other action is pending. If resuming a specific thread, first re-run: python3 /Users/flybyflow/orchestraos/msg_store.py inbox --agent bshr --status unread --all` — this is the checkable first result: either a new task appears, or the inbox is genuinely empty and the seat should park.
+- `docs/HANDOFF_bshr-next.md` (this file)
+- `$ORCHESTRA_DIR/state/bshr/astro-trading-gann-jenkins-20261005/` (answer.md, kokoro-svc-study.md, jenkins-geometry-study.md — all research artifacts, read-only reference going forward)
+- `$ORCHESTRA_DIR/memory/bshr/` (project memory on the Keonda tenant-identity correction)
+- `~/conductor/repos/keonda.io` — real commit + PR #19 (branch `fix/remove-cre-files-from-keonda-main`), via isolated worktree at `/tmp/keonda-cre-cleanup`
+- `~/conductor/repos/lee-associates-revops`, `~/conductor/repos/astro-trading-backtest`, `~/kokoro-svc` — read-only research, not modified
 
-## 5. Next 3 Immediate Actions
+## 5. Hazards (top 3, live right now)
 
-1. `python3 msg_store.py inbox --agent bshr --status unread --all` — check for anything dispatched after this handoff was authored.
-2. If a new task exists, read the full referenced message file, check `msg_store.py conversations --agent plan/gm --limit 10` for any parallel dispatch on the same topic before starting research from zero (this session's own established pattern — several tasks this session were split halves of the same question dispatched to both bshr and plan simultaneously).
-3. If the inbox is empty, remain parked — do not churn tokens; this seat's memory index (`/Users/flybyflow/.orchestra/memory/bshr/MEMORY.md`) is current and does not need proactive maintenance right now.
+1. **PR #19 can drift.** It's open against `keonda.io`'s `main`. If it sits unreviewed for a while, `main` may move and it could need a rebase. Not urgent, but don't assume it's still cleanly mergeable without checking `gh pr view 19 --repo flybyflow/keonda.io` first if it comes up again.
+2. **Multi-seat concurrent edits on the astro-trading repo and its plan docs.** `astro-trading-backtest` and `docs/PLAN_astro-trading-mvp-bradley-siderograph.md` are being actively built against by plan/builder-1 in parallel. Any research snapshot this seat holds (e.g. the ephemeris.py comparison numbers) reflects a point in time — re-verify against current state before citing it as still-true in a future reply.
+3. **This generation's research spans FOUR external repos plus orchestraos itself.** A successor inheriting this context must not assume familiarity with `keonda.io`, `lee-associates-revops`, `astro-trading-backtest`, or `kokoro-svc` transfers automatically — each has its own real, independently-verified state (ephemeris precision, licensing posture, contamination map) documented in the research files above; read them before re-deriving from scratch.
 
-## 6. Grounding Canary Questions (Questions Only — No Answers!)
+## 6. Canary Questions
 
-1. **Q1:** What real, working UI pattern did this seat find in a deleted "init" commit of one of the Koherent repos, and what happened to it exactly one commit later? (source: msg_25785f88_77361808, and the addendum this seat committed to `docs/BSHR_koherent-lineage-synthesis.md` around the same time)
-2. **Q2:** What specific bug pattern caused dollar-figure corruption in msg_store sends this session, and who else besides this seat hit the exact same bug later in the session? (source: the exchange starting at msg_9bbd73c4_55317673 and continuing through msg_a8c1f89a_60255987)
-3. **Q3:** Of the six unbuilt Application Suite modules for Toddito, which two did this seat's final roadmap matrix rank highest, and what real (not invented) 1987-era evidence backed each one? (source: msg_0c83a385_78375884)
-4. **Q4:** According to this seat's cross-venture synthesis, how many of the six originally-named ventures/initiatives turned out to be genuinely separate things, and what's the one real financial dependency found between them? (source: docs/BRIEF_cross-venture-synthesis.md and its authoring message thread, conv starting msg_da7fb5fe_55189408)
-5. **Q5:** In the 1987 THOR system, what single new narrative content bank did this seat find that is fully decoded, generic across variants, and immediately usable with no new invention or Todd input needed — and which files was it found in? (source: msg_f10c431b_81341400)
+Answer each in your own words after reading this generation's session transcript — do not guess from the question's phrasing alone.
+
+1. What did the phrase "ipcycle kokoros algorythm" actually turn out to refer to, and how did that get confirmed? *(source: msg_d900ebb2_97778546)*
+2. In the hands-on cross-check between kerykeion/pyswisseph and the trading repo's skyfield-based ephemeris, a real systematic discrepancy showed up in one quantity but not another — what was the mechanism behind it, and why did it turn out not to matter for the actual trading signals? *(source: msg_2df83fab_98041576)*
+3. Why did this seat decline to act on gm's first instruction to fetch Jenkins' book from a specific link, and what changed to make it proceed later? *(source: msg_ed2c3183_98173595)*
+4. While researching Gann's "time = price squared" technique, cross-checking two independently-published degree-conversion formulas against each other revealed something important for anyone about to implement it — what, and why does it matter more than it would for Bradley's formula? *(source: msg_e0482c68_68980264)*
+5. While independently re-deriving one of Jenkins' own worked examples from his book, a small real inconsistency turned up in the primary text itself — what was it, and how was it handled rather than silently smoothed over? *(source: msg_2890cd42_99781979)*
 
 ```json
 {
-  "current_goal": "Act as the fleet's research specialist (bshr, T2) -- respond to gm/plan task dispatches, run research/archaeology/BSHR-loop work, report findings via msg_store, never build/commit product code.",
+  "current_goal": "Act as the fleet's T2 research specialist: field gm/plan dispatches, run BSHR-loop research, report via msg_store, default to docs/memory/PDF lane only.",
   "phase_state": {
-    "plan_ref": null,
-    "phase": "idle-between-dispatches",
-    "next_gate": "next msg_store task dispatched to bshr"
+    "plan_ref": "docs/PLAN_astro-trading-mvp-bradley-siderograph.md (and successor plan docs owned by plan/builder-1 as of this handoff)",
+    "phase": "idle_parked",
+    "next_gate": "next msg_store dispatch from gm or plan"
   },
   "next_3_actions": [
     {
-      "action": "Check inbox for any task dispatched after this handoff was authored.",
+      "action": "Check inbox for any new dispatch",
       "first_effect": {
-        "kind": "command",
-        "target": "python3 /Users/flybyflow/orchestraos/msg_store.py inbox --agent bshr --status unread --all",
-        "check": "command returns either a non-empty messages array (new task to read) or count: 0 (genuinely idle, park without churning tokens)"
+        "kind": "read",
+        "target": "msg_store.py inbox --agent bshr --status unread --all",
+        "check": "command returns a count (0 means stay parked, >0 means a new task exists to read and act on)"
       }
     },
     {
-      "action": "If a new task exists, check for a parallel dispatch on the same topic to plan/gm before researching from zero.",
-      "first_effect": {
-        "kind": "command",
-        "target": "python3 /Users/flybyflow/orchestraos/msg_store.py conversations --agent plan --limit 10",
-        "check": "review conversation subjects for topical overlap with the new task before dispatching research agents"
-      }
+      "action": "If a new message exists, read /tmp/agent-msg-<id>.md, act on it per its own instructions, reply via msg_store, then ack the dispatch message id"
     },
     {
-      "action": "Remain parked if inbox is empty -- do not proactively churn on memory/doc maintenance.",
-      "first_effect": {
-        "kind": "state",
-        "target": "no-op",
-        "check": "no commits, no msg_store sends occur unless a real task arrives"
-      }
+      "action": "If inbox is empty, remain parked -- do not churn tokens, do not proactively re-open closed threads (keonda PR #19, astro-trading research) unless explicitly asked"
     }
   ],
   "decisions": [
-    {"text": "Always send msg_store bodies containing $ or backticks via --body-file (temp file), never --body \"$VAR\".", "rationale": "bash shell-expands $0/$360 etc. inside a double-quoted variable at assignment time, silently corrupting the message -- observed twice this session, including by the person who broadcast the fleet-wide warning about it."},
-    {"text": "Re-read every sent msg_store message via `get` before considering a reply done.", "rationale": "a stray rendered tool-error box was found stitched mid-sentence into one sent message this session; the research itself was correct, only the composed text was corrupted."},
-    {"text": "Lane boundary: research and documentation only, never product/application code, never build, never push.", "rationale": "matches prompts/bshr.md's charter; every task this session was explicitly scoped research-only."},
-    {"text": "Single-trunk: all work lands on the branch already checked out at session start, no new branches, no destructive git ops.", "rationale": "standing git-safety guidance; nothing tonight required isolation."},
-    {"text": "Never edit a shared doc without re-reading its current state first.", "rationale": "plan/build/gm were concurrently editing the same doc set all session; several files changed on disk between this seat's own reads."}
+    {"text": "Default lane is research/docs/memory/PDF only, never build/edit product code unprompted", "rationale": "matches prompts/bshr.md's own charter"},
+    {"text": "Exception: execute bounded, verified, human-reviewed repo work when gm explicitly dispatches it, PR-not-merge is non-negotiable", "rationale": "demonstrated this generation on keonda.io PR #19 -- flagged the lane question to gm first rather than silently deciding either way"},
+    {"text": "Never fetch/extract from unauthorized scan/piracy document sites even when dispatched to, unless the operator confirms personal legitimate ownership of a specific file", "rationale": "played out once this generation on the Jenkins book -- flagged, operator confirmed ownership, then proceeded with normal summarize/quote discipline"},
+    {"text": "Verify every numeric claim by re-deriving it independently (Python), not by re-reading a source's own claim", "rationale": "caught a real cross-source formula discrepancy (Gann) and confirmed a primary-source worked example to the penny (Jenkins) this generation -- highest-value habit, keep doing it"},
+    {"text": "Always --body-file for msg_store sends containing $ or backticks, never --body \"$VAR\"", "rationale": "bash shell-expansion silently corrupts message bodies containing dollar amounts"},
+    {"text": "Re-read every sent message via msg_store.py get before considering a reply done", "rationale": "standing verification guard from a prior generation, still holds"},
+    {"text": "Single-trunk in orchestraos; isolated git worktree for the one external-repo exception, never touch another seat's dirty checkout", "rationale": "avoids clobbering concurrent multi-seat work"}
   ],
   "open_loops": [
-    "gm/plan have not yet given a final build-dispatch decision on the roadmap impact/feasibility matrix (msg_0c83a385_78375884) -- their decision, not a pending action for this seat.",
-    "gm has not yet replied to the 1987-IP-sweep findings (msg_f10c431b_81341400) -- a real, immediately-usable, fully-decoded content gap was found (Congruence/Incongruence narrative bank), no action pending on this seat.",
-    "RESOLVED (was open in the two prior handoff refreshes): the Self/Other/Whole framing correction and the §7a.1 stale-survey fix are both closed -- see decisions/hazards below for what to watch for if this recurs."
+    "keonda.io PR #19 open, mergeable, awaiting human review -- not this seat's action",
+    "astro-trading Music-ratio signal passed to plan for next backtest cycle -- no action pending unless a new question comes back"
   ],
   "file_roots_touched": [
-    "docs/BSHR_koherent-lineage-synthesis.md",
-    "docs/BRIEF_cross-venture-synthesis.md",
-    "docs/BRIEF_cross-venture-synthesis.pdf",
-    "docs/PLAN_od6-voice-agent.md",
-    "docs/PLAN_toddito-1987-venture.md",
-    "docs/PLAN_silicon-jungle-agentic-platform.md",
-    "/Users/flybyflow/.orchestra/memory/bshr/"
+    "docs/HANDOFF_bshr-next.md",
+    "$ORCHESTRA_DIR/state/bshr/astro-trading-gann-jenkins-20261005/",
+    "$ORCHESTRA_DIR/memory/bshr/",
+    "~/conductor/repos/keonda.io (real commit + PR #19, via isolated worktree)",
+    "~/conductor/repos/lee-associates-revops (read-only)",
+    "~/conductor/repos/astro-trading-backtest (read-only)",
+    "~/kokoro-svc (read-only)"
   ],
   "hazards": [
-    "The $-in-double-quoted---body msg_store corruption bug is real and has bitten multiple seats this session, including after a fleet-wide warning went out -- always use --body-file for any message containing a dollar amount.",
-    "docs/PLAN_silicon-jungle-agentic-platform.md is ~2400 lines and almost entirely internal security/review material -- easy to misjudge scope on a future rewrite/edit pass; its narrative content already has a plain-language home elsewhere (docs/BRIEF_silicon-jungle-the-why.md).",
-    "Several docs in docs/ are being actively co-edited by other seats in parallel (plan, build) -- always check git log/diff before assuming a section's content matches what this seat last saw."
+    "PR #19 can drift from main if it sits unreviewed -- re-check mergeable state before citing it as current",
+    "astro-trading-backtest and its plan docs are actively edited by other seats in parallel -- re-verify before citing a prior snapshot as still true",
+    "This generation's research spans four external repos plus orchestraos -- read the research artifact files before re-deriving from scratch"
   ],
   "canary_questions": [
-    {"id": "Q1", "question": "What real, working UI pattern did this seat find in a deleted 'init' commit of one of the Koherent repos, and what happened to it exactly one commit later?", "source_pointer": "msg_25785f88_77361808"},
-    {"id": "Q2", "question": "What specific bug pattern caused dollar-figure corruption in msg_store sends this session, and who else besides this seat hit the exact same bug later in the session?", "source_pointer": "msg_9bbd73c4_55317673..msg_a8c1f89a_60255987"},
-    {"id": "Q3", "question": "Of the six unbuilt Application Suite modules for Toddito, which two did this seat's final roadmap matrix rank highest, and what real (not invented) 1987-era evidence backed each one?", "source_pointer": "msg_0c83a385_78375884"},
-    {"id": "Q4", "question": "According to this seat's cross-venture synthesis, how many of the six originally-named ventures/initiatives turned out to be genuinely separate things, and what's the one real financial dependency found between them?", "source_pointer": "conv:msg_da7fb5fe_55189408"},
-    {"id": "Q5", "question": "In the 1987 THOR system, what single new narrative content bank did this seat find that is fully decoded, generic across variants, and immediately usable with no new invention or Todd input needed -- and which files was it found in?", "source_pointer": "msg_f10c431b_81341400"}
+    {"id": "cq1", "question": "What did the phrase 'ipcycle kokoros algorythm' actually turn out to refer to, and how did that get confirmed?", "source_pointer": "msg_d900ebb2_97778546"},
+    {"id": "cq2", "question": "In the hands-on cross-check between kerykeion/pyswisseph and the trading repo's skyfield-based ephemeris, a real systematic discrepancy showed up in one quantity but not another -- what was the mechanism, and why did it not matter for the actual trading signals?", "source_pointer": "msg_2df83fab_98041576"},
+    {"id": "cq3", "question": "Why did this seat decline to act on gm's first instruction to fetch Jenkins' book from a specific link, and what changed to make it proceed later?", "source_pointer": "msg_ed2c3183_98173595"},
+    {"id": "cq4", "question": "While researching Gann's 'time = price squared' technique, cross-checking two independently-published degree-conversion formulas revealed something important for anyone about to implement it -- what, and why does it matter more than it would for Bradley's formula?", "source_pointer": "msg_e0482c68_68980264"},
+    {"id": "cq5", "question": "While independently re-deriving one of Jenkins' own worked examples from his book, a small real inconsistency turned up in the primary text itself -- what was it, and how was it handled rather than silently smoothed over?", "source_pointer": "msg_2890cd42_99781979"}
   ]
 }
 ```
