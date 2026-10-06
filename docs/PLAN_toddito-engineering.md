@@ -1317,6 +1317,127 @@ doesn't have? Real product-policy question, not a technical one — flag
 to the operator before shipping the named-divergence framing, technical
 build can proceed with role-tagging either way.
 
+## 14. Operator priority (2026-10-06T00:15 UTC, via gm, `msg_d6915220_45707939`,
+Telegram voicemail): report depth/length does not scale with interview
+length — scoped, not yet built
+
+**The operator's own question, verbatim:** "how can a much longer
+interview produce the same-length assessment?" Reference: the legacy
+system's report ended with a full risk assessment pulling together
+culture, strategy, structure, leadership style, and stage of development
+— letting people "get out of autopilot" by seeing the true risk picture,
+a plausible cause, and a few concrete suggestions. A 20-25 minute
+interview should not read the same length/depth/intensity as the usual
+~8-minute one.
+
+**Root cause, found in code (`src/lib/scoring/prompt.ts`), then confirmed
+against real production data — not guessed from either alone.**
+
+The scoring pipeline (`score.ts` → `prompt.ts`) has exactly one prompt per
+tier (Lite, Full), and that prompt's OUTPUT schema hard-codes fixed
+cardinality regardless of how much the transcript actually contains:
+`"clinical_observations": [string, string, string]` (always exactly 3 on
+Full, 2 on Lite — a JSON-schema literal, not a range), `critical_risk` and
+`recommendation` are always exactly one sentence each, and
+`focus_evidence` is only loosely steered ("most transcripts yield 2-6
+entries"). Nothing in the prompt tells Claude to scale the NUMBER or
+DEPTH of observations to the evidence actually present — so a transcript
+with 5x more signal still gets compressed into the same fixed slots.
+
+**Verified against real production data (Supabase `almworaoyraprsdlkrha`,
+`reports`/`transcripts`/`sessions` tables) — only 2 scored Full-tier
+sessions exist, but they land exactly on the predicted pattern:**
+
+| | Session A | Session B |
+|---|---|---|
+| transcript size | 2,881 chars | 16,201 chars (5.6x) |
+| duration / probes | unknown | 1354s (**22.6 min** — matches the operator's "20-25 min" exactly) / 54 probes |
+| `clinical_observations` count | 3 | 3 (**identical**, as the fixed-array schema predicts) |
+| `critical_risk` length | 336 chars | 531 chars (1.6x — nowhere near proportional to 5.6x transcript growth, because it's pinned to "one sentence") |
+| `recommendation` length | 321 chars | 518 chars (same pattern) |
+| `focus_evidence` entries | 0 | 6 (this field has NO fixed-count instruction — and it's the one field that actually scaled) |
+
+That last row is the tell: the one field without a hard-coded count is
+the one field that responded to the richer transcript. This directly
+confirms the fix target — it isn't the model failing to notice more
+signal, it's the schema refusing to let that signal become more output.
+
+**Two other candidate causes checked and ruled out:**
+- **Frontend truncation** — `ReportView.tsx` just `.map()`s over whatever
+  array the API returns; no client-side cap. Not the bottleneck.
+- **THOR (deterministic 1987-engine) scoring** — fixed-dimension
+  scorecard by design (raw/pct per named dimension); this is correctly
+  invariant to transcript length and is not where "depth" is supposed to
+  live. Not in scope for this fix.
+
+**One structural gap found but NOT currently causing the complaint —
+flagged so it isn't mistaken for the fix:** `Tier = "lite" | "full" |
+"deep"` already exists in the data model (`ELEVENLABS_AGENT_ID_DEEP` env
+var, `elevenlabs-config/route.ts`), and `score.ts` carries its own
+comment admitting the gap: `// Deep uses full scoring prompt — extended
+output once DEEP_SCORING_SYSTEM_PROMPT lands`. That prompt was never
+written; `deep` silently reuses `FULL_SCORING_SYSTEM_PROMPT` today.
+**Checked live data: zero `deep`-tier sessions exist in production** (4
+`lite`, 3 `full`, 0 `deep`). So the long interviews the operator is
+describing are happening on the `full` tier itself — fixing `full`'s
+schema is the actual fix; building out `deep` is a separate, currently-
+dormant gap worth a one-line flag to the operator, not a reason to expand
+this task's scope.
+
+**Noticed in passing, not actioned here (separate thread, [[toddito-report-tone]]):**
+`main` (`1731e66`, confirmed current) still has the literal `TONE:
+Clinical` line in `prompt.ts` in both Full and Lite prompts — the
+report-tone fix that memory shows as "dispatched"/"resumed via /ship"
+apparently never landed. Flagging for that thread's owner, not pulling it
+into this one — same prompt file, different fix, don't blend them into
+one diff.
+
+**Recommended fix, two parts, both inside `prompt.ts` (no new pipeline,
+no schema/table migration needed — `focus_evidence` already proves
+variable-cardinality JSON fields work fine end-to-end):**
+
+1. **Replace fixed-count schema hints with evidence-scaled instructions.**
+   `clinical_observations` becomes an explicit range tied to evidence,
+   e.g. "Produce one observation per genuinely distinct, well-evidenced
+   pattern — typically 2 for a short/thin interview, up to 5-6 for a
+   long, rich one. Do not pad to hit a count. Do not invent evidence to
+   fill a slot." Same move for `critical_risk`/`recommendation`: if the
+   operator wants the legacy-style multi-point risk assessment (culture +
+   strategy + structure + leadership + stage synthesized together, not
+   one sentence), that's a bigger change — see open question below
+   before building it.
+2. **Ground the model in a stated richness number**, the same
+   "reference beats recall" discipline used elsewhere this project:
+   pass the actual respondent turn count / probe count into the user
+   message (`sessions.probe_count` and `transcripts` already carry
+   this) so the model's sense of "how much is here" is anchored to a
+   real number, not inferred from skimming the transcript once.
+
+**Open questions for the operator before build (do NOT guess past
+these):**
+- Is "scale clinical_observations / critical_risk / recommendation to
+  evidence density" sufficient, or does the operator want an actual NEW
+  cross-dimension "risk assessment" section (the legacy GPARISK.ASF-style
+  synthesis named in the voicemail) distinct from today's single-sentence
+  `critical_risk`? That's new schema + new UI, not a prompt tweak — needs
+  its own go/no-go, same scope discipline as every other toddito thread
+  this plan tracks ([[toddito-consultant-facet]] already decoded the
+  adjacent CPCSP.EXE content from the same legacy binary set at
+  `~/conductor/repos/mic-program-toddito` — reuse that decode, don't
+  re-derive it).
+- Sample size is 2 live scored sessions — thin. Recommend validating the
+  fix against a handful of synthetic short vs. long transcripts (same
+  org, deliberately varied respondent elaboration) before/after the
+  prompt change, not just trusting the prompt edit "reads right."
+- Retroactive re-score of the 2 existing `full` reports, or forward-only?
+
+**Sequencing:** builder-3 has live context on this exact file's
+neighborhood (just off PR #22/#24) — recommend looping them in rather
+than a fresh build instance, since `prompt.ts`/`score.ts` is squarely
+inside what they already have warm context on. Not yet dispatched to
+build — operator wants a plan first per this priority's own instruction;
+this section is that plan.
+
 ## GSTACK REVIEW REPORT
 
 **Mode: HOLD SCOPE.** This is improvement work on an existing, mature,
