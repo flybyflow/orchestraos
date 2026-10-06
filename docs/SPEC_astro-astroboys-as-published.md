@@ -126,6 +126,39 @@ scale-driven effect masquerade as solar.
 earlier revision proposed testing B against a fixed-num control matched on
 offset magnitude. That is withdrawn as *not implementable* — see §4.1.
 
+### 3.1 INTERPRETATION CEILING — what a positive Claim B can and cannot mean
+
+**`num = ceil(sun longitude)` is, to measurement precision, a calendar
+lookup.** Solar ecliptic longitude is a near-deterministic function of the
+date. Measured here across 24617 trading days, 1927–2025, as the circular
+deviation of each observation from its own day-of-year circular mean:
+
+| statistic | measured here | reported by review |
+|---|---|---|
+| mean | **0.27°** | 0.79° |
+| 99th percentile | **0.67°** | 1.18° |
+| max | **0.74°** | 1.20° |
+
+The two sets disagree by a consistent ~0.5°, which is a methodological
+difference (plausibly leap-year day-of-year alignment, or calendar vs trading
+days) and is **not reconciled here**. It does not matter for the conclusion:
+the figures measured here are *smaller*, so they make the point **more**
+strongly, not less. Either way the deviation is sub-degree, and no amount of
+data separates "the sun was at 97°" from "it was April 7th".
+
+**Therefore, a ceiling on what any positive Claim B result could mean:**
+at best it is evidence that *this particular day-of-year function beats other
+day-of-year functions*. It is **never** evidence of astronomy specifically.
+A solar-longitude signal and a calendar signal are not distinguishable on this
+data by any test, however well controlled.
+
+This is written **before any Claim B outcome exists**, and it is a constraint
+on interpretation rather than on the test — the test itself is unchanged.
+It is recorded here rather than in §4.1 because §4.1's existing point ("a
+naive test would find seasonal structure, correctly, and it would be
+arithmetic") is about **firing rate**; this is about what a positive
+**outcome** may be claimed to mean. Different claims.
+
 ---
 
 ## 4. Claim A is descriptive-only. Claim B is pre-registered here.
@@ -197,15 +230,20 @@ That is withdrawn for two reasons, the first fatal:
 Firing rate is not a function of |offset|. My own nine-num sweep is the dataset
 that refutes it:
 
+All nine measured nums, not a subset — the two endpoints the surrounding
+prose cites (num=2 is the max, num=361 the min) are rows here:
+
 | num | offset | \|offset\| | firing rate |
 |---|---|---|---|
+| 1 | (0,0) | 0.00 | **0.2146** |
+| 2 | (1,0) | 1.00 | **0.2214**  ← max |
 | 5 | (1,1) | **1.41** | **0.2178** |
 | 9 | (−1,−1) | **1.41** | **0.2148** |
-| 1 | (0,0) | 0.00 | **0.2146** |
 | 25 | (−2,−2) | 2.83 | **0.2146** |
 | 100 | (5,4) | 6.40 | 0.2123 |
 | 180 | (4,−7) | 8.06 | 0.2200 |
 | 290 | (−8,−9) | 12.04 | 0.2000 |
+| 361 | (−9,−9) | 12.73 | **0.1913**  ← min |
 
 Same magnitude, different rate (rows 1–2) means rate is not a function of
 |offset| at all. Same rate, different magnitude (rows 3–4) means the inverse
