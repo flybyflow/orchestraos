@@ -129,50 +129,33 @@ offset magnitude. That is withdrawn as *not implementable* — see §4.1.
 ### 3.1 INTERPRETATION CEILING — what a positive Claim B can and cannot mean
 
 **`num = ceil(sun longitude)` is, to measurement precision, a calendar
-lookup.** Solar ecliptic longitude is a near-deterministic function of the
-date. Measured here across 24617 trading days, 1927–2025, as the circular
-deviation of each observation from its own day-of-year circular mean:
+lookup.** Stated as an exact integer fact, with no aggregation choice hiding
+inside it:
 
-| statistic | measured here | reported by review |
-|---|---|---|
-| mean | **0.27°** | 0.79° |
-| 99th percentile | **0.67°** | 1.18° |
-| max | **0.74°** | 1.20° |
+> Across 1927–2025, **knowing the date pins `num` to at most 3 adjacent
+> integers out of 360** — mean 2.32, always contiguous, with a single
+> exception at day-of-year 79 (the March equinox) where the 0/360 wraparound
+> splits the range.
 
-**The figures measured here are the ones to use, and the justification is not
-"I computed them" — it is an a-priori derivation that depends on neither
-party's code.** Within a 4-year leap cycle the date↔longitude offset spans
-about 0.75 day, and
+Verified here independently of review, who proposed this framing. It replaces
+an earlier degree/percentile table in this section: review and I had measured
+that quantity differently and disagreed by ~0.5°, and the reconciliation was
+two stacked methodology differences — they measured `ceil`'d `num` where I
+measured raw longitude, and they took per-day-of-year maxima where I took
+per-observation values. Both of the causes originally guessed at (leap-year
+day-of-year alignment; calendar-vs-trading days) were ruled out by direct
+test, as was a later guess about a span crossing 1900. The integer statement
+above has no such degrees of freedom, which is why it is the one that belongs
+in a locked document.
 
-    0.75 day × 0.9856°/day = 0.739°
-
-against a measured max of **0.742°**. The prediction holds to three decimals,
-using no ephemeris at all. Review's 1.20° max would require ~1.22 days of
-date↔longitude spread, which a clean 4-year cycle cannot produce.
-
-**Cause of the gap: plausible but UNCONFIRMED.** 1900 was not a leap year
-(divisible by 100, not 400), so any span crossing it picks up an extra day of
-drift and could plausibly reach 1.2°. The window used here, 1927–2025,
-contains no century exception — 2000 *was* a leap year — which is why it is
-clean. This could not be tested from here: spans reaching before ~1927 fail
-with `EphemerisRangeError`. Named as a hypothesis, not asserted.
-
-Five method variants were tested and **none** reproduces review's figures;
-in particular leap-year day-of-year alignment and calendar-vs-trading-days —
-the first guesses — change the result by less than 0.01° and are *not* the
-cause.
-
-None of this matters for the conclusion, and the direction is worth stating:
-the figures here are *smaller*, so they make the point **more** strongly.
-Either way the deviation is sub-degree, and no amount of data separates
-"the sun was at 97°" from "it was April 7th".
-
-**Not to be confused with the ephemeris question.** This statistic is measured
-relative to each day-of-year's own mean, so a constant time offset cancels
-exactly in it (verified: identical to three decimals at hour 0 and hour 12).
-The AL.getsun-vs-ephemeris.py question is *nothing but* a constant offset, and
-flips `num` on 49.4% of days. The two are orthogonal; resolving one says
-nothing about the other.
+**Do not confuse this with the sampling-hour question in §4.** They look like
+the same confound and are orthogonal. This statistic is measured relative to
+each day-of-year's own values, so a **constant** time offset cancels in it
+(verified: identical at hour 0 and hour 12). The sampling-hour question is
+*nothing but* a constant offset, and flips `num` on 49.4% of days. One is
+blind to constant shifts; the other is made entirely of them. Resolving
+either says nothing about the other — recorded so the next reader does not
+re-derive the same wrong coupling, as both gm and I initially did.
 
 **Therefore, a ceiling on what any positive Claim B result could mean:**
 at best it is evidence that *this particular day-of-year function beats other
@@ -207,7 +190,36 @@ not as controls for a test A will not receive.
 > variant generates it, and randomises only angular position.
 
 All four confounds below are mandatory controls for B, each justified by a
-measured quantity:
+measured quantity.
+
+> #### ⚠️ ONE PARAMETER OF CLAIM B IS NOT YET PINNED: THE SAMPLING HOUR
+>
+> `num` is `ceil` of the sun's longitude **at some instant of the day**, and
+> this spec does not yet say which. Until it does, "Claim B" names roughly two
+> dozen different tests rather than one, so **the lock is incomplete on this
+> axis** — stated plainly rather than discovered later.
+>
+> It is a spec gap, **not a validity bug**: phase rotation shares whatever
+> hour is chosen between the real series and every surrogate, so the null
+> stays honest either way.
+>
+> Why it is load-bearing, measured: this repo's `ephemeris.py` uses
+> `DEFAULT_HOUR = 12.0` (noon UT); the script uses
+> `AL.J2000(AL.JDN(time, 0, tz))`, sampling off the bar's own timestamp with
+> `tz` defaulting to 0 — **not noon**. That convention difference flips `num`
+> on **49.4%** of days. A genuine ephemeris *precision* difference flips it on
+> ~0.9%. The hour is a **50× larger** effect than the choice of ephemeris.
+>
+> The "Observer Location" lat/long inputs are a red herring for ecliptic
+> longitude: solar parallax matters on ~0.2% of days and both default to 0.
+> `tz` is the only load-bearing argument.
+>
+> **Resolution:** the operator has been asked to read sun-degree values off
+> their own chart for known dates. Whatever hour the published script actually
+> uses will show up there regardless of theory — the same oracle pattern that
+> caught a 346/361-cell error in the spiral. The resolved hour gets recorded
+> here explicitly, **stated rather than inherited by default** from this
+> repo's convention just because it is familiar. Nothing is scored until then.
 
 **Control 1 — move size.** A cross *requires* `|Δclose|` to exceed the distance
 to the nearest level, so crosses select for large moves, and large moves sit
