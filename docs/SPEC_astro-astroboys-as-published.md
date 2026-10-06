@@ -139,12 +139,40 @@ deviation of each observation from its own day-of-year circular mean:
 | 99th percentile | **0.67°** | 1.18° |
 | max | **0.74°** | 1.20° |
 
-The two sets disagree by a consistent ~0.5°, which is a methodological
-difference (plausibly leap-year day-of-year alignment, or calendar vs trading
-days) and is **not reconciled here**. It does not matter for the conclusion:
-the figures measured here are *smaller*, so they make the point **more**
-strongly, not less. Either way the deviation is sub-degree, and no amount of
-data separates "the sun was at 97°" from "it was April 7th".
+**The figures measured here are the ones to use, and the justification is not
+"I computed them" — it is an a-priori derivation that depends on neither
+party's code.** Within a 4-year leap cycle the date↔longitude offset spans
+about 0.75 day, and
+
+    0.75 day × 0.9856°/day = 0.739°
+
+against a measured max of **0.742°**. The prediction holds to three decimals,
+using no ephemeris at all. Review's 1.20° max would require ~1.22 days of
+date↔longitude spread, which a clean 4-year cycle cannot produce.
+
+**Cause of the gap: plausible but UNCONFIRMED.** 1900 was not a leap year
+(divisible by 100, not 400), so any span crossing it picks up an extra day of
+drift and could plausibly reach 1.2°. The window used here, 1927–2025,
+contains no century exception — 2000 *was* a leap year — which is why it is
+clean. This could not be tested from here: spans reaching before ~1927 fail
+with `EphemerisRangeError`. Named as a hypothesis, not asserted.
+
+Five method variants were tested and **none** reproduces review's figures;
+in particular leap-year day-of-year alignment and calendar-vs-trading-days —
+the first guesses — change the result by less than 0.01° and are *not* the
+cause.
+
+None of this matters for the conclusion, and the direction is worth stating:
+the figures here are *smaller*, so they make the point **more** strongly.
+Either way the deviation is sub-degree, and no amount of data separates
+"the sun was at 97°" from "it was April 7th".
+
+**Not to be confused with the ephemeris question.** This statistic is measured
+relative to each day-of-year's own mean, so a constant time offset cancels
+exactly in it (verified: identical to three decimals at hour 0 and hour 12).
+The AL.getsun-vs-ephemeris.py question is *nothing but* a constant offset, and
+flips `num` on 49.4% of days. The two are orthogonal; resolving one says
+nothing about the other.
 
 **Therefore, a ceiling on what any positive Claim B result could mean:**
 at best it is evidence that *this particular day-of-year function beats other
