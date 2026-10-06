@@ -142,11 +142,19 @@ an earlier degree/percentile table in this section: review and I had measured
 that quantity differently and disagreed by ~0.5°, and the reconciliation was
 two stacked methodology differences — they measured `ceil`'d `num` where I
 measured raw longitude, and they took per-day-of-year maxima where I took
-per-observation values. Both of the causes originally guessed at (leap-year
-day-of-year alignment; calendar-vs-trading days) were ruled out by direct
-test, as was a later guess about a span crossing 1900. The integer statement
-above has no such degrees of freedom, which is why it is the one that belongs
-in a locked document.
+per-observation values. That is fully nailed down and nothing about it remains
+open.
+
+Three causes were *guessed* before that, and all three were wrong: leap-year
+day-of-year alignment and calendar-vs-trading days (change the result by
+<0.01°), and a span crossing 1900 — dead on both grounds, since review's range
+is 1927–2025 and a century skip would add a full day of drift, predicting
+1.75 × 0.9856 = **1.72°** rather than the 1.20° observed. The correct
+explanation was on nobody's list, which is the argument for testing candidate
+causes instead of ranking them by plausibility.
+
+The integer statement above has no such degrees of freedom, which is why it is
+the one that belongs in a locked document.
 
 **Do not confuse this with the sampling-hour question in §4.** They look like
 the same confound and are orthogonal. This statistic is measured relative to
