@@ -107,7 +107,36 @@ parsing code. Lower priority than §1b/2's items: this is delivery-status
 observability, not a safety gate or a send path — flag as a known gap to
 close, not a blocker to ship without.
 
-## 3. Real open risks — flagged, not resolved
+## 3. Real open risks — flagged, then confirmed by gm against the live account (2026-10-07T14:29 UTC)
+
+**Update: all three checked. One is now a confirmed HARD BLOCKER on build —
+hold this specific swap until it clears.**
+
+1. **10DLC/A2P status — CONFIRMED NOT APPROVED, hard blocker.** gm ran
+   `GET /campaigns` with the live key: `status: "Carriers Pending"`,
+   `tcr_status: "pending"`, `registered_on: null`. This is not hypothetical —
+   this account has not cleared A2P. Sending real SMS through this campaign
+   right now carries the real risk of reproducing the exact failure mode
+   that killed Twilio for this client. **Do not cut over real traffic until
+   this clears.** Code work that doesn't depend on it (adapter.py's lookup,
+   entrypoint.sh's PUBLIC tuple, the adapter module itself) can proceed in
+   parallel; do not wire the live webhook endpoint until both this AND item 2
+   below are resolved.
+2. **No webhook signing secret — CONFIRMED, not just undocumented-so-far.**
+   gm has the full 32-page reference (more than what fit in my first fetch)
+   and confirmed there is no HMAC option anywhere in it. Stopgap if Sendivo
+   genuinely has none: IP-allowlist the webhook endpoint to Sendivo's sending
+   ranges (ask their support for the list directly, don't guess it from
+   traffic). Resolve before wiring the live endpoint, same as item 1.
+3. **Sendivo's own AI Responder — likely exists as a real product feature,
+   not just my reading of one phrase.** gm confirms the dashboard's left nav
+   has a top-level "Artificial Intelligence" product section, separate from
+   SMS/CRM. Not proof it's active on this specific account, but strong
+   evidence the capability is real and needs an explicit off-switch check —
+   a dashboard check, not something resolvable via the API key alone. gm is
+   flagging directly to the operator.
+
+Original flags, for the record, below.
 
 1. **10DLC/A2P approval status — gm asked me to check this directly; I
    can't without the live key.** The reference doc confirms this Sendivo
