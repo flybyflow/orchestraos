@@ -244,7 +244,13 @@ hold it correctly.
      carry the validation burden until real usage accumulates.
 ```
 
-## 3a. Real open question, flagged to gm/operator, not decided here
+## 3a. Claims-framing question — DECIDED, not open
+
+gm made this call directly: no 1987-provenance claim in the report; the
+weights carry forward as a prior, not as "the 1987 instrument's calibrated
+score." Settled, not blocking anything below.
+
+### Original framing of the question, for the record
 
 builder-3 raised a claims-accuracy question, not a testing matter: the
 dispatch's constraint said the 1987 instrument's vectors/weights "stay as
