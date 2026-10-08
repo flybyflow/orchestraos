@@ -190,6 +190,46 @@ except by gm's own timeline for PR #9, not a mechanical scheduling choice.
           exclusion actually means. Not touching until that lands.
 ```
 
+## Addendum 2026-10-08T13:45 UTC — build's PR #8 findings: main's CI is already red, PR #1 vs PR #11 collision
+
+**Main's CI has been red since at least Oct 1, independent of anything in
+this batch.** build compared failure profiles across `3921221`, `1731e66`,
+and their own PR #8 merge commit (`1cadf4c`): identical pattern each time —
+Lint/Type-Check, Unit Tests, Tier Default Regression, and Scoring Model Pin
+all pass; only **Security Scan** fails (`npm audit`: 10 vulnerabilities, 3
+critical/6 high/1 moderate). Because Security Scan fails, **the Build job
+is skipped** — main hasn't had a successful CI Build since at least Oct 1.
+PR #8 introduced nothing new here; confirmed identical before/after.
+
+**This gives PR #1 a concrete, checkable success criterion, not a generic
+one:** PR #1's `02cff01` commit is the npm-audit-criticals fix. After PR #1
+lands, Security Scan should pass and Build should stop being skipped —
+build is verifying exactly that, not just "tests pass."
+
+**No deploy observability — expected, not a new gap.** CI has no deploy
+job; Coolify (which watches main) isn't reachable from here, consistent
+with [[project_toddito-deploy-topology]]'s standing finding. Landing to
+main is verifiable; actual deploy isn't, without Coolify access or a live
+HTTP check against the running app.
+
+**Real sequencing collision, not in the original plan (written before PR
+#11 existed): PR #1 and PR #11 (fix-sec09-sec05-remediation) both touch
+`src/app/api/webhooks/elevenlabs/route.ts`.** PR #11's SEC-05 fix and PR
+#1's SEC-01/04 fixes are almost certainly different hunks of the same file,
+not a competing redesign, but whichever lands first makes the other's
+rebase stale on that one file. **Resequenced: PR #11 lands first** (same
+reasoning as landing PR #8 before PR #1 — small, nearly-clean, removes a
+conflict before the big rebase locks in), then PR #1 rebases against that
+final state so the webhooks/elevenlabs/route.ts hunk gets resolved once,
+not twice. Told build to hold PR #1's rebase before pushing anything until
+PR #11 clears.
+
+**Shared-checkout hazard, correctly avoided:** build noticed `~/conductor/
+repos/toddito` (the shared working directory multiple seats use) currently
+has `fix-sec09-sec05-remediation` checked out — live work in progress — and
+is doing PR #1's rebase in an isolated worktree instead of touching that
+checkout, consistent with [[feedback_shared-working-directory-branch-hazard]].
+
 ## Addendum 2026-10-08T13:32 UTC — the kokoro-svc Pipecat branch, found and checked
 
 gm relayed the operator's clarification: the working cloud Pipecat version
