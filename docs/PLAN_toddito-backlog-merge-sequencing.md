@@ -362,3 +362,67 @@ default. Sequencing PR #8 before PR #1 removes one conflict for free.
 it's a five-month-stale fork whose naive merge would delete two real
 migrations and test infra; worth the operator's explicit "still want this"
 with that specific cost attached, not a generic size caveat.
+
+---
+
+## Live landing condition on PR #2 — self-check privacy gate (builder-3, 2026-10-08)
+
+**Recorded here because a gate that lives only in a cron job or a message
+thread is not a gate.** gm landed PR #2 on the explicit basis that this check
+would be *monitored*, not recommended.
+
+**The condition.** `self_check_reports` is **workspace-private, not
+person-private**: no `user_id` column, and the only read-site filter is
+`report.account_id !== ws.accountId`
+(`src/app/dashboard/self-check/[id]/page.tsx:115`). So co-members of one
+account can read **and overwrite** each other's self-assessments.
+
+**Why landing was still correct.** The harm is currently unreachable, verified
+read-only against production `almworaoyraprsdlkrha`: **1 account, 0 profiles,
+0 self-check rows.** There is no second person who could read anything. The
+only reader resolves through `ADMIN_TOKEN` to the founder workspace.
+
+**Correction worth keeping: this is NOT a config flip.** Making it
+person-private needs a `user_id` column (a migration in
+`supabase/migrations/`, CONFIRMED-ACTIVE with a named owner) **plus** a filter
+at every read site. Whichever way Todd rules, one of the two answers costs a
+migration plus code. Any plan that assumes "land now, flip a flag later" is
+built on a false premise.
+
+**The gate, as a query.** Must stay `0` until Todd rules or a `user_id`
+column exists:
+
+```sql
+select count(*) from (
+  select p.account_id from profiles p group by p.account_id having count(*) > 1
+  intersect
+  select distinct account_id from self_check_reports where account_id is not null) x;
+```
+
+The conjunction matters. >1 profile with no self-check rows is harmless, and
+self-check rows under a single profile are harmless. Only both together expose
+anything.
+
+**Monitoring, and its honest limits.** Durable cron job `94393324`, daily,
+runs the query via the Supabase MCP and alerts gm + plan on a non-zero result;
+it self-retires if a `user_id` column appears, and reports loudly rather than
+silently if the query cannot be evaluated.
+
+Three limitations stated rather than buried:
+
+1. **Recurring crons auto-expire after 7 days.** If Todd has not ruled by then
+   it must be re-armed. The gate has no deadline; the cron does.
+2. **Cron jobs fire only while a REPL is idle.** If this seat is gone or busy,
+   a tick can be missed.
+3. **It could not be written as a `scripts/*_watch.py`** in the house pattern,
+   because **no script-reachable credential for toddito's database exists** —
+   the access lives in the MCP layer, which is available to an agent session
+   and not to a standalone script. That constraint applies to *any* future
+   toddito monitoring, not just this gate.
+
+**Standing recommendation on the product question** (builder-3 and `review`
+independently agree): **person-private.** If workspace-visible turns out to be
+wrong, a colleague has already read someone's "weak" and no fix reaches that.
+The cheapest moment to add `user_id` is while the table has **zero rows** —
+which is now. The decision gets monotonically more expensive with every row
+written.
