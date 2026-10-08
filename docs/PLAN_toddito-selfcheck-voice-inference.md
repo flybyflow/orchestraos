@@ -117,7 +117,29 @@ GATE 3 (go/no-go) -- within-facet variance survives
   (needs facet mean 3.10-3.99 via real item disagreement, not a uniform
   fill). FAIL = the 1987 ladder's "uneven relationship" rung is dead on
   arrival; do not proceed.
+
+GATE 4 (go/no-go) -- `expectations` can be returned unscored
+  `expectations` is a single item carrying 1/6 of the headline weight.
+  `MIN_SCORED_FACETS=5` makes losing it survivable -- which means the
+  instrument silently changes meaning (headline score computed from 5
+  facets instead of 6) rather than refusing. Confirm the model can and
+  does abstain on this specific item when the conversation never touches
+  it, same as any other item (GATE 1's logic, called out separately
+  because this is the facet where silently proceeding is worst).
 ```
+
+**The contract decision GATE 2 is actually testing, made explicit:** the
+model must emit RAW per-item agreement with each item's own (possibly
+negatively-phrased) statement — NOT an already-oriented "how healthy is
+this facet" judgment. `score.ts`'s `orientedRating()` does the reverse-item
+flip itself; asking the model to also orient its answer double-flips
+reverse items. This is exactly the acquiescence fingerprint (`awareness`
+-> weak while overall reads solid) — GATE 2 IS the acceptance test for
+getting this contract right, not a separate sanity check. Recommendation,
+endorsed: model emits raw agreement, scorer keeps doing all orientation —
+keeps the 1987 polarity logic in the one place that already has mutation
+coverage for all five reverse items, rather than asking the model to also
+hold it correctly.
 
 1. Run GATES 1-3 on the first prompt draft, iterating on synthetic
    transcripts (praise-only, criticism-only, mixed, silence-on-one-facet)
@@ -140,6 +162,23 @@ GATE 3 (go/no-go) -- within-facet variance survives
      (1 account, 0 self-check rows as of tonight) -- synthetic transcripts
      carry the validation burden until real usage accumulates.
 ```
+
+## 3a. Real open question, flagged to gm/operator, not decided here
+
+builder-3 raised a claims-accuracy question, not a testing matter: the
+dispatch's constraint said the 1987 instrument's vectors/weights "stay as
+the recovered source of truth." (B) changes what those weights are
+calibrated AGAINST (self-perception -> observed-language), even though the
+numbers themselves can be preserved. **No test catches this — every
+number stays in range either way.** The actual question: does the report
+still present its output as the 1987 instrument's calibrated score, or
+does it honestly reframe as a new instrument that reuses the 1987 items
+as a topic guide / starting prior? Presenting it as the former would claim
+a calibration it no longer has. builder-3's read, which this seat agrees
+with: reframe honestly (the latter) — cheap, mostly a copy/claims change
+in how the report describes itself, not a scope change to the build.
+Flagging to gm rather than deciding unilaterally, since it's about what
+the product claims to the client, not a technical call.
 
 ## 4. What's reusable vs. new
 
