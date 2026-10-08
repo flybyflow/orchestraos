@@ -190,6 +190,60 @@ except by gm's own timeline for PR #9, not a mechanical scheduling choice.
           exclusion actually means. Not touching until that lands.
 ```
 
+## Addendum 2026-10-08T13:32 UTC — the kokoro-svc Pipecat branch, found and checked
+
+gm relayed the operator's clarification: the working cloud Pipecat version
+was on a branch, not main, which is why the first check (default branches
+only) missed it. Checked `git branch -a` / `git log --all` / `git grep`
+across all branches of all three repos (`kokoro-svc-v1`, `v2`,
+`v2-trust-core`) this time, not just main.
+
+**Found it: `feature/11labs-migration`, present (same content) in all three
+repos, still-open PR #47 in `kokoro-svc-v2`, never merged.** Real code —
+`pipecat_server.py`, `observability.py`, `services/session_store.py`,
+a Dockerfile. But:
+
+- The commit itself (`fcd0114`) is titled **"feat(voice): add
+  self-hosted Pipecat voice pipeline"** — Groq STT → Anthropic LLM →
+  ElevenLabs TTS over **LiveKit WebRTC**, explicitly "a deployable
+  alternative to ElevenLabs Conversational AI." Self-hosted, not a managed
+  cloud product.
+- **Dated 2026-05-20, Mo Sersouri — the exact same day as toddito's own
+  `backup/add-pipecat` commit** (`[TUL-51] Support self-hosted Pipecat +
+  WebRTC pipeline`, also Mo Sersouri, 56 minutes later). Same author, same
+  day, same "self-hosted" framing, both never merged — this reads as one
+  exploratory session ported across two sibling repos, not two independent
+  proof points.
+- No cost data, no production-deployment evidence, no later commits
+  referencing results — PR #47 has sat open, unmerged, for ~5 months.
+
+**Not relaying this as "confirmed, the claim was simply wrong" either** —
+it's possible "self-hosted" in the commit message refers to the AI-stack
+choice (self-managed Pipecat pipeline vs. ElevenLabs's managed
+conversational AI), not the hosting infrastructure, and this code could in
+principle run on a cloud host rather than physical hardware. What I can
+verify: this specific branch exists, is unmerged, and nothing in either
+repo shows it was ever run in production or measured for cost. What I
+can't verify: whether "proven in production, measurably cut costs" refers
+to running THIS code somewhere outside what I can see, or whether the
+operator is recalling something that didn't actually happen this way.
+Relaying the facts, not resolving the discrepancy myself.
+
+**Other context from gm's message, logged for when this reaches the front
+of the queue (not actioned now, correctly last-in-sequence):**
+- Latency rationale: Kokoro's own use case (real-time conversational
+  voice) is latency-sensitive in a way a diagnostic/assessment tool like
+  toddito is not — the operator's read is that whatever made this
+  insufficient for Kokoro could still be fine for toddito's actual need.
+- Design principle to carry forward, not just for this integration:
+  build the AI/voice backend with an easily-swappable-provider
+  abstraction from the start — providers compete, sponsorship/free-token
+  deals can appear, and retrofitting a swap layer later is more expensive
+  than designing for it up front.
+- When this reaches the front of the queue: run `/plan-eng-review` and
+  `/plan-devex-review` before build starts — operator named both
+  explicitly.
+
 ## What to tell gm
 
 §0 is the thing to confirm before any build time gets spent: PR #1 and
