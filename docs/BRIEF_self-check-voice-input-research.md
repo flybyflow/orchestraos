@@ -234,3 +234,106 @@ worth knowing before a plan is written around them.
    the weights while every number still looks fine.
 4. Run the two cheap tests (H4, H2) before committing to either, because both
    can fail in a way that is invisible afterwards.
+
+---
+
+# Addendum — computed, not hypothesised (same session)
+
+Three of the five hypotheses above turned out to be **deterministic arithmetic
+over the shipped scorer**, not experiments needing model calls. `score.ts` is
+deliberately pure ("no Supabase, no Anthropic, no next/\* imports"), so I ran
+the real `scoreSelfCheck` over simulated rating patterns. No API key involved.
+
+Its own docstring is worth noting: *"The model's only job is to read a
+transcript and emit a 1-7 rating per item"* — model-emitted ratings were
+already anticipated by the original design.
+
+## H4 is confirmed, and it is worse than "likely"
+
+```
+all-same rating 1..7, all 16 items answered:  overall refused 0 / 7
+```
+
+**The gates cannot fire against any input that rates every item.** 16 answers
+clears `MIN_ANSWERED_OVERALL = 12`; 6 facets clears `MIN_SCORED_FACETS = 5`.
+So the protection that today refuses an overall **86.9%** of the time at
+exactly 12 answers becomes **structurally unreachable** the moment a model
+fills in all 16. Not a probability — a property.
+
+This is the single most actionable finding: whatever is built, the model must
+be able to return *no rating*, and that path needs its own test.
+
+## The acquiescence fingerprint — a specific, detectable signature
+
+If the model rates agreeably without honouring reverse polarity (every item 6):
+
+| facet | value | band | reverse |
+|---|---|---|---|
+| trust | 5.67 | solid | 2/5 |
+| expectations | 8.33 | strong | 0/1 |
+| value | 5.00 | solid | 1/2 |
+| **awareness** | **1.67** | **weak** | **2/2** |
+| access | 8.33 | strong | 0/4 |
+| network | 8.33 | strong | 0/2 |
+| **OVERALL** | **6.22** | **solid** | |
+
+Versus the same model respecting polarity: **every facet 8.33 / strong,
+overall 8.33.**
+
+So the failure signature is: **`awareness` collapses to `weak` while the
+overall stays a believable `solid`.** A 6.66-point swing in one facet that the
+headline barely registers. Nothing errors, every number is in range, and the
+report reads plausibly — it just says this consultant is blind to their client
+when the data says nothing of the kind.
+
+`value` (1/2 reverse) is half-affected and therefore *more* dangerous: it
+drifts without collapsing, so it looks like a finding rather than a fault.
+
+**This is a free pre-flight check.** Any candidate prompt can be scored against
+a transcript of unambiguous praise; if `awareness` comes back weak, the prompt
+does not understand polarity, and that is knowable before any validation study.
+
+## The finding I did not predict: `thin` requires within-facet disagreement
+
+Oriented level → overall, polarity held constant so this isolates compression:
+
+```
+L=1  0.00 weak     L=5  6.67 solid
+L=2  1.67 weak     L=6  8.33 strong
+L=3  3.33 weak     L=7 10.00 strong
+L=4  5.00 solid
+```
+
+**No integer level lands in `thin`** (ten-scale 3.50–4.99). `thin` needs a
+facet mean of 3.10–3.99, and for trust that means an item sum of 16–19 — which
+no uniform fill produces. So:
+
+- **`thin` is structurally the "uneven relationship" band.** It only appears
+  when a facet's own items disagree. A consistent respondent can never produce
+  it.
+- **`expectations` can never be `thin` at all**, having one item: its mean is
+  that integer, and no integer is in the window.
+
+That matters directly for voice. A model reasoning about *"the relationship"*
+rather than about 16 separate statements will naturally assign facet-level
+impressions, making facets internally uniform — which **deletes `thin` from the
+product.** The 1987 ladder's third rung ("greater effort", the *uneven* case)
+stops being expressible, and nothing anywhere reports an error.
+
+The inverse risk is equally real: a model noisy within facets manufactures
+`thin` where the consultant would have been consistent.
+
+So within-facet variance is not incidental to this instrument — **it carries
+one of the four bands.** Any validation must compare per-item variance, not
+just facet means. A paired study that matched on facet means and declared
+success could have destroyed a band and not noticed.
+
+## Correction to my own method, recorded
+
+My first pass measured band reachability with *uniform* fills across all 16
+items, and concluded that `[4..6]` loses `weak`, `thin` and `strong`. **That
+was wrong** — on a mixed-polarity facet, uniform raw ratings make the reverse
+items pull against the forward ones, so it was measuring polarity, not
+compression. Isolating them (setting each item's *oriented* value) gives the
+table above. Reporting the first version would have been a confident wrong
+finding about the instrument's sensitivity.
