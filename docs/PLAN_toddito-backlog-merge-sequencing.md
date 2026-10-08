@@ -230,6 +230,47 @@ has `fix-sec09-sec05-remediation` checked out — live work in progress — and
 is doing PR #1's rebase in an isolated worktree instead of touching that
 checkout, consistent with [[feedback_shared-working-directory-branch-hazard]].
 
+## Addendum 2026-10-08T15:38 UTC — 2 real cross-PR collisions found by review in PR #1's staged resolution
+
+**Collision 1 — ReportView.tsx's "05" SectionHeader, PR #1 vs PR #9, same line,
+different attributes, neither PR alone produces the right merge.** main:
+`kicker="Clinical observations" title="Three things worth saying out
+loud"`. PR #9 changes `title` only (to "Observations worth saying out
+loud", for the up-to-6-observations fix). PR #1 changes `kicker` only (to
+"What stood out", the tone fix). **Correct merge takes BOTH: `kicker="What
+stood out" title="Observations worth saying out loud"`.** Taking either
+side wholesale silently reverts the other PR's customer-visible fix — in
+PR #1's direction specifically, that means restoring "Three things" over a
+report that can now return up to six observations. Will bite whichever of
+PR #1/PR #9 rebases second against the other's landed state. Relayed the
+correct values to both owners (build, builder-3) so neither has to
+re-derive it.
+
+**Collision 2 — PR #13 is a strict subset of PR #1's score/route.ts
+resolution (requireAdminToken only, no SEC-06 rate limit) — same finding
+build already made, review adds the order risk.** If PR #1 lands first and
+PR #13 then merges carelessly, taking PR #13's side would silently DROP
+the rate limit while keeping the auth — invisible to any test checking
+only for a 401. Action: verify PR #1's final merged score/route.ts
+explicitly contains BOTH `requireAdminToken` and the rate-limit call once
+it's ready to land — don't infer it from a clean merge.
+
+**New fast-follow item, not blocking:** `admin-auth.ts`'s own comparison
+(`token !== expected`) is non-constant-time, and its own docstring calls
+itself "the real gate" vs. middleware's "defense-in-depth" — so PR #11 is
+hardening the secondary layer while the primary one stays plain `!==`.
+PR #1's SEC-02 fix routes another endpoint through it, raising the stakes
+post-landing. Follow-up: reuse PR #11's `timingSafeEqualString` here too.
+
+**Plotly 3→4, sharpened to a concrete visual-verification checklist**
+(react-plotly.js's open-ended peer range means `npm install` stays clean
+regardless of a v4 regression; PR #8's tests assert the config OBJECT, not
+what Plotly renders from it — structurally blind to this class of bug):
+1. `xaxis.zerolinelayer: "above traces"` — center line above or behind the
+   track? 2. `base: -5` on the track trace. 3. `barmode: "overlay"` — do
+   traces still share a row? 4. StageCurve/EcgSparkline render with no
+   console errors. All four need a human or screenshot, not a green suite.
+
 ## Addendum 2026-10-08T15:35 UTC — rebase trap recorded: score/route.ts post-PR#13
 
 PR #13 (fast-tracked standalone SEC-02 fix, 88 lines) and PR #1's own
