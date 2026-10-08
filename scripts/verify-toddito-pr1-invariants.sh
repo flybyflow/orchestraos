@@ -51,24 +51,38 @@ chk "StageCurve crash guard kept"    "src/components/report/StageCurve.tsx" "if 
 chk "engagements GET is guarded"     "src/app/api/engagements/route.ts" "requireWorkspaceAccount(req)"
 chk "score.ts prose-reply path kept" "src/lib/scoring/score.ts" "replied in prose"
 
-echo "SEC-01 SPLIT -- the validator comes OUT, the key normaliser must NOT go with it"
-# gm approved splitting the SEC-01 zod validator out of PR #1 entirely (its
-# schemas had drifted behind main's ScoringResult in three places). But validate.ts
-# held TWO things, and only one of them was the validator: normaliseObservationKey
-# maps the wire key `key_observations` (which prompt.ts, STILL IN THIS PR, asks the
-# model for) onto the storage name `clinical_observations`. Delete it along with the
-# validator and tsc stays clean -- the cast is unchecked -- while persist.ts:110
-# writes null on every new report and ReportView's `.length > 0` guard hides
-# section 05. So: validator absent, normaliser present AND called.
+echo "SEC-01 SPLIT -- validator out, and the wire-key rename out WITH it"
+# gm approved splitting the SEC-01 zod validator out of PR #1 (its schemas had
+# drifted behind main's ScoringResult in three places). But validate.ts held TWO
+# things, and only one was the validator: it also carried the only mapping from
+# the wire key `key_observations` to the storage name `clinical_observations`.
+# Remove the validator while prompt.ts still asks for the wire name and the model
+# answers in a key nothing reads -- tsc clean (the cast is unchecked), tests green,
+# persist.ts:110 writes null on every new report, ReportView's `.length > 0` guard
+# hides section 05. gm/review ruled: drop the rename too, one name end-to-end, no
+# mapping layer. So all three must hold together.
 if git show ":src/lib/scoring/validate.ts" >/dev/null 2>&1; then
   printf "  FAIL  validate.ts must be gone (SEC-01 split out per gm)\n"; fail=1
 else
   printf "  PASS  validate.ts removed (SEC-01 split out per gm)\n"
 fi
-chk "normaliser kept, not deleted with it" "src/lib/scoring/contract.ts" "normaliseObservationKey"
-chk "normaliser WIRED at the call site"    "src/lib/scoring/score.ts" "normaliseObservationKey(parsed)"
-chk "old wire key still accepted"          "src/lib/scoring/contract.ts" "clinical_observations ?? key_observations"
-chk "removal documented for the next PR"   "docs/SCORING.md" "SEC-01 output validator is not in this PR"
+# prompt.ts is all prompt text, so ANY occurrence there is the wire name itself.
+if git show ":src/lib/scoring/prompt.ts" | grep -q "key_observations"; then
+  printf "  FAIL  wire-key rename must be reverted in prompt.ts\n"; fail=1
+else
+  printf "  PASS  prompt.ts uses the storage name only\n"
+fi
+# Elsewhere, key on the mapping function rather than the string: score.ts names the
+# old key in a comment explaining the history, which is worth keeping, and an
+# any-occurrence check would fail on the comment. Scope-tested both ways below.
+if git grep -I --cached -l "normaliseObservationKey" -- src >/dev/null 2>&1; then
+  printf "  FAIL  no mapping layer should remain (one name end-to-end)\n"; fail=1
+else
+  printf "  PASS  no mapping layer remains (one name end-to-end)\n"
+fi
+chk "prompt still asks for the key readers use" "src/lib/scoring/prompt.ts" '"clinical_observations"'
+chk "prompt<->reader pin has a test"            "src/lib/scoring/score-floor-wiring.test.ts" "same observations key the persistence path reads"
+chk "removal documented for the next PR"        "docs/SCORING.md" "SEC-01 output validator is not in this PR"
 
 echo "package.json -- the one file where a side-pick passes every local check"
 # This one bit. The merge took PR #1's package.json wholesale, which is 9 days
@@ -99,11 +113,34 @@ else
   printf "  PASS  no vapi deps (main migrated to livekit)\n"
 fi
 
+echo "ROOT/CONFIG FILES -- same class as package.json, found twice"
+# The merge took PR #1's side wholesale on every root-level file, and PR #1 is
+# 9 days behind main there. review caught tsconfig.json (lost main's
+# allowImportingTsExtensions -> 3x TS5097 on scripts/report-depth-ab.mts ->
+# `npm run type-check` red); it was one of six. These must match main exactly.
+# next.config.ts is NOT here on purpose: PR #1's /start redirect is additive.
+for f in tsconfig.json eslint.config.mjs playwright.config.ts .gitignore \
+         .env.local.example CLAUDE.md; do
+  if git diff --cached origin/main -- "$f" | grep -q .; then
+    printf "  FAIL  %s must match main (PR #1's copy is 9 days stale)\n" "$f"; fail=1
+  else
+    printf "  PASS  %s matches main\n" "$f"
+  fi
+done
+# Verified by running it, not by reading the lock: `npm ci` is the first step of
+# all six CI jobs and rejects a lock `npm install` happily wrote. Static checks
+# cannot see this -- re-run `npm ci` after any manifest change.
+printf "  NOTE  run 'npm ci' (not 'npm install') to re-verify the lock\n"
+
 echo "prompt.ts -- PR #1 and PR #9 BOTH contribute; a side-pick drops one silently"
 chk "PR#9 OUTPUT VOLUME section kept"  "src/lib/scoring/prompt.ts" "OUTPUT VOLUME"
 chk "PR#9 variable-length note kept"   "src/lib/scoring/prompt.ts" "3 to 6"
 chk "PR#1 PLAIN-LANGUAGE RULE kept"    "src/lib/scoring/prompt.ts" "PLAIN-LANGUAGE RULE"
-chk "PR#1 key_observations rename kept" "src/lib/scoring/prompt.ts" "key_observations"
+# NOTE: an earlier revision asserted PR #1's key_observations rename was KEPT.
+# That assertion was wrong and the SEC-01 block above now asserts the opposite:
+# the rename renamed the key in the prompt only, so the model answered in a name
+# no reader used. Left as a comment rather than deleted -- the check passed while
+# the code was broken, which is the more useful thing to remember.
 # PR #1's whole purpose: the prompt must stop telling the model to sound clinical
 if git show ":src/lib/scoring/prompt.ts" 2>/dev/null | grep -q "TONE: Clinical"; then
   printf "  FAIL  PR#1 removed 'TONE: Clinical'\n          still present in src/lib/scoring/prompt.ts\n"; fail=1
