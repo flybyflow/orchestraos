@@ -257,6 +257,42 @@ requirement for whenever the voice path actually ships, flagged now so a
 single hard-coded string doesn't get written later by whoever builds it
 without this context.
 
+## 3b. Extraction prompt draft v1 — committed, two real design choices worth recording
+
+`docs/BRIEF_self-check-extraction-prompt-draft.md` (builder-3). Reasoned
+entirely from the instrument's structure; **nothing run against a model
+yet** — all four gates are the acceptance tests and all need a key, so
+this draft is exactly as unvalidated as the architecture it serves.
+
+- **Deliberately omits THOR's own "do NOT default to null" instruction.**
+  That instruction is a correct inference from THOR's structure (180
+  questions, a noise-tolerant weight matrix — a null there genuinely
+  costs signal) and the exact wrong inference for self-check (16 items,
+  no redundancy, nulling IS how the instrument refuses, recovered
+  verbatim from the 1987 source). Same instruction, opposite
+  correctness — GATE 1 stays elevated specifically because this is the
+  trap a thor-extract-modeled prompt would walk into.
+- **GATE 3 solved by STRUCTURE, not instruction:** the draft presents
+  the 16 items flat and never names the facets to the model. `thin`
+  only exists via within-facet disagreement; showing the model its own
+  groupings invites it to reason "how is trust going" and smooth 5
+  items into one impression, deleting the band silently. Not handing it
+  the grouping at all is a strong control; instructing it not to
+  generalize would have been a weak one. `score.ts` needs the facet
+  structure; the model doesn't.
+- The silence-handling block names four specific do-not-infer patterns,
+  two of which (absence-of-complaint, adjacent-topic) are exactly the
+  traps the self-test transcript used — aimed at a demonstrated failure
+  mode, not a hypothetical one.
+
+**New risk surfaced, bigger than the extraction prompt itself, nobody
+has started it:** the extraction prompt only covers half the problem.
+**The voice AGENT's own side — how it covers 16 topics conversationally
+without reading them aloud as a checklist — is a separate, harder design
+question**, unstarted. This may be the real risk to (B) producing usable
+coverage at all, more than the extraction prompt's correctness. Flagging
+as its own scope item, not yet assigned.
+
 ## 4. Sequencing
 
 ```
