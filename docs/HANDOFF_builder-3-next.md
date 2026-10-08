@@ -1,231 +1,245 @@
-# Handoff: builder-3 -> successor
-- **Lineage:** builder-3 (soft-handoff, authored 2026-10-04)
-- **Working Directory:** /Users/flybyflow/orchestraos
-- **Authoritative memory:** `~/.orchestra/memory/builder-3/MEMORY.md` (7 entries). The
-  cwd-scoped `~/.claude/projects/.../memory/` store is shared by every seat here and is
-  NOT the lineage store — read both, trust neither blindly.
-- **State file:** `~/.orchestra/state/builder-3.json` — carries the full per-PR detail
-  this document summarises. A resume BLANKS it to a fresh `spawning` record; an empty
-  state file is not evidence that nothing was in flight.
+# HANDOFF — builder-3 → successor
 
-## 1. Current Goal & Phase State
-- **Goal:** Keonda community-pilot Phase 0 on `flybyflow/keonda.io` (gm,
-  `msg_d9ff03fb_35670722`), which widened into a live-only-code preservation sweep and
-  then into two cognee cross-tenant security fixes.
-- **Plan reference:** `docs/PLAN_keonda-community-manager-pilots.md` (orchestraos,
-  `53f5119`). I filed one correction to its data claims — see Decisions.
-- **Phase:** ALL DISPATCHED WORK COMPLETE. Five PRs open on keonda.io, none merged.
-  Nothing in flight, no uncommitted work, no worktree dirty.
-- **Next gate:** the operator's word. Every PR is held deliberately; `review` has
-  approved #20 and has an open thread on the others.
+Supersedes the 2026-10-04 keonda-arc handoff (`090aa77`) entirely. That arc is
+closed; this session is **toddito**.
 
-## 2. Open Loops
-Reconciled against msg_store. Two replies I sent are awaiting a response; everything
-else is closed.
+## current_goal
 
-- [ ] **Awaiting gm** on `msg_f21234ca_40695261` — gateway check result, PR #23, and my
-  recommended deploy sequencing for #22+#23.
-- [ ] **Awaiting review** on `msg_853a6932_40719997` — the probe's
-  `LEAK / FAIL`-means-cannot-run problem, flagged for them to reconcile rather than me
-  editing their file.
-- [ ] **FIVE keonda PRs held, none merged:** #19 (bshr's CRE cleanup, not mine), #20
-  (pilot wiring + 3 engine fixes, **review APPROVED** at `4eaa2ce`), #21 (all 10
-  never-committed live-only files), #22 (cognee read isolation), #23 (sidecar auth).
-- [ ] **toddito PR #2** at `c624d6b` — separate repo, still under the operator's
-  force-push hold. No merge, no rebase, nothing to toddito main.
-- [ ] **MIGRATION owed if #22 lands:** chunks indexed under the old tag become invisible
-  to recall. `reconcile_index.py` is the recovery path but someone must RUN it; it does
-  not self-heal.
-- [ ] **Three toddito product calls** still with Todd: person-private vs
-  workspace-private report default (my recommendation: person-private), the one-item
-  `expectations` facet, and gate strictness.
-- [ ] **Which seating generator owns `seating.json`** is undecided and deliberately so.
-- [ ] **Not fixed, flagged:** `_handle_send_hq_prompts` swallows per-recipient
-  exceptions AND marks the dinner prompted regardless, so one transient outage
-  permanently loses that dinner's HQ moment.
+Land the toddito backlog cleanly via the full gstack process. PR #9 (report
+depth / PLAN §14) is **merged**. PR #2 (Client Relationship facet) is
+review-APPROVED with its migration blocker cleared and is waiting on `test`.
+One **live blocker** of mine sits on another seat's PR #1 resolution.
 
-## 3. Decisions & Guards
+## phase_state
 
-**GUARDS — these are lane boundaries, not preferences.**
-1. **Never run an unknown script to find out what it does.** Read its write surface
-   first. I broke this once today and destroyed live tenant data.
-2. **Single trunk, own worktree, never the shared checkout.** keonda.io's shared
-   checkout is dirty on `feature/sje-111-cre-bdr-epic`; this repo has collision history
-   that has already cost the fleet real time.
-3. **Never kill or restart a running service.** The cognee sidecar on `:8077` is live
-   and was not touched; all testing used a temp store and a spare port.
-4. **Verify before completion, and prove the check can fail.** A check that passes when
-   its inputs are missing is not a check.
-5. **Nothing merges.** Every PR is held for the operator regardless of any review
-   verdict.
-6. **Focus boundary:** I build and verify. I do not resolve product questions (which
-   generator wins, privacy defaults, gate thresholds) and I do not allocate other
-   seats' time — that is gm's.
+- **plan_ref:** `docs/PLAN_toddito-backlog-merge-sequencing.md` (orchestraos),
+  plus `docs/PLAN_toddito-engineering.md` §14 for the shipped work
+- **phase:** backlog merge, 2 of ~6 PRs landed by the fleet; my two assigned
+  PRs are 1 landed / 1 awaiting a gate
+- **next_gate:** `test` runs PR #2 end-to-end against the now-live migration
+  034. Nothing merges without review APPROVE **plus** test pass.
 
-**Decisions with rationale**
-- **Isolate the store, not the tenant names, when fixing `events.py --demo`.** The
-  demo's whole point is one engine serving two tenants with different vocabularies;
-  renaming them would weaken what it proves.
-- **Rebind the module global instead of `importlib.reload`.** Run as a script that
-  module IS `__main__`, so reloading re-executes the entry block into infinite
-  recursion.
-- **`capability: interview` for the volleyball tenant, not a new capability.** The
-  organize tools register unconditionally, the only runtime branch on capability is the
-  CRE send gate (which a community tenant must not inherit), and a new capability means
-  editing a file another open PR is already editing.
-- **Named the preserved generator for what it does, not its status.** "legacy" would
-  have smuggled in a decision gm explicitly said to leave open.
-- **Booking is opt-in, not the default.** On principle rather than on the measured size
-  of the risk — the whole reason that PR exists is that a default pointed at production.
-- **Test `main()`, not `build_plan()`, for a CLI default.** The inner function takes the
-  flag explicitly, so a test of it could pass forever while the wiring defaulted wrong.
-- **Kept an unreachable guard rather than deleting it,** labelled unreachable, because
-  widening the extractor is a plausible future change that would silently reopen a
-  patched bug.
-- **Corrected the plan's pilot-data claim.** Most of the "real RSVP" evidence was
-  written by a demo seeder in a single burst, not organic activity. The plan's
-  conclusion survives for a stronger reason than it gave.
-- **Reported `review`'s own headline number as wrong** after reproducing it, while
-  accepting their conclusion. Their restated framing then beat mine, and I adopted it.
+## working_state
 
-## 4. File Roots Touched
-- `~/conductor/workspaces/builder-3-keonda-phase0` — PR #20 (`feat/community-pilot-phase0`)
-- `~/conductor/workspaces/builder-3-keonda-preserve` — PR #21 (`chore/preserve-live-seating-script`)
-- `~/conductor/workspaces/builder-3-keonda-isofix` — PR #22 (`fix/memory-cognee-read-isolation`)
-- `~/conductor/workspaces/builder-3-keonda-sidecar-auth` — PR #23 (`fix/cognee-sidecar-auth`)
-- `~/conductor/workspaces/builder-3-consulting-communicator` — toddito PR #2
-- `~/conductor/repos/keonda.io` (clone), `~/conductor/repos/toddito` (clone)
-- Read-only: `~/.hermes/skills/keonda/{scripts,graph,crm}`, `~/.hermes/plugins/keonda-tools`,
-  `~/.hermes/logs`, `~/.hermes/hermes-agent`, `~/.hermes/gateway`
-- orchestraos: `docs/HANDOFF_builder-3-next.md`, `~/.orchestra/{state,memory}/builder-3`
+Two worktrees, both clean, both pushed, nothing uncommitted:
 
-## 5. Hazards (top 3, live)
-1. **`events.py --demo` is destructive against REAL tenant names** and is only safe on
-   `fix/...` branches where PR #20's fix exists. On `main` it still unlinks and rewrites
-   the live volleyball and immigration community files. Do not run it outside a branch
-   that carries the fix, and never without checking which store it resolves to.
-2. **An unauthenticated service is live right now.** Any local process can read any
-   tenant's facts from it. PR #23 closes it but is unmerged, so the exposure is open
-   until the operator acts. Do not restart or reconfigure the running process.
-3. **`~/.hermes` has no backup.** Time Machine would not mount. Recovery today worked
-   only because a logging side effect happened to retain what was lost. Treat anything
-   under there as unrecoverable before you write to it.
+- `~/conductor/workspaces/builder-3-report-depth` — PR #9, **MERGED**
+- `~/conductor/workspaces/builder-3-consulting-communicator` — PR #2, open
 
-## 6. Next 3 Actions
-1. **Check for responses and PR verdicts before doing anything else.**
-   - *first_effect:* `kind=command`, `target=gh pr view 23 --repo flybyflow/keonda.io
-     --json state,reviewDecision,mergeable`, `check=state == "OPEN"` and
-     `reviewDecision` is recorded in the reply to gm. If any of the five PRs has moved
-     to MERGED, stop and reconcile before touching anything — a merge changes what
-     `main` contains and therefore which hazards above are still live.
-2. `python3 msg_store.py inbox --agent builder-3` and answer the two open callbacks if
-   gm or review have replied.
-3. Only if the operator clears something: for keonda, deploy #22 and #23 **together**
-   (a patched sidecar with an unpatched client 401s everything and silently falls back
-   to the record). For toddito, if old history is restored, rebase
-   `feat/consulting-communicator` BEFORE anyone reads PR #2's diff as my change.
+I have merged nothing myself. Under the current pipeline no seat merges its own
+work: builder → independent `review` → `test` → `ship` lands.
 
-## 7. Grounding Canary Questions (questions only — never write an answer anywhere)
-1. **Q1:** During the data-loss incident, recovery was possible because of a side
-   effect of normal operation rather than any backup, and the restored timestamps were
-   confirmed against a second, independent artifact of a different kind. Name both
-   sources and say why the second one mattered more than the first for fidelity.
-   *(source_pointer: `jsonl:2026-10-04T17:55Z..18:05Z`)*
-2. **Q2:** A verification loop reported success while having copied nothing at all.
-   Explain the precise mechanism that produced that false green, and what the rewritten
-   check required in order to be incapable of passing vacuously.
-   *(source_pointer: `jsonl:2026-10-04T19:05Z..19:20Z`)*
-3. **Q3:** A figure describing a seating regression was withdrawn after reproduction.
-   Explain what two variables had moved between the two things being compared, and the
-   property of the current data that makes the original figure unreachable by any
-   algorithm.
-   *(source_pointer: `jsonl:2026-10-04T18:30Z..18:45Z`)*
-4. **Q4:** Porting a read-side filter without changing a write-side tag would have
-   produced a result that looked like a successful fix but was a different failure.
-   Describe that failure mode and why the probe used to verify the real fix would have
-   caught it.
-   *(source_pointer: `jsonl:2026-10-04T18:50Z..19:00Z`)*
-5. **Q5:** A committed security probe reports the same alarming prefix and exit status
-   in two situations that mean opposite things. State both situations and why the
-   direction it fails in makes it unsafe to wire into CI as-is.
-   *(source_pointer: `jsonl:2026-10-04T19:00Z..19:10Z`)*
+## next_3_actions
+
+1. **Confirm the PR #1 prompt-prose blocker is closed before it lands.**
+   - `first_effect`: {kind: `grep`, target: `src/lib/scoring/prompt.ts` on the
+     PR #1 resolution branch, check: `zero occurrences of the old wire-key name
+     remain in PROSE instruction lines, while the output-schema block uses the
+     new name consistently`}
+   - If prose and schema disagree, the §14 volume rules name a key the model is
+     no longer asked to emit, the scaling silently stops binding, and CI stays
+     green because no test reads prompt prose.
+2. **Chase `test` on PR #2.** Its risk is not unit coverage (192 pass, tsc and
+   lint clean). It is that nothing has exercised the real data path: the visual
+   pass stubbed the Supabase client and the transcript→responses model call has
+   zero test references. Migration 034 is applied, so a genuine end-to-end
+   self-check is possible for the first time.
+3. **Collect the post-fix arm of the §14 measurement** once Full sessions
+   accumulate on the new prompt. The pre-fix baseline is already collected and
+   the null held. Honour the pre-registered rule below or the result is
+   meaningless.
+
+## decisions
+
+Carrying guards and lane boundaries. Each has a rationale because the rationale
+is the part that transfers.
+
+1. **Read the dated artifact, never the freshest message.** — Two seats were
+   operating off different undocumented restricted-file lists; what resolved it
+   was a committed, dated doc that outranks any thread. I was one command from
+   reverting the only authorized edit in my own PR, acting on an instruction
+   that was sincere and stale.
+2. **Treat CONFIRMED-ACTIVE restricted paths as hard walls, even to fix a real
+   bug.** — A correct one-line fix of mine is parked behind a human-ownership
+   answer. Reverting it cost a day; shipping it would have crossed a boundary
+   that is not mine to decide. The fix is recorded in the repo so waiting is
+   cheap instead of lossy.
+3. **Say the SHA or path you read.** — Two of us reached opposite, individually
+   correct conclusions about one "collision" because neither named which
+   artifact we were reading. Applies to claims, not just approvals.
+4. **Verify "I was wrong" as hard as "they were wrong."** — I concluded I had
+   applied one standard two ways; the peer had been pre-authorized and I could
+   not see their dispatch. Self-blame skips verification because it feels safe,
+   and it lands an implication on someone else.
+5. **Never restate a status learned from prose — reopen the diff.** — Twice in
+   one session, opposite directions: I widened a model-scoped rule into a
+   per-PR blocker, and called two already-fixed items "still open" by echoing
+   a peer's summary of my own work. The first reached an operator as an action
+   item.
+6. **Ask what the test observes, not whether the code is testable.** — Three
+   guards were thoroughly tested while the thing at risk stayed unprotected.
+   When the vulnerable artifact is a call site, extraction moves the gap and
+   adds a green that implies coverage.
+7. **A constant the brief tells you to loosen may be a product boundary.** —
+   Following the dispatched wording literally would have shipped two
+   regressions of one kind. Grep the constant's neighbours before touching it.
+8. **Fail closed on an unreadable row when the branch is a security branch.** —
+   A Supabase helper reports "absent" and "failed" identically; a condition
+   keyed only on data cannot tell them apart.
+9. **Remove a risk rather than mitigate it when the mitigation has no owner.**
+   — An output cap was raised for free headroom behind a post-deploy action
+   nobody could perform. Lowering it deleted the risk instead of monitoring it.
+10. **Never edit an applied migration; `supabase/migrations/` is owned.** —
+    Standing repo rule, and this project already paid for the lesson once.
+11. **Lane boundary: single trunk, never kill services, verify before
+    completion.** — I push only to my own PR branches, never to `main`, and I
+    report a gate as passed only with the command output in hand.
+
+## open_loops
+
+Reconciled against outstanding msg_store traffic:
+
+- **PR #1 prompt-prose blocker** — raised to the owning seat and gm, not yet
+  confirmed closed. **The only thing with my name on it that can still break
+  shipped behaviour.**
+- **PR #2 awaiting `test`** — review APPROVE stands, migration verified in
+  production; the test gate has never run against this PR.
+- **Three product decisions with the operator** on the facet: report privacy
+  default, a single-item facet carrying a sixth of the headline, and gate
+  strictness. None are bugs; all change what the headline number means.
+- **A one-line copy fix parked** behind the human-ownership answer for a
+  CONFIRMED-ACTIVE path. Recorded in the repo so it survives the revert.
+- **The §14 behavioural claim is unverified** and the operator declined a key
+  "at this stage." The production-data route needs no key and is the live path.
+- **An advisor WARN** on a definer function with an unnecessary public EXECUTE
+  grant. Checked twice, independently, by two seats: not exploitable. One
+  REVOKE closes it, in an owned directory.
+
+## file_roots_touched
+
+- `src/lib/scoring/` — prompt, score, persist, contract + their tests
+- `src/lib/transcript/` — richness measurement and the scoring user message
+- `src/app/api/webhooks/elevenlabs/` — structured-richness threading
+- `src/components/report/` — two lines under a dated, named exception
+- `src/app/dashboard/guide/` — tier copy
+- `scripts/report-depth-ab.mts`, `scripts/report-depth-fixtures.mts`
+- `supabase/migrations/034_*` (PR #2, authored earlier; **do not edit**)
+- `docs/DO_NOT_EDIT.md` — recorded the parked fix
+
+## hazards
+
+1. **The prompt-prose/schema mismatch on the unlanded resolution.** It reverts
+   a shipped feature silently. No test reads prompt prose, and the behavioural
+   check is blocked on a credential the operator declined. Green CI proves
+   nothing here.
+2. **A staged conflict resolution older than `main`.** This is the specific
+   case where "resolve the conflict" and "take the newer side" diverge.
+   Applying a pre-merge resolution now reverts live code. `main` moved four
+   times in the last hour of this session.
+3. **Richness degrades silently on an unrecognised transcript shape.** A real
+   production transcript exercises the zero-turn fallback. The fallback is
+   correct and deliberate, but it means a richness-driven feature can
+   no-op on real data with nothing in the logs saying so.
+
+## measurement rule (pre-registered — do not fit this after the data exists)
+
+The post-fix check is informative **only** if the sample contains at least one
+Full session in the top quartile of respondent characters for this project.
+Below that, record **"insufficient range,"** not "no effect." The floor means a
+thin interview returning the minimum is the prompt working correctly, which is
+indistinguishable from the fix having done nothing.
+
+## canary_questions
+
+Answer these in your own words after reading my jsonl. There is no answer key
+anywhere, by design.
+
+See the machine block for ids and pointers.
+
+1. One existing production transcript makes both respondent-richness measures
+   read zero, and the blank-line split is **not** the cause. What is
+   structurally different about that transcript, and which deliberate safety
+   behaviour does it therefore exercise on real data?
+2. Two seats reported opposite conclusions about the same "collision" and both
+   were correct. What distinguished the two things each of us had actually
+   read, and why did that make the hazard deferred rather than absent?
+3. An output cap was raised and then lowered again within one session. The
+   model's own limit was never the deciding factor. What unavailability made
+   the raise untenable?
+4. I cited a repo requirement as blocking a PR and it did not apply. Name the
+   two independent ways the citation was wrong.
+5. Three separate guards in this session were well tested while the thing at
+   risk stayed unprotected. What did all three share, and why would extracting
+   a helper have failed to close the third one?
 
 ```json
 {
-  "current_goal": "Keonda community-pilot Phase 0 on flybyflow/keonda.io (gm msg_d9ff03fb_35670722), which widened into preserving all never-committed live-only scripts and then into two cognee cross-tenant security fixes. All dispatched work is COMPLETE; five PRs are open and deliberately unmerged, awaiting the operator.",
+  "current_goal": "Land the toddito backlog via full gstack process. PR #9 (report depth, PLAN §14) MERGED. PR #2 (Client Relationship facet) review-APPROVED with migration blocker cleared, awaiting test. One live blocker of mine on another seat's PR #1 resolution.",
   "phase_state": {
-    "plan_ref": "docs/PLAN_keonda-community-manager-pilots.md (orchestraos 53f5119)",
-    "phase_n": 0,
-    "phase_m": 3,
-    "gates_passed": ["move-a-seating-generator", "move-b-tenant-config", "move-c-hq-chain-verified", "stray-file-question-answered", "live-only-preservation", "cognee-read-isolation-fix", "sidecar-auth-fix", "gateway-caller-check"],
-    "gates_total": 8,
-    "current_step": "Nothing in flight. Two msg_store replies awaiting response; five PRs held for the operator.",
-    "next_gate": "Operator ruling. No PR merges, and no toddito main activity, without their explicit word."
+    "plan_ref": "docs/PLAN_toddito-backlog-merge-sequencing.md (+ docs/PLAN_toddito-engineering.md §14)",
+    "phase_n": 2,
+    "phase_m": 6,
+    "gates_passed": ["review APPROVE on both my PRs", "migration 034 applied + independently verified in production", "PR #9 landed by ship"],
+    "gates_total": 4,
+    "current_step": "PR #2 awaiting the test gate; PR #1 resolution awaiting my blocker being closed",
+    "next_gate": "test runs PR #2 end-to-end against live migration 034"
   },
-  "working_state": "Clean. All five worktrees have zero uncommitted changes. Real keonda tenant data verified intact (3 events / 4 RSVPs) and byte-verified against an independent source after the incident. keonda main d13526b and toddito main 1731e66 both untouched. keonda.io has NO .github/workflows, so the --demo self-test battery is the only verification gate that exists in that repo.",
+  "working_state": "Two worktrees, both clean and pushed, nothing uncommitted. builder-3-report-depth = PR #9 MERGED. builder-3-consulting-communicator = PR #2 open. I have merged nothing myself; no seat merges its own work.",
   "open_loops": [
-    {"kind": "callback", "to": "gm", "what_for": "gateway check result, PR #23 sidecar auth, and recommended deploy sequencing for #22+#23", "request_id": "msg_f21234ca_40695261", "state": "sent"},
-    {"kind": "callback", "to": "review", "what_for": "the isolation probe reports LEAK/FAIL when it means 'cannot run'; flagged for them to reconcile rather than edited by me", "request_id": "msg_853a6932_40719997", "state": "sent"},
-    "keonda PR #19 open (bshr's CRE cleanup, not mine) -- do not touch",
-    "keonda PR #20 open, review APPROVED at 4eaa2ce, NOT merged",
-    "keonda PR #21 open -- all 10 never-committed live-only files, isolation tests as their own landable commit",
-    "keonda PR #22 open -- cognee read isolation; verified against the repro probe with its negative control",
-    "keonda PR #23 open -- sidecar bearer auth + unused raw-read routes off",
-    "toddito PR #2 open at c624d6b, under the operator's force-push hold: no merge, no rebase, nothing to toddito main",
-    "MIGRATION owed if #22 lands: chunks tagged under the old scheme become invisible to recall; reconcile_index.py is the recovery path but must be RUN, it does not self-heal",
-    "Three toddito product calls still with Todd: person-private vs workspace-private default (recommend person-private), the one-item expectations facet, gate strictness",
-    "Undecided by design: which seating generator owns seating.json",
-    "Flagged not fixed: _handle_send_hq_prompts swallows per-recipient exceptions AND marks prompted regardless, so a transient outage permanently loses that dinner's HQ moment"
+    "PR #1 prompt-prose blocker raised to the owning seat and gm, not yet confirmed closed — the only item of mine that can still silently break shipped behaviour",
+    "PR #2 awaiting test; review APPROVE stands and migration verified in prod, but the test gate has never run on this PR",
+    "Three product decisions with the operator: report privacy default, a single-item facet carrying a sixth of the headline, gate strictness",
+    "A one-line copy fix parked behind the human-ownership answer for a CONFIRMED-ACTIVE path; recorded in the repo so it survives the revert",
+    "The §14 behavioural claim is unverified; operator declined a key at this stage. The production-data route needs no key and is the live path",
+    "Advisor WARN on a definer function with an unnecessary public EXECUTE grant — checked independently by two seats, not exploitable; one REVOKE closes it in an owned directory"
   ],
   "decisions": [
-    {"text": "GUARD: never run an unknown script to find out what it does; read its write surface first.", "rationale": "I broke this once today and destroyed live tenant data. Fixing an unrelated bug had repointed a destructive self-test at the real store, and I ran it anyway after having already flagged it as dangerous an hour earlier."},
-    {"text": "GUARD: fix the destructive thing FIRST, then the thing that arms it.", "rationale": "Ordering was the whole failure. Ask what a fix makes newly reachable, not just whether the fix is correct."},
-    {"text": "GUARD: single trunk, own worktree, never the shared checkout.", "rationale": "keonda.io's shared checkout is dirty on another branch and this repo has collision history that has already cost the fleet real time."},
-    {"text": "GUARD: never kill or restart a running service; test on a temp store and a spare port.", "rationale": "The cognee sidecar is live. Every auth test ran on :8099/:8098 with relocated store roots, and the running process was verified untouched afterwards."},
-    {"text": "GUARD: verify before completion, and prove the check can fail.", "rationale": "A copy loop reported 'all byte-identical' while having copied nothing, because it compared two identical failures. A check that passes when its inputs are missing is not a check."},
-    {"text": "GUARD: nothing merges, and product questions are not mine.", "rationale": "Everything client-adjacent is held for the operator. Which generator wins, privacy defaults and gate thresholds belong to Todd; allocating other seats' time belongs to gm."},
-    {"text": "Isolate the store, not the tenant names, when fixing the destructive demo.", "rationale": "The demo exists to prove one engine serves two tenants with different vocabularies; renaming them would weaken what it demonstrates."},
-    {"text": "Rebind the module global rather than importlib.reload.", "rationale": "Run as a script the module IS __main__, so reloading re-executes the entry block into infinite recursion."},
-    {"text": "capability: interview for the new tenant rather than a third capability.", "rationale": "The organize tools register unconditionally; the only runtime branch on capability is a send gate a community tenant must not inherit; and a new capability means editing a file another open PR is already editing."},
-    {"text": "Name the preserved generator for what it does, not its status.", "rationale": "'legacy' would have smuggled in a decision gm explicitly said to leave open -- it is not old, it has a different objective."},
-    {"text": "Booking is opt-in; the safe mode is the default.", "rationale": "On principle rather than on the measured size of the risk: the PR exists because a default pointed at production."},
-    {"text": "Test main() rather than the inner function when the CLI default is what changed.", "rationale": "The inner function takes the flag explicitly, so a test of it could pass forever while the wiring defaulted the wrong way."},
-    {"text": "Keep an unreachable guard, labelled, rather than delete it.", "rationale": "Widening the extractor is a plausible future change that would silently reopen a patched bug; three lines to make that loud is a good trade."},
-    {"text": "Correct a reviewer's headline number while accepting their conclusion.", "rationale": "A correction from a review gate is not automatically ground truth. Reproduced it, found two variables had moved, and then adopted their restated framing when it beat mine."}
+    {"text": "Read the dated artifact, never the freshest message", "rationale": "Two seats held different undocumented restricted-file lists; a committed dated doc resolved it. I was one command from reverting the only authorized edit in my own PR on a sincere but stale instruction."},
+    {"text": "Treat CONFIRMED-ACTIVE restricted paths as hard walls, even to fix a real bug", "rationale": "A correct one-line fix is parked behind a human-ownership answer. Shipping it would decide something that is not mine; recording it in the repo made waiting cheap instead of lossy."},
+    {"text": "Say the SHA or path you read", "rationale": "Two of us reached opposite, individually correct conclusions about one collision because neither named which artifact we were reading. Applies to claims, not just approvals."},
+    {"text": "Verify 'I was wrong' as hard as 'they were wrong'", "rationale": "I concluded I had applied one standard two ways; the peer had been pre-authorized and I could not see their dispatch. Self-blame skips verification because it feels safe, and it lands an implication on someone else."},
+    {"text": "Never restate a status learned from prose — reopen the diff", "rationale": "Twice in one session, opposite directions: widened a model-scoped rule into a per-PR blocker, and called two already-fixed items still-open by echoing a peer's summary of my own work. The first reached an operator as an action item."},
+    {"text": "Ask what the test observes, not whether the code is testable", "rationale": "Three guards were thoroughly tested while the thing at risk stayed unprotected. When the vulnerable artifact is a call site, extraction moves the gap and adds a green that implies coverage."},
+    {"text": "A constant the brief tells you to loosen may be a product boundary", "rationale": "Following the dispatched wording literally would have shipped two regressions of one kind. Grep the constant's neighbours before touching it."},
+    {"text": "Fail closed on an unreadable row when the branch is a security branch", "rationale": "The Supabase helper reports absent and failed identically; a condition keyed only on data cannot distinguish them, and the fail-open copy covered three callers including an unauthenticated one."},
+    {"text": "Remove a risk rather than mitigate it when the mitigation has no owner", "rationale": "An output cap was raised for free headroom behind a post-deploy action nobody could perform. Lowering it deleted the risk instead of monitoring it."},
+    {"text": "Never edit an applied migration; supabase/migrations/ is owned", "rationale": "Standing repo rule with a named owner, and this project already paid for the lesson once."},
+    {"text": "Lane boundary: single trunk, never kill services, verify before completion", "rationale": "I push only to my own PR branches, never to main, and report a gate as passed only with command output in hand."}
   ],
   "file_roots_touched": [
-    "~/conductor/workspaces/builder-3-keonda-phase0 (PR #20, feat/community-pilot-phase0)",
-    "~/conductor/workspaces/builder-3-keonda-preserve (PR #21, chore/preserve-live-seating-script)",
-    "~/conductor/workspaces/builder-3-keonda-isofix (PR #22, fix/memory-cognee-read-isolation)",
-    "~/conductor/workspaces/builder-3-keonda-sidecar-auth (PR #23, fix/cognee-sidecar-auth)",
-    "~/conductor/workspaces/builder-3-consulting-communicator (toddito PR #2, feat/consulting-communicator)",
-    "~/conductor/repos/keonda.io, ~/conductor/repos/toddito",
-    "read-only: ~/.hermes/skills/keonda/{scripts,graph,crm}, ~/.hermes/plugins/keonda-tools, ~/.hermes/logs, ~/.hermes/hermes-agent, ~/.hermes/gateway",
-    "orchestraos: docs/HANDOFF_builder-3-next.md, ~/.orchestra/state/builder-3.json, ~/.orchestra/memory/builder-3/"
+    "src/lib/scoring/",
+    "src/lib/transcript/",
+    "src/app/api/webhooks/elevenlabs/",
+    "src/components/report/",
+    "src/app/dashboard/guide/",
+    "scripts/report-depth-ab.mts",
+    "scripts/report-depth-fixtures.mts",
+    "supabase/migrations/034_self_check_client_relationship.sql",
+    "docs/DO_NOT_EDIT.md"
   ],
   "next_3_actions": [
     {
-      "action": "Check for responses and PR verdicts before touching anything. A merge would change what main contains and therefore which hazards are still live.",
+      "action": "Confirm the PR #1 prompt-prose blocker is closed before that resolution lands",
       "first_effect": {
-        "kind": "command",
-        "target": "gh pr view 23 --repo flybyflow/keonda.io --json state,reviewDecision,mergeable",
-        "check": "state == OPEN and mergeable == MERGEABLE; if any of PRs 19-23 reads MERGED, STOP and reconcile the hazard list before any further action"
+        "kind": "grep",
+        "target": "src/lib/scoring/prompt.ts on the PR #1 resolution branch",
+        "check": "zero occurrences of the old wire-key name remain in PROSE instruction lines while the output-schema block uses the new name consistently; a mismatch means the volume rules name a key the model is no longer asked to emit"
       }
     },
-    {"action": "python3 msg_store.py inbox --agent builder-3 -- answer the two open callbacks if gm or review have replied; both are currently sent-and-awaiting."},
-    {"action": "Only on the operator's word: deploy keonda #22 and #23 TOGETHER (a patched sidecar with an unpatched client 401s everything and silently falls back to the record). For toddito, if old history is restored, rebase feat/consulting-communicator BEFORE anyone reads PR #2's diff as my change."}
+    {"action": "Chase the test gate on PR #2 — the risk is the unexercised real data path (stubbed Supabase client, zero test references on the transcript→responses model call), not unit coverage"},
+    {"action": "Collect the post-fix arm of the §14 measurement once Full sessions accumulate, honouring the pre-registered top-quartile rule or recording 'insufficient range'"}
   ],
   "hazards": [
-    "events.py --demo is DESTRUCTIVE against real tenant names and is only safe on branches carrying PR #20's fix. On main it still unlinks and rewrites two live communities' event and RSVP files. Never run it without first checking which store it resolves to.",
-    "An unauthenticated local service is live right now and serves any tenant's facts to any local process. PR #23 closes it but is unmerged, so the exposure stands until the operator acts. Do not restart or reconfigure the running process.",
-    "~/.hermes has no backup and Time Machine would not mount. Today's recovery worked only because a logging side effect happened to retain what was lost. Treat anything under there as unrecoverable before writing to it."
+    "Prompt-prose/schema mismatch on the unlanded resolution silently reverts a shipped feature; no test reads prompt prose and the behavioural check is blocked on a declined credential, so green CI proves nothing",
+    "A staged conflict resolution older than main — the specific case where 'resolve the conflict' and 'take the newer side' diverge; main moved four times in the last hour",
+    "Richness degrades silently on an unrecognised transcript shape; a real production transcript exercises the zero-turn fallback, which is correct but logs nothing"
   ],
   "canary_questions": [
-    {"id": "c1", "question": "During the data-loss incident, recovery was possible because of a side effect of normal operation rather than any backup, and the restored timestamps were confirmed against a second, independent artifact of a different kind. Name both sources and say why the second one mattered more than the first for fidelity.", "source_pointer": "jsonl:2026-10-04T17:55Z..18:05Z"},
-    {"id": "c2", "question": "A verification loop reported success while having copied nothing at all. Explain the precise mechanism that produced that false green, and what the rewritten check required in order to be incapable of passing vacuously.", "source_pointer": "jsonl:2026-10-04T19:05Z..19:20Z"},
-    {"id": "c3", "question": "A figure describing a seating regression was withdrawn after reproduction. Explain what two variables had moved between the two things being compared, and the property of the current data that makes the original figure unreachable by any algorithm.", "source_pointer": "jsonl:2026-10-04T18:30Z..18:45Z"},
-    {"id": "c4", "question": "Porting a read-side filter without changing a write-side tag would have produced a result that looked like a successful fix but was a different failure. Describe that failure mode and why the probe used to verify the real fix would have caught it.", "source_pointer": "jsonl:2026-10-04T18:50Z..19:00Z"},
-    {"id": "c5", "question": "A committed security probe reports the same alarming prefix and exit status in two situations that mean opposite things. State both situations and why the direction it fails in makes it unsafe to wire into CI as-is.", "source_pointer": "jsonl:2026-10-04T19:00Z..19:10Z"}
+    {"id": "cq1", "question": "One existing production transcript makes both respondent-richness measures read zero, and the blank-line split is NOT the cause. What is structurally different about that transcript, and which deliberate safety behaviour does it therefore exercise on real data?", "source_pointer": "jsonl ISO range 2026-10-08T16:25:00Z/2026-10-08T16:32:00Z (production read-only queries and the reasoning immediately following)"},
+    {"id": "cq2", "question": "Two seats reported opposite conclusions about the same collision and both were correct. What distinguished the two things each of us had actually read, and why did that make the hazard deferred rather than absent?", "source_pointer": "jsonl ISO range 2026-10-08T15:55:00Z/2026-10-08T16:12:00Z"},
+    {"id": "cq3", "question": "An output cap was raised and then lowered again within one session, and the model's own limit was never the deciding factor. What unavailability made the raise untenable?", "source_pointer": "jsonl ISO range 2026-10-08T15:50:00Z/2026-10-08T16:05:00Z"},
+    {"id": "cq4", "question": "I cited a repo requirement as blocking a PR and it did not apply. Name the two independent ways the citation was wrong.", "source_pointer": "jsonl ISO range 2026-10-08T15:30:00Z/2026-10-08T15:45:00Z"},
+    {"id": "cq5", "question": "Three separate guards in this session were well tested while the thing at risk stayed unprotected. What did all three share, and why would extracting a helper have failed to close the third one?", "source_pointer": "jsonl ISO range 2026-10-08T15:20:00Z/2026-10-08T16:20:00Z"}
   ]
 }
 ```
