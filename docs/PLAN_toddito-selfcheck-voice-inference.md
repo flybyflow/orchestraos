@@ -1,4 +1,85 @@
-# Toddito self-check: voice-modernize via free-form inference (B)
+# Toddito self-check: voice-modernize via extract+deterministic-score (THOR pattern)
+
+## ARCHITECTURE CORRECTION, 2026-10-08T23:18 UTC — supersedes pure (B) below
+
+Operator pointed at the actual precedent they meant by "reverse engineered
+the weights... same as the org diagnostic": **THOR's extract+deterministic-
+score pattern** (`src/lib/scoring/thor-extract.ts` + `thor-score.ts`,
+`docs/THOR_ENGINE.md`), not free-form LLM scoring. Verified directly
+against `THOR_ENGINE.md`, not taken on report:
+
+- Claude Call 2 (`thor-extract.ts`) maps the transcript to **per-question
+  RAW answers** in the original 1987 instrument's own scale (`-2/-1/+1/+2/
+  null`) — "Score what the language demonstrates, not what the respondent
+  claims to believe," same instruction family as the linguistic pass, but
+  the OUTPUT is structured per-item data, not a holistic judgment.
+- A real TypeScript port of the 1987 `score.py` (`thor-score.ts`) then
+  computes the result **deterministically**: `raw[dim] = Σ answer × weight`
+  from a static weight matrix (migration 012, 438 pairs) — no LLM
+  involved in the actual scoring math at all.
+- **Null handling is already solved and documented:** "if the transcript
+  is silent on a topic, Claude returns null. Missing answers contribute 0
+  to scoring" — this is GATE 1 below, already a proven, shipped pattern,
+  not something to design from scratch.
+
+**This directly resolves most of §1's structural concerns, by
+construction, not by careful prompt engineering:**
+
+- GATE 1 (null emission) — already the documented, shipped behavior of
+  this exact pattern on the org-diagnostic side.
+- GATE 2 (polarity/contract) — extraction asks for RAW agreement with
+  each item's own statement (positive or negative phrasing, doesn't
+  matter); the deterministic scorer's weight SIGN handles directionality,
+  exactly matching builder-3's own recommended contract (model emits raw,
+  scorer orients) — except here "the scorer" is `score.ts`'s existing,
+  already-mutation-tested `orientedRating()`, unchanged.
+- GATE 3 (within-facet variance) — each of the 16 items is extracted
+  independently as its own per-item answer; there's no holistic
+  "facet impression" step to smooth values together, so disagreement
+  within a facet survives structurally rather than needing a special
+  prompt instruction to preserve it.
+- GATE 4 (expectations unscored) — same null mechanism as GATE 1.
+
+**What changes in scope:** self-check needs its own `self-check-extract.ts`
+(new, modeled directly on `thor-extract.ts`'s shape) feeding the EXISTING,
+already-built, already-tested `score.ts` (`scoreSelfCheck`, orientedRating,
+band thresholds) **unchanged** — not a new scoring prompt, not an LLM
+holistically producing final facet scores. This is a smaller, lower-risk
+build than pure free-form (B) was: the riskiest, most-tested code
+(`score.ts`) doesn't change at all; only a new extraction step does.
+
+**Confirming with builder-3** (who has the deepest context on both the
+1987 instrument and `score.ts`) that this reading holds once they look at
+`thor-extract.ts`/`thor-score.ts` directly — not asserting it myself
+without their check, per gm's own ask.
+
+## F8 — real, pre-existing, already-tracked issue on the ORG-DIAGNOSTIC side; checked whether it transfers
+
+`docs/ROADMAP.md`: "THOR ground-truth harness: legacy runs as fixtures;
+**weights diverge from the legacy program (F8)** — documented via
+`it.fails` tests; THOR = directional" — and "Parked: re-derive THOR
+weights from the legacy SCORE.ASF binaries" is listed as explicitly
+unresolved. This is real, not a false alarm, and it predates this
+initiative entirely.
+
+**Does it transfer to self-check? No, not directly** — F8 is about the
+ORG-DIAGNOSTIC's weight matrix (migration 012, 438 (question, dimension)
+pairs, derived from THOR's own combo-fixture ground truth). Self-check's
+weights come from a DIFFERENT 1987 instrument (`GPAQUEST.ASF`, Client
+Relationship, items.ts) and were independently verified during PR #2
+(review re-derived the facet-weighting math, mutation-tested all five
+reverse-coded items). **But the CAUTIONARY PRECEDENT transfers directly:**
+a ported 1987 weight-derivation process silently produced wrong rankings,
+caught only by deliberate `it.fails` ground-truth tests comparing against
+real legacy output — not by type-checking or unit tests on the port's own
+logic. Self-check's new extraction step needs the same discipline applied
+to ITSELF (ground-truth checks against known transcripts/expected
+outputs), not just inherited confidence from `score.ts` already being
+verified.
+
+---
+
+## [SUPERSEDED BY THE ABOVE] Original plan for pure (B) — free-form inference
 
 - **Requested by:** operator, via gm, Telegram, 2026-10-08. Confirmed choice:
   (B) — free-form inference, explicitly "just like we did already with the
