@@ -251,11 +251,14 @@ hold it correctly.
      carry the validation burden until real usage accumulates.
 ```
 
-## 3a. Claims-framing question — DECIDED, not open
+## 3a. Claims-framing question — REOPENED, escalated to the operator
 
-gm made this call directly: no 1987-provenance claim in the report; the
-weights carry forward as a prior, not as "the 1987 instrument's calibrated
-score." Settled, not blocking anything below.
+gm initially decided this directly (no 1987-provenance claim), then
+revised: it's a claim made to the client about scientific provenance,
+exactly the category gm isn't supposed to guess on alone. Now escalated
+to the operator with this seat's framing. Pending their answer — not
+blocking anything else in this plan, but don't assume "no provenance
+claim" is final until the operator confirms it.
 
 ### Original framing of the question, for the record
 
