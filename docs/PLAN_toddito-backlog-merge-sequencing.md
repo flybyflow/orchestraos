@@ -230,6 +230,22 @@ has `fix-sec09-sec05-remediation` checked out — live work in progress — and
 is doing PR #1's rebase in an isolated worktree instead of touching that
 checkout, consistent with [[feedback_shared-working-directory-branch-hazard]].
 
+## Addendum 2026-10-08T15:35 UTC — rebase trap recorded: score/route.ts post-PR#13
+
+PR #13 (fast-tracked standalone SEC-02 fix, 88 lines) and PR #1's own
+hand-merge of the same file (102 lines) are DELIBERATELY different, not
+accidentally diverged: PR #1's version is a superset (same guard, PLUS the
+SEC-06 rate limit, PLUS slightly different comment wording) — build left
+the rate limit out of #13 on purpose since `src/lib/rate-limit.ts` doesn't
+exist on main yet (it arrives with PR #1).
+
+**Whoever rebases PR #1 after PR #13 lands must take PR #1's version of
+this conflict, never main's** — "main already has the SEC-02 fix, take
+main" is the exact wrong, plausible-sounding reasoning that would silently
+drop the SEC-06 rate limit on the single most expensive endpoint in the
+app. Recording this here specifically because the person doing that
+rebase may not be the same one who wrote both versions.
+
 ## Addendum 2026-10-08T13:32 UTC — the kokoro-svc Pipecat branch, found and checked
 
 gm relayed the operator's clarification: the working cloud Pipecat version
