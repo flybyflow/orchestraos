@@ -130,7 +130,13 @@ done
 # Verified by running it, not by reading the lock: `npm ci` is the first step of
 # all six CI jobs and rejects a lock `npm install` happily wrote. Static checks
 # cannot see this -- re-run `npm ci` after any manifest change.
-printf "  NOTE  run 'npm ci' (not 'npm install') to re-verify the lock\n"
+# And it must run on the node major ci.yml pins: the SAME lock was accepted on
+# node 24 and rejected on 22 and 26, over two different @emnapi entries. A green
+# on the wrong node proves nothing. Three findings tonight were this one shape --
+# hardlinked node_modules, an unstaged worktree layer, a node major -- and none
+# of them looked like an environment problem.
+CI_NODE=$(git show ":.github/workflows/ci.yml" 2>/dev/null | sed -n 's/.*NODE_VERSION: *"\([0-9]*\)".*/\1/p' | head -1)
+printf "  NOTE  re-verify the lock with: nvm exec %s npm ci   (not npm install, not another node)\n" "${CI_NODE:-22}"
 
 echo "prompt.ts -- PR #1 and PR #9 BOTH contribute; a side-pick drops one silently"
 chk "PR#9 OUTPUT VOLUME section kept"  "src/lib/scoring/prompt.ts" "OUTPUT VOLUME"
