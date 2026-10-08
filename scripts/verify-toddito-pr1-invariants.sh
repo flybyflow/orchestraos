@@ -52,6 +52,23 @@ chk "engagements GET is guarded"     "src/app/api/engagements/route.ts" "require
 chk "score.ts prose-reply path kept" "src/lib/scoring/score.ts" "replied in prose"
 chk "score.ts SEC-01 validation kept" "src/lib/scoring/score.ts" "validateScoringResult"
 
+echo "prompt.ts -- PR #1 and PR #9 BOTH contribute; a side-pick drops one silently"
+chk "PR#9 OUTPUT VOLUME section kept"  "src/lib/scoring/prompt.ts" "OUTPUT VOLUME"
+chk "PR#9 variable-length note kept"   "src/lib/scoring/prompt.ts" "3 to 6"
+chk "PR#1 PLAIN-LANGUAGE RULE kept"    "src/lib/scoring/prompt.ts" "PLAIN-LANGUAGE RULE"
+chk "PR#1 key_observations rename kept" "src/lib/scoring/prompt.ts" "key_observations"
+# PR #1's whole purpose: the prompt must stop telling the model to sound clinical
+if git show ":src/lib/scoring/prompt.ts" 2>/dev/null | grep -q "TONE: Clinical"; then
+  printf "  FAIL  PR#1 removed 'TONE: Clinical'\n          still present in src/lib/scoring/prompt.ts\n"; fail=1
+else
+  printf "  PASS  PR#1 removed 'TONE: Clinical'\n"
+fi
+
+echo "ReportView -- all THREE kicker sites, not just the two in the 05 block"
+chk "skeleton kicker renamed (line ~244)" "src/components/report/ReportView.tsx" 'kicker="05 · What stood out"'
+chk "PR#9 guard comment kept"             "src/components/report/ReportView.tsx" "empty array is truthy"
+chk "demo page renamed too"               "src/app/report/demo/page.tsx" 'kicker="What stood out"'
+
 echo
 [ $fail -eq 0 ] && echo "ALL INVARIANTS HOLD" || echo "INVARIANTS VIOLATED -- do not land"
 exit $fail
