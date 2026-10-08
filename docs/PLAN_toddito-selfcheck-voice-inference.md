@@ -219,11 +219,43 @@ binary**, checked against `GPASCORE.ASF` layer by layer:
 | aggregation into the overall | ours | well-founded by 1987's facet-first structure, but unverified (arithmetic compiled, not recovered) |
 | the ratings under (B) | no | model-inferred from speech, not self-reported |
 
-**Final report copy, this exact framing:** the items, their grouping,
-and the four-step interpretation are verbatim 1987; the final score's
-formula and the voice-inferred ratings are ours. One sentence of
-provenance text on the report, stated in those terms — not a 1987-
-calibration claim, not a from-scratch-new-instrument claim either.
+**Final report copy, this exact framing — checked against the already-
+shipped form, two real refinements found:**
+
+**1. ADD to the existing copy, don't replace it.** The shipped form
+(`dashboard/self-check/[id]/page.tsx:285`) already says *"This is your
+own read of the relationship, not {client}'s. It is a prompt for a
+conversation, not a measurement of one. The 16 questions come from the
+Client Relationship module of a 1987 consulting diagnostic, recovered
+verbatim and reworded for plain English."* Already layered correctly
+(1987 claimed for the questions only), and "not a measurement of one" is
+a STRONGER disclaimer than the locked sentence alone carries — it's what
+stops a consultant treating the number as a measurement at all. Swapping
+the locked sentence IN PLACE OF this line would be a net downgrade in
+honesty. The locked sentence explains provenance; the existing line
+manages the claim. Ship both.
+
+**2. The copy cannot be one static string — it must vary by input
+modality.** "The voice-inferred ratings are ours" is only true for
+voice-completed reports; the shipped form correctly says "your own read"
+because on the FORM the ratings genuinely are the consultant's own. Once
+both input paths coexist, applying the voice sentence to a
+form-completed report would wrongly tell a consultant their own
+self-ratings were ours — exactly the downgrade §3 point 1 warns about,
+in the other direction. **Key the sentence on the same `output_kind`-
+style discriminator the pipeline already uses for routing:**
+
+```
+form:   ... the four-step interpretation are verbatim 1987; the final
+        score's formula is ours, and the ratings are your own.
+voice:  ... the four-step interpretation are verbatim 1987; the final
+        score's formula and the voice-inferred ratings are ours.
+```
+
+Nothing blocking, nothing shipped needs changing today — this is a build
+requirement for whenever the voice path actually ships, flagged now so a
+single hard-coded string doesn't get written later by whoever builds it
+without this context.
 
 ## 4. Sequencing
 
