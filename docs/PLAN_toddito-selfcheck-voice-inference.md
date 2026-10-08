@@ -53,6 +53,33 @@ build than pure free-form (B) was: the riskiest, most-tested code
 `thor-extract.ts`/`thor-score.ts` directly — not asserting it myself
 without their check, per gm's own ask.
 
+## F8 corroboration check — self-check's structure verified against the real 1987 source, different risk shape from THOR
+
+builder-3 checked the THOR warning against the actual 1987 scoring program
+(`GPASCORE.ASF`, `~/conductor/repos/mic-program-toddito`), not assumed
+either way. Result: self-check's structure corroborates the source
+directly — the refusal message is verbatim, the facets and a facet's item
+count match 1987's own wording exactly, the 4-rung ladder is 1987's
+(visible in the `expectations` narrative), and 1987 had per-facet
+partial-answer branches (more granular than self-check's facet-level
+scored/unscored — a faithful simplification, not a deviation).
+
+**Only the final aggregation formula is unverified** — the arithmetic is
+compiled, not recovered as readable logic. Different risk shape from
+THOR: THOR's weight matrix itself is unverified AND known-wrong against
+real ground truth (F8); self-check's inputs check out against the source,
+only the last combination step is open.
+
+**This reframes the `expectations`-carries-1/6-of-headline item (already
+accepted by the operator for v1, ship-as-is-iterate-later) as a 1987-
+inherited design property, not an arbitrary artifact of this build** —
+1987 treats facets as first-class units with their own scores/ladders/
+narratives, so an overall built from facet-level means is the natural
+reading of the source, not a guess. The real open question, if ever
+revisited, is "do we want to depart from 1987 here," not "should we fix
+our mistake" — worth stating precisely since those deserve different
+answers.
+
 ## F8 — real, pre-existing, already-tracked issue on the ORG-DIAGNOSTIC side; checked whether it transfers
 
 `docs/ROADMAP.md`: "THOR ground-truth harness: legacy runs as fixtures;
