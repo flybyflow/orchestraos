@@ -178,12 +178,19 @@ infrastructure — it gets rewritten and re-checked. None needs infra, a
 voice agent, or an API key.
 
 ```
-GATE 1 (go/no-go) -- null-emission survives
-  Does a draft prompt emit "no rating" for a facet the conversation never
-  touches, rather than fabricating one? Confirm the 86.9%-refusal
-  protection is still reachable (MIN_ANSWERED/MIN_SCORED_FACETS can still
-  trigger). FAIL = the gates are structurally dead on arrival; do not
-  proceed until the prompt can genuinely abstain.
+GATE 1 (go/no-go) -- null-emission survives, CORRECTED SEVERITY
+  Not "structurally unreachable" as first framed -- enumerated all 64
+  nulling patterns: the gate is vacuous in only 6/64 (fabricate
+  everything, or null exactly 1 of the 5 smaller facets). It regains
+  FULL power the moment the model nulls 2+ facets. Real requirement,
+  cheaper than first stated: the prompt does not need to null often, it
+  needs to be ABLE to null -- acceptance bar is "nulling 2 facets (e.g.
+  expectations + value, 3 items) restores refusal," not "nulls
+  frequently." Also found: the ITEM gate (MIN_ANSWERED=12) does more of
+  the real catching than the FACET gate under this pattern -- `access`
+  (4 items) vanishing lands exactly on the 12-answer threshold, `trust`
+  (5 items) tips it. FAIL = prompt cannot null even 2 facets when the
+  conversation genuinely doesn't cover them; do not proceed.
 
 GATE 2 (go/no-go) -- polarity fingerprint
   Score a transcript of unambiguous, one-sided praise. Check `awareness`
