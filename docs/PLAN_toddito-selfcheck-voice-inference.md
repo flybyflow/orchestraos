@@ -110,22 +110,46 @@ GATE 3 -- within-facet variance survives
   ladder's "uneven relationship" rung is dead on arrival; do not
   proceed.
 
-GATE 4 -- `expectations` can be returned unscored
-  Single-item facet, 1/6 of the headline weight. MIN_SCORED_FACETS=5
-  makes losing it survivable -- the instrument silently changes meaning
-  (5-facet headline instead of 6) rather than refusing. Confirm the
-  model abstains on this item specifically when untouched, same
-  mechanism as GATE 1, called out separately because this is the facet
-  where silent proceeding is worst.
+GATE 4 -- `expectations` can be returned unscored, AND IS ALREADY DISCLOSED
+  Single-item facet, 1/6 of the headline weight when SCORED. Confirmed
+  via self-test + code read: `score.ts`'s `omittedFacets` is populated
+  on the SUCCESS path (not just refusal) and the report UI
+  (`page.tsx:188`) already surfaces it when `omittedFacets.length > 0` --
+  a correct null is NOT silently indistinguishable from fabrication to
+  the reader. This was nearly misreported as an open gap; it isn't one.
+  Remaining requirement, narrower than first framed: confirm the model
+  abstains on this item when untouched (same mechanism as GATE 1) --
+  the disclosure half is already solved.
 ```
 
-**Status:** computable halves of GATE 1/2/3 done without a model call
-(enumeration, structural reachability). Behavioural halves (does a real
-model actually fabricate, does it actually reach band extremes) need a
-model call — no `ANTHROPIC_API_KEY` available to this fleet yet. A
-one-sided self-test (builder-3 answering their own draft prompt, heavily
-caveated — N=1, primed, a pass proves nothing, a failure is real) is
-running as a cheap pre-signal while a real key is pending.
+**Sharpening GATE 3's framing, from the self-test's own arithmetic:**
+"expectations is 1/6 of the headline" describes a SCORED item moving the
+mean; it does NOT describe the cost of an UNSCORED one, which is a
+different operation and much cheaper on average: `(omitted facet's value
+− mean of the others) / 6`. Measured example: correctly nulling
+`expectations` moved the overall by 0.23 (same band) when the facet
+wasn't an outlier; had it been (e.g. a badly-managed-expectations case
+scored 1.67 against a 6.95 mean elsewhere), the same omission would have
+moved it 0.88 — enough to cross a band. **Omission is cheap on average
+and expensive exactly when the omitted facet would have been the
+outlier** — the two "1/6" framings invite contradictory intuitions if
+stated without this distinction.
+
+**Status:** computable halves of GATES 1-3 done without a model call
+(enumeration, structural reachability); GATE 4's disclosure half
+confirmed already-shipped. Behavioural halves (does a real model
+actually fabricate, does it actually reach band extremes under real
+inference) need a model call — no `ANTHROPIC_API_KEY` available to this
+fleet yet. A one-sided self-test (builder-3 answering their own draft
+prompt on a transcript with a deliberate expectations-adjacency trap —
+heavily caveated, N=1, primed, a pass proves nothing) ran clean:
+correctly nulled the untouched item, and separately validated GATE 2's
+raw-emission contract on real prose (a reverse-coded item's raw
+agreement correctly inverted to the right answer; emitting an already-
+oriented value instead would have produced the exact acquiescence
+fingerprint computed earlier). The one thing still genuinely open is
+whether the PRODUCTION model does this unprompted and untested — that
+needs the key, not more self-testing.
 
 ## 2. Self-check's structure, corroborated against the real 1987 source — different risk shape from THOR's F8
 
