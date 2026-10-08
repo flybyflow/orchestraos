@@ -178,13 +178,12 @@ rankings, caught only by deliberate ground-truth tests against real
 legacy output, not by type-checking. Self-check's new extraction step
 needs that same discipline applied to itself.
 
-## 3. Claims-framing question — escalated to the operator, refined from binary to layered
+## 3. Claims-framing — DECIDED, final (operator delegated, 2026-10-08T23:30 UTC)
 
-gm initially decided this directly (no 1987-provenance claim), then
-revised: it's a claim made to the client about scientific provenance,
-exactly the category not to decide alone. Escalated — but the original
-framing (a binary "does the report claim 1987 provenance, yes/no") was
-itself wrong, caught before it went out: **provenance is layered, not
+Operator: "bshr and make the call, I trust your recommendation." The
+layered framing below is now **final, not provisional**. Original
+question was a binary "does the report claim 1987 provenance, yes/no" —
+caught as wrong before it went out, since **provenance is layered, not
 binary**, checked against `GPASCORE.ASF` layer by layer:
 
 | layer | 1987? | basis |
@@ -196,13 +195,11 @@ binary**, checked against `GPASCORE.ASF` layer by layer:
 | aggregation into the overall | ours | well-founded by 1987's facet-first structure, but unverified (arithmetic compiled, not recovered) |
 | the ratings under (B) | no | model-inferred from speech, not self-reported |
 
-**Actual question for the operator:** "the items, their grouping, and the
-four-step interpretation are verbatim 1987; the final score's formula and
-the voice-inferred ratings are ours. Is it acceptable to say that — in
-those terms — on the report?" A flat yes/no would misstate 4 of 6 layers
-either direction. Not blocking the rest of this plan — this only
-determines exact report copy, and per builder-3 it's a one-sentence
-change either way (cheaper than first estimated, not more expensive).
+**Final report copy, this exact framing:** the items, their grouping,
+and the four-step interpretation are verbatim 1987; the final score's
+formula and the voice-inferred ratings are ours. One sentence of
+provenance text on the report, stated in those terms — not a 1987-
+calibration claim, not a from-scratch-new-instrument claim either.
 
 ## 4. Sequencing
 
