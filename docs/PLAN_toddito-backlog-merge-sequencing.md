@@ -190,6 +190,37 @@ except by gm's own timeline for PR #9, not a mechanical scheduling choice.
           exclusion actually means. Not touching until that lands.
 ```
 
+## Addendum 2026-10-08T16:43 UTC — PR #1 SPLITS: SEC-01's validator pulled out for a real rewrite
+
+build found, running main's OWN unit tests against the fully-resolved tree
+(the first real exercise of score -> validate -> persist all week): PR #1's
+SEC-01 zod validator requires `strategy.risk`/`strategy.predictability` — a
+shape main abandoned on 2026-07-18 (main's own `types.ts` labels it
+"Pre-2026-07-18... Old report"). Main's real output is
+`risk_appetite/horizon/innovation/concentration/orientation`. **If PR #1
+landed as-is, every real scoring run throws — not degraded, scoring stops
+working entirely.** Compounds with an earlier-found `focus_evidence` gap
+in the opposite direction (validator omits a field main now requires;
+zod silently strips it). Not a merge artifact — PR #1's branch alone
+typechecks clean because it carries its own stale `types.ts`.
+
+**gm approved the split (confirmed, not my call alone):** lands
+independently now — the npm-audit dependency fix (restores CI's Build
+job), SEC-04/SEC-06/SEC-08 (don't touch `validate.ts`), the Plotly 3->4
+bump, the tone-rename work (6 ReportView.tsx strings; demo/page.tsx's 4
+strings explicitly DROPPED per the Cassandra-ownership boundary, even
+though build's tree already has them correct — authorization, not
+accuracy, gm's own words). **Pulled out for separate, properly-scoped
+work:** SEC-01's validator needs an actual rewrite against main's current
+contract, not a rushed fix inside this rebase.
+
+**Also found, priority, not yet resolved as of this addendum:** PR #1's
+resolved `prompt.ts` drops BOTH of PR #9's just-landed OUTPUT VOLUME
+sections (304 lines vs main's 422) — if unresolved, landing PR #1 would
+silently undo PR #9's report-depth fix the same night it shipped. Same
+collision family as score/route.ts and ReportView.tsx, bigger stakes
+(reverts a feature, not just a guard). Dispatched to build as priority.
+
 ## Addendum 2026-10-08T13:45 UTC — build's PR #8 findings: main's CI is already red, PR #1 vs PR #11 collision
 
 **Main's CI has been red since at least Oct 1, independent of anything in
