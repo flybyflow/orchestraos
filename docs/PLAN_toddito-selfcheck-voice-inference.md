@@ -1,361 +1,266 @@
-# Toddito self-check: voice-modernize via extract+deterministic-score (THOR pattern)
+# Toddito self-check: voice-modernize the input (operator-confirmed: B, free-form inference)
 
-## ARCHITECTURE CORRECTION, 2026-10-08T23:18 UTC — supersedes pure (B) below
-
-Operator pointed at the actual precedent they meant by "reverse engineered
-the weights... same as the org diagnostic": **THOR's extract+deterministic-
-score pattern** (`src/lib/scoring/thor-extract.ts` + `thor-score.ts`,
-`docs/THOR_ENGINE.md`), not free-form LLM scoring. Verified directly
-against `THOR_ENGINE.md`, not taken on report:
-
-- Claude Call 2 (`thor-extract.ts`) maps the transcript to **per-question
-  RAW answers** in the original 1987 instrument's own scale (`-2/-1/+1/+2/
-  null`) — "Score what the language demonstrates, not what the respondent
-  claims to believe," same instruction family as the linguistic pass, but
-  the OUTPUT is structured per-item data, not a holistic judgment.
-- A real TypeScript port of the 1987 `score.py` (`thor-score.ts`) then
-  computes the result **deterministically**: `raw[dim] = Σ answer × weight`
-  from a static weight matrix (migration 012, 438 pairs) — no LLM
-  involved in the actual scoring math at all.
-- **Null handling is already solved and documented:** "if the transcript
-  is silent on a topic, Claude returns null. Missing answers contribute 0
-  to scoring" — this is GATE 1 below, already a proven, shipped pattern,
-  not something to design from scratch.
-
-**This directly resolves most of §1's structural concerns, by
-construction, not by careful prompt engineering:**
-
-- GATE 1 (null emission) — already the documented, shipped behavior of
-  this exact pattern on the org-diagnostic side.
-- GATE 2 (polarity/contract) — extraction asks for RAW agreement with
-  each item's own statement (positive or negative phrasing, doesn't
-  matter); the deterministic scorer's weight SIGN handles directionality,
-  exactly matching builder-3's own recommended contract (model emits raw,
-  scorer orients) — except here "the scorer" is `score.ts`'s existing,
-  already-mutation-tested `orientedRating()`, unchanged.
-- GATE 3 (within-facet variance) — each of the 16 items is extracted
-  independently as its own per-item answer; there's no holistic
-  "facet impression" step to smooth values together, so disagreement
-  within a facet survives structurally rather than needing a special
-  prompt instruction to preserve it.
-- GATE 4 (expectations unscored) — same null mechanism as GATE 1.
-
-**What changes in scope:** self-check needs its own `self-check-extract.ts`
-(new, modeled directly on `thor-extract.ts`'s shape) feeding the EXISTING,
-already-built, already-tested `score.ts` (`scoreSelfCheck`, orientedRating,
-band thresholds) **unchanged** — not a new scoring prompt, not an LLM
-holistically producing final facet scores. This is a smaller, lower-risk
-build than pure free-form (B) was: the riskiest, most-tested code
-(`score.ts`) doesn't change at all; only a new extraction step does.
-
-**Confirming with builder-3** (who has the deepest context on both the
-1987 instrument and `score.ts`) that this reading holds once they look at
-`thor-extract.ts`/`thor-score.ts` directly — not asserting it myself
-without their check, per gm's own ask.
-
-## F8 corroboration check — self-check's structure verified against the real 1987 source, different risk shape from THOR
-
-builder-3 checked the THOR warning against the actual 1987 scoring program
-(`GPASCORE.ASF`, `~/conductor/repos/mic-program-toddito`), not assumed
-either way. Result: self-check's structure corroborates the source
-directly — the refusal message is verbatim, the facets and a facet's item
-count match 1987's own wording exactly, the 4-rung ladder is 1987's
-(visible in the `expectations` narrative), and 1987 had per-facet
-partial-answer branches (more granular than self-check's facet-level
-scored/unscored — a faithful simplification, not a deviation).
-
-**Only the final aggregation formula is unverified** — the arithmetic is
-compiled, not recovered as readable logic. Different risk shape from
-THOR: THOR's weight matrix itself is unverified AND known-wrong against
-real ground truth (F8); self-check's inputs check out against the source,
-only the last combination step is open.
-
-**This reframes the `expectations`-carries-1/6-of-headline item (already
-accepted by the operator for v1, ship-as-is-iterate-later) as a 1987-
-inherited design property, not an arbitrary artifact of this build** —
-1987 treats facets as first-class units with their own scores/ladders/
-narratives, so an overall built from facet-level means is the natural
-reading of the source, not a guess. The real open question, if ever
-revisited, is "do we want to depart from 1987 here," not "should we fix
-our mistake" — worth stating precisely since those deserve different
-answers.
-
-## F8 — real, pre-existing, already-tracked issue on the ORG-DIAGNOSTIC side; checked whether it transfers
-
-`docs/ROADMAP.md`: "THOR ground-truth harness: legacy runs as fixtures;
-**weights diverge from the legacy program (F8)** — documented via
-`it.fails` tests; THOR = directional" — and "Parked: re-derive THOR
-weights from the legacy SCORE.ASF binaries" is listed as explicitly
-unresolved. This is real, not a false alarm, and it predates this
-initiative entirely.
-
-**Does it transfer to self-check? No, not directly** — F8 is about the
-ORG-DIAGNOSTIC's weight matrix (migration 012, 438 (question, dimension)
-pairs, derived from THOR's own combo-fixture ground truth). Self-check's
-weights come from a DIFFERENT 1987 instrument (`GPAQUEST.ASF`, Client
-Relationship, items.ts) and were independently verified during PR #2
-(review re-derived the facet-weighting math, mutation-tested all five
-reverse-coded items). **But the CAUTIONARY PRECEDENT transfers directly:**
-a ported 1987 weight-derivation process silently produced wrong rankings,
-caught only by deliberate `it.fails` ground-truth tests comparing against
-real legacy output — not by type-checking or unit tests on the port's own
-logic. Self-check's new extraction step needs the same discipline applied
-to ITSELF (ground-truth checks against known transcripts/expected
-outputs), not just inherited confidence from `score.ts` already being
-verified.
-
----
-
-## [SUPERSEDED BY THE ABOVE] Original plan for pure (B) — free-form inference
-
-- **Requested by:** operator, via gm, Telegram, 2026-10-08. Confirmed choice:
-  (B) — free-form inference, explicitly "just like we did already with the
-  original org diagnostic, so far it's yielding incredible results."
+- **Requested by:** operator, via gm, Telegram, 2026-10-08. Confirmed
+  choice: (B) — free-form inference, explicitly "just like we did already
+  with the original org diagnostic, so far it's yielding incredible
+  results."
 - **Research:** builder-3, `docs/BRIEF_self-check-voice-input-research.md`
-  (`6f5bf78`) + addendum (`256744d`) — full findings folded in below, not
-  re-derived.
+  (`6f5bf78`) + two addenda (`256744d`, `97221b6`) — full findings folded
+  in below, not re-derived.
 - **Not urgent** — normal pace, proper process. This doc is the planning
   phase; nothing built yet.
 
-## 0. What "(B)" actually commits to — confirmed by gm, not guessed
+## 0. Architecture — CONFIRMED ALREADY EXISTS, corrected twice before landing here
 
-gm already flagged this to the operator and is waiting on explicit
-confirmation of the framing (not the choice itself, which is settled):
-**(B) makes this a NEW instrument that reuses the 1987 item content as
-conversation topics, not the same scored instrument with a swapped input.**
-The 16 items' weights were calibrated for self-report ("a consultant reads
-a statement and picks a number"); inferring the same ratings from free-form
-language changes what's being measured (self-perception →
-observed-language-about-the-relationship), not just how the number is
-captured. Proceeding with planning on that premise — if the operator's
-confirmation comes back different, the scope below changes accordingly,
-flagged so build doesn't start on an unconfirmed premise.
+The operator pointed at THOR's extract→deterministic-score pattern
+(`thor-extract.ts` + `thor-score.ts`) as "the thing I meant by reverse-
+engineered weights." **builder-3 confirmed this is already the self-
+check's own architecture** — `score.ts`'s own header comment: *"Mirrors
+how THOR already splits extraction from scoring."* `prompt.ts` extracts a
+1-7 rating per item from the transcript; `score.ts` computes the result
+deterministically (`orientedRating`, facet means, band thresholds) with
+**zero model involvement in the scoring math itself**. So the operator's
+architectural instinct is correct, and the answer is "already built,"
+not "needs re-architecting." Two real mistakes this seat made while first
+writing this up, corrected before any build started on the wrong premise:
 
-## 1. The three structural findings that shape the design, not just risks to note later
+**Mistake 1 — wrong scale.** First draft said the extraction should emit
+THOR's own `-2/-1/+1/+2/null` scale. `score.ts`'s `MIN=1, MAX=7` and its
+input sanitizer reject anything outside `1-7` — emitting THOR's scale
+would make every item fail validation and null out, refusing every
+report. **Self-check's extraction must emit 1-7, in the item's own
+stated polarity** (the scorer's `orientedRating()` does the reverse-item
+flip; the model answers the item's literal statement, not an "is this
+facet healthy" judgment).
 
-Each of these changes something concrete in the build, not just a caveat
-for the report:
+**Mistake 2 — no weight matrix exists to port.** THOR has a real 438-pair
+weight matrix (migration 012) to port into TypeScript. **Self-check has
+no equivalent matrix** — no `self_check_weights` table, nothing in
+`supabase/`. The 1987 aggregation formula is *compiled* in `GPASCORE.ASF`,
+not recovered as readable logic (confirmed, `97221b6`). There's nothing
+to port because `score.ts` already IS the deterministic scorer, built
+directly from the facet structure builder-3 verified against the source
+(§2 below) — not a THOR-style weight-matrix computation, a different
+(simpler, already-shipped) one.
 
-**1a. The refusal gates are structurally defeated by a full fill, not
-probabilistically.** Today's `MIN_ANSWERED=12`/`MIN_SCORED_FACETS=5` gates
-exist to refuse scoring on thin signal — currently refusing 86.9% of
-minimal-valid Likert subsets. If an LLM free-form-infers all 16 items every
-time (which it will, by default, unless told not to), both gates clear
-unconditionally and the protection they exist for disappears. **Design
-requirement, not optional:** the inference prompt must be able to return
-"no rating" per item when the conversation never touched it, and that
-null-emission path needs its own test before anything else — this is
-literally builder-3's test #1, run first.
+**Mistake 3, the one that would have done real damage if it had landed:
+architecture does not resolve the four gates in §1. The gates are entirely
+about MODEL BEHAVIOUR; no architecture choice changes model behaviour.**
+`score.ts` already accepts `null` per item — that makes null
+*representable*. It does not make the extraction model *use* null, honor
+reverse polarity, or preserve within-facet disagreement. **Representability
+is not behaviour** — same shape as this project's own guard-testing lesson
+earlier tonight (an affordance nobody exercises is indistinguishable from
+no affordance). Worse: modeling the new extraction prompt directly on
+`thor-extract.ts`'s own instructions would import a line that actively
+fights GATE 1 — *"be decisive — pick +2 or -2"* — written for THOR because
+180 questions and a tolerant weight matrix can absorb some noise. Self-
+check has 16 items and gates that depend on the model declining when it
+should. **Do not inherit that instruction.** GATE 1 is elevated risk under
+a thor-extract-modeled prompt specifically because of this, not resolved
+by one.
 
-**1b. Acquiescence has a free, pre-flight-testable fingerprint.** A model
-that infers agreeable ratings without honoring reverse-coded items produces
-a specific, checkable signature: the `awareness` facet (both items
-reverse-coded) collapses toward `weak` while the overall headline stays a
-plausible `solid` — nothing errors, the report reads fine, and it's wrong.
-**Design requirement:** before any prompt is trusted, score a transcript of
-unambiguous praise and confirm `awareness` does NOT come back weak. This is
-builder-3's test #2's companion check — cheap, repeatable, becomes a
-standing regression check for any future prompt edit, not a one-time
-validation.
+**Bottom line scope, corrected:** the only new component is the voice-
+transcript extractor (a new `prompt.ts`-style extraction step, 1-7 per
+item, the item's own polarity, modeled on `thor-extract.ts`'s SHAPE but
+NOT its decisiveness instruction). `score.ts` stays genuinely unchanged —
+that part of the original claim holds and is still a real, valuable scope
+reduction. All four gates below remain live, un-resolved, go/no-go
+requirements on the new prompt.
 
-**1c. The `thin` band requires within-facet disagreement, not a low mean —
-and a holistic-reasoning model will delete it by construction.** No uniform
-fill (same rating repeated across a facet's items) can produce `thin`; it
-needs genuine item-level disagreement within one facet (e.g. trust's 5
-items summing to 16-19). A model reasoning about "the relationship" as one
-impression rather than 16 separable observations will naturally make
-facets internally consistent — which silently removes the 1987 ladder's
-"uneven relationship" rung from the product, with every report still
-scoring cleanly. **Design requirement:** the inference prompt must be
-instructed to let item-level ratings disagree within a facet when the
-conversation actually supports that, not smoothed to one impression per
-facet — and validation must check per-item variance, not just facet means
-(a study that only compares facet-mean outputs could destroy this band
-without anyone noticing).
+## 1. The four go/no-go gates on the extraction prompt — not optional, not resolved by architecture
 
-## 2. The scoring-prompt design — modeled on the org-diagnostic, with one
-deliberate divergence
-
-The org-diagnostic's own governing instruction is a deliberate rejection of
-self-report: *"Do not score what they claim to believe. Score what their
-language demonstrates."* That's safe there because its 0-10 dimensions were
-designed from scratch for language inference. The self-check's 16 items
-were NOT — so the new prompt needs the same STRUCTURE (read language,
-surface what the respondent can't see themselves) while explicitly carrying
-forward the three constraints above as first-class instructions, not
-discovered-later bugs:
-
-- Per-item null is a valid, expected output — "if the conversation never
-  touches this, don't guess; the gate exists for a reason."
-- Reverse-coded items need the model to track polarity explicitly, not
-  infer sentiment and apply it uniformly — the `awareness` fingerprint
-  check (1b) is the acceptance test for this working.
-- Item-level ratings within one facet are allowed to disagree — explicitly
-  tell the model not to smooth a facet to one impression.
-- Same `FOCUS EVIDENCE` invariant the org-diagnostic already proved out in
-  production (§14: absence = affirmative evidence the topic is off-radar,
-  not mere silence) — directly reusable, not a new concept.
-
-## 3. Sequencing — tests before build-time dependencies, not in parallel
-
-**gm's explicit instruction: the three checks below are GO/NO-GO gates on
-the build plan, not something `test` runs at the end for a report.** A
-prompt draft that fails any one of them does not proceed to voice
-infrastructure — it gets rewritten and re-checked. None needs infra, a
-voice agent, or an API key.
+**gm's explicit instruction: these are GO/NO-GO gates on the build plan,
+not something `test` runs at the end for a report.** A prompt draft that
+fails any one does not proceed to voice infrastructure. None needs infra,
+a voice agent, or an API key — all four are checkable against the
+existing pure `scoreSelfCheck`/synthetic transcripts.
 
 ```
-GATE 1 (go/no-go) -- null-emission survives, CORRECTED SEVERITY
-  Not "structurally unreachable" as first framed -- enumerated all 64
-  nulling patterns: the gate is vacuous in only 6/64 (fabricate
-  everything, or null exactly 1 of the 5 smaller facets). It regains
-  FULL power the moment the model nulls 2+ facets. Real requirement,
-  cheaper than first stated: the prompt does not need to null often, it
-  needs to be ABLE to null -- acceptance bar is "nulling 2 facets (e.g.
-  expectations + value, 3 items) restores refusal," not "nulls
-  frequently." Also found: the ITEM gate (MIN_ANSWERED=12) does more of
-  the real catching than the FACET gate under this pattern -- `access`
-  (4 items) vanishing lands exactly on the 12-answer threshold, `trust`
-  (5 items) tips it. FAIL = prompt cannot null even 2 facets when the
-  conversation genuinely doesn't cover them; do not proceed.
+GATE 1 -- null-emission survives (ELEVATED RISK under a thor-extract-
+          modeled prompt, see Mistake 3 above -- do not inherit
+          "be decisive")
+  Severity, corrected by enumeration (all 64 nulling patterns): the
+  refusal gate is vacuous in only 6/64 (fabricate everything, or null
+  exactly 1 of the 5 smaller facets) -- it regains FULL power once 2+
+  facets are nulled. Real bar: the prompt must be ABLE to null 2 facets
+  when genuinely untouched, not null often. Also found: the ITEM gate
+  (MIN_ANSWERED=12) does more real catching than the FACET gate here --
+  `access` (4 items) vanishing lands exactly on the 12-answer threshold,
+  `trust` (5 items) tips it over. FAIL = prompt cannot null even 2 facets
+  on a transcript that genuinely never covers them; do not proceed.
 
-GATE 2 (go/no-go) -- polarity fingerprint
+GATE 2 -- polarity / raw-emission contract
   Score a transcript of unambiguous, one-sided praise. Check `awareness`
-  (both items reverse-coded) does NOT come back `weak`. FAIL = the prompt
-  is polarity-blind and will produce believable-looking, backwards
-  reports; do not proceed.
+  (both items reverse-coded) does NOT come back `weak` while the overall
+  reads `solid` -- that specific signature means the prompt emitted
+  already-oriented values instead of raw per-item agreement, and
+  score.ts's orientedRating() double-flipped it. Contract: model emits
+  RAW agreement with the item's own (possibly negative) statement;
+  score.ts does ALL orientation, unchanged, already mutation-tested on
+  all five reverse items. FAIL = prompt is polarity-blind; do not
+  proceed.
 
-GATE 3 (go/no-go) -- within-facet variance survives
-  On a transcript with genuine mixed signal within one facet, confirm the
-  model emits disagreeing item-level ratings rather than smoothing to one
-  facet impression, and confirm a `thin`-band result is reachable at all
-  (needs facet mean 3.10-3.99 via real item disagreement, not a uniform
-  fill). FAIL = the 1987 ladder's "uneven relationship" rung is dead on
-  arrival; do not proceed.
+GATE 3 -- within-facet variance survives
+  On a transcript with genuine mixed signal within one facet, confirm
+  the model emits disagreeing item-level ratings rather than smoothing
+  to one facet-level impression, and confirm a `thin`-band result is
+  reachable at all (needs facet mean 3.10-3.99 via real item
+  disagreement -- no uniform fill can produce it). FAIL = the 1987
+  ladder's "uneven relationship" rung is dead on arrival; do not
+  proceed.
 
-GATE 4 (go/no-go) -- `expectations` can be returned unscored
-  `expectations` is a single item carrying 1/6 of the headline weight.
-  `MIN_SCORED_FACETS=5` makes losing it survivable -- which means the
-  instrument silently changes meaning (headline score computed from 5
-  facets instead of 6) rather than refusing. Confirm the model can and
-  does abstain on this specific item when the conversation never touches
-  it, same as any other item (GATE 1's logic, called out separately
-  because this is the facet where silently proceeding is worst).
+GATE 4 -- `expectations` can be returned unscored
+  Single-item facet, 1/6 of the headline weight. MIN_SCORED_FACETS=5
+  makes losing it survivable -- the instrument silently changes meaning
+  (5-facet headline instead of 6) rather than refusing. Confirm the
+  model abstains on this item specifically when untouched, same
+  mechanism as GATE 1, called out separately because this is the facet
+  where silent proceeding is worst.
 ```
 
-**The contract decision GATE 2 is actually testing, made explicit:** the
-model must emit RAW per-item agreement with each item's own (possibly
-negatively-phrased) statement — NOT an already-oriented "how healthy is
-this facet" judgment. `score.ts`'s `orientedRating()` does the reverse-item
-flip itself; asking the model to also orient its answer double-flips
-reverse items. This is exactly the acquiescence fingerprint (`awareness`
--> weak while overall reads solid) — GATE 2 IS the acceptance test for
-getting this contract right, not a separate sanity check. Recommendation,
-endorsed: model emits raw agreement, scorer keeps doing all orientation —
-keeps the 1987 polarity logic in the one place that already has mutation
-coverage for all five reverse items, rather than asking the model to also
-hold it correctly.
+**Status:** computable halves of GATE 1/2/3 done without a model call
+(enumeration, structural reachability). Behavioural halves (does a real
+model actually fabricate, does it actually reach band extremes) need a
+model call — no `ANTHROPIC_API_KEY` available to this fleet yet. A
+one-sided self-test (builder-3 answering their own draft prompt, heavily
+caveated — N=1, primed, a pass proves nothing, a failure is real) is
+running as a cheap pre-signal while a real key is pending.
 
-1. Run GATES 1-3 on the first prompt draft, iterating on synthetic
-   transcripts (praise-only, criticism-only, mixed, silence-on-one-facet)
-   until all three pass. This is the highest-risk, most iteration-heavy
-   piece and must NOT be gated on the voice agent existing yet — pure
-   prompt engineering against `scoreSelfCheck`, no infra.
+## 2. Self-check's structure, corroborated against the real 1987 source — different risk shape from THOR's F8
 
-2. Only once all three gates pass: move to voice infrastructure.
+builder-3 checked THOR's own known-bug warning (F8, below) against the
+actual 1987 program (`GPASCORE.ASF`, `~/conductor/repos/mic-program-
+toddito`) rather than assuming it transfers either way. Verified, not
+inferred:
 
-3. THEN the build-time blockers, which don't block steps 1-2:
-   - New ElevenLabs agent + env var (ELEVENLABS_AGENT_ID_* pattern already
-     exists per-tier; this facet needs its own, dashboard access required
-     from whoever holds it)
-   - ANTHROPIC_API_KEY for testing against the real model on real
-     transcripts (same shared blocker as the §14/PR#9 thread all
-     session -- operator has consistently declined to provide one;
-     ask again specifically for this initiative rather than assuming
-     the same no carries over silently)
-   - Real validation needs more production self-check data than exists
-     (1 account, 0 self-check rows as of tonight) -- synthetic transcripts
-     carry the validation burden until real usage accumulates.
-```
+- The refusal message is **verbatim** 1987 ("Too many items were omitted
+  to permit the generation of an overall score or description").
+- The 6 **facets** and a facet's item count (e.g. `network` = 2 items)
+  match 1987's own wording exactly.
+- The 4-rung **ladder** is 1987's own language (*"has done a good job" /
+  "a slightly greater effort" / "a greater effort" / "a much greater
+  effort"*).
+- 1987 had per-facet partial-answer branches — **more** granular than
+  self-check's facet-level scored/unscored; a faithful simplification,
+  not a deviation.
 
-## 3a. Claims-framing question — REOPENED, escalated to the operator, REFINED from binary to layered
+**Only the final aggregation formula is unverified** (compiled in the
+1987 binary, not recovered as logic). Different risk shape from THOR:
+THOR's weight matrix is unverified AND known-wrong against real ground
+truth (F8, below). Self-check's inputs check out against the source;
+only the last combination step is open.
+
+**Real consequence: this reframes the `expectations`-carries-1/6-of-
+headline item** (already accepted by the operator for v1, ship-as-is-
+iterate-later) as a property **inherited from 1987's own facet-first
+design**, not an arbitrary artifact of this build — 1987 treats facets
+as first-class units with their own scores/ladders/narratives, so an
+overall built from facet-level means is the natural reading of the
+source. If ever revisited, the real question is "do we want to depart
+from 1987 here," not "should we fix our mistake."
+
+## 2a. F8 — real, pre-existing, already-tracked bug on the ORG-DIAGNOSTIC side; checked whether it transfers (it doesn't, directly)
+
+`docs/ROADMAP.md`: "THOR ground-truth harness: legacy runs as fixtures;
+**weights diverge from the legacy program (F8)** — documented via
+`it.fails` tests; THOR = directional," and "Parked: re-derive THOR
+weights from the legacy SCORE.ASF binaries" — explicitly unresolved,
+predates this initiative entirely.
+
+**Doesn't transfer directly** — F8 is the ORG-DIAGNOSTIC's weight matrix
+(migration 012, 438 pairs, derived from THOR's own ground truth). Self-
+check's weights come from a different 1987 instrument and were
+independently verified during PR #2 (facet-weighting math re-derived,
+reverse-scoring mutation-tested). **The cautionary precedent transfers
+directly though:** a ported 1987 process silently produced wrong
+rankings, caught only by deliberate ground-truth tests against real
+legacy output, not by type-checking. Self-check's new extraction step
+needs that same discipline applied to itself.
+
+## 3. Claims-framing question — escalated to the operator, refined from binary to layered
 
 gm initially decided this directly (no 1987-provenance claim), then
 revised: it's a claim made to the client about scientific provenance,
-exactly the category gm isn't supposed to guess on alone. Escalated to
-the operator — but the original framing (a binary "does the report claim
-1987 provenance, yes/no") was itself wrong, caught by builder-3 before it
-went out: **provenance here is layered, not binary**, checked against
-`GPASCORE.ASF` layer by layer:
+exactly the category not to decide alone. Escalated — but the original
+framing (a binary "does the report claim 1987 provenance, yes/no") was
+itself wrong, caught before it went out: **provenance is layered, not
+binary**, checked against `GPASCORE.ASF` layer by layer:
 
 | layer | 1987? | basis |
 |---|---|---|
 | the 16 items | yes | recovered verbatim, `GPAQUEST.ASF` offset 42276 |
 | the 6 facets + membership | yes | named narrative blocks in source |
-| the four-rung ladder | yes | "good job / slightly greater / greater / much greater effort" |
+| the four-rung ladder | yes | 1987's own wording |
 | refusing sparse data | yes | refusal string verbatim |
 | aggregation into the overall | ours | well-founded by 1987's facet-first structure, but unverified (arithmetic compiled, not recovered) |
 | the ratings under (B) | no | model-inferred from speech, not self-reported |
 
-**The actual question for the operator:** "the items, their grouping, and
-the four-step interpretation are verbatim 1987; the final score's formula
-and the voice-inferred ratings are ours. Is it acceptable to say that —
-in those terms — on the report?" A flat yes/no would get either
-understate 4 genuinely-1987 layers or overstate the 2 that aren't. Not
-blocking anything else in this plan; this only determines exact copy on
-the report, and per builder-3, it's a one-sentence change either way —
-cheaper than first estimated, not more expensive.
+**Actual question for the operator:** "the items, their grouping, and the
+four-step interpretation are verbatim 1987; the final score's formula and
+the voice-inferred ratings are ours. Is it acceptable to say that — in
+those terms — on the report?" A flat yes/no would misstate 4 of 6 layers
+either direction. Not blocking the rest of this plan — this only
+determines exact report copy, and per builder-3 it's a one-sentence
+change either way (cheaper than first estimated, not more expensive).
 
-### Original framing of the question, for the record
+## 4. Sequencing
 
-builder-3 raised a claims-accuracy question, not a testing matter: the
-dispatch's constraint said the 1987 instrument's vectors/weights "stay as
-the recovered source of truth." (B) changes what those weights are
-calibrated AGAINST (self-perception -> observed-language), even though the
-numbers themselves can be preserved. **No test catches this — every
-number stays in range either way.** The actual question: does the report
-still present its output as the 1987 instrument's calibrated score, or
-does it honestly reframe as a new instrument that reuses the 1987 items
-as a topic guide / starting prior? Presenting it as the former would claim
-a calibration it no longer has. builder-3's read, which this seat agrees
-with: reframe honestly (the latter) — cheap, mostly a copy/claims change
-in how the report describes itself, not a scope change to the build.
-Flagging to gm rather than deciding unilaterally, since it's about what
-the product claims to the client, not a technical call.
+```
+1. GATES 1-4 on the extraction prompt, iterating on synthetic transcripts
+   (praise-only, criticism-only, mixed, silence-on-one-facet,
+   silence-on-expectations) until all four pass. Pure prompt engineering
+   against the existing `scoreSelfCheck` -- no infra, no voice agent.
+   Must NOT be gated on the voice agent existing yet.
 
-## 4. What's reusable vs. new
+2. Only once all four gates pass: move to voice infrastructure.
+
+3. THEN the build-time blockers, which don't block steps 1-2:
+   - New ElevenLabs agent + env var (per-tier ELEVENLABS_AGENT_ID_*
+     pattern already exists; this facet needs its own, dashboard access
+     required)
+   - ANTHROPIC_API_KEY for real-model testing on real transcripts (same
+     standing blocker as the §14/PR#9 thread all session -- ask again
+     specifically for this initiative, don't assume the prior no
+     silently carries over)
+   - Real validation needs more production self-check data than exists
+     (1 account, 0 self-check rows as of tonight) -- synthetic
+     transcripts carry the validation burden until usage accumulates.
+```
+
+## 5. What's reusable vs. new
 
 ```
 REUSABLE AS-IS:
   ElevenLabs voice-call infrastructure (signed-URL minting, webhook
     receipt pattern) -- same shape as the org-diagnostic's, new agent ID
-  FOCUS EVIDENCE's absence-is-affirmative-evidence invariant (§14,
-    production-proven)
+  FOCUS EVIDENCE's absence-is-affirmative-evidence invariant (PLAN §14,
+    production-proven on the org-diagnostic side)
   self_check_reports table / migration 034 (already live) -- schema
     doesn't change, only how `responses` gets populated
-  The existing band-threshold math (score.ts) -- unchanged; what changes
-    is what feeds it
+  score.ts entirely -- orientedRating, facet means, band thresholds,
+    all four refusal gates -- genuinely unchanged
 
 NEW:
-  A self-check-specific scoring prompt (not a copy of the org-diagnostic's,
-    its own instrument/dimension set)
-  The null-per-item emission contract + its test (§1a)
-  The polarity-fingerprint regression check (§1b)
-  The within-facet-variance validation approach (§1c)
+  The voice-transcript extraction prompt (1-7 per item, item's own
+    polarity, modeled on thor-extract.ts's SHAPE but explicitly NOT its
+    decisiveness instruction)
+  GATES 1-4 as explicit acceptance tests on that new prompt
   A new ElevenLabs agent + voice UI replacing the current Likert form
 ```
 
 ## What to tell the operator
 
-Direction is set (B), planning proceeding. Three structural findings
-(not just "risks to note") now shape the actual design: the model must be
-able to say "no rating" per item or the refusal protection silently
-disappears; there's a free, repeatable pre-flight check for whether a
-prompt respects reverse-coded items; and the "thin" (uneven relationship)
-band only survives if item ratings are allowed to disagree within a facet,
-which needs validating on per-item variance, not just facet means. Two
-cheap tests are running now with no new infrastructure. Real build is
-blocked on three things outside this fleet's control: a new voice agent
-(needs dashboard access), an API key for real-transcript testing (same
-standing blocker as earlier tonight), and more production self-check
-usage to validate against.
+Architecture confirmed as already-built (extract→deterministic, matching
+the THOR precedent) — not new work, and `score.ts` (the most-tested code)
+doesn't change at all. The real new work is a voice-transcript extraction
+prompt, and it must NOT be modeled too literally on THOR's own extraction
+prompt (THOR's "be decisive" instruction would actively work against
+self-check's refusal gates). Four go/no-go gates on that new prompt, none
+needing a voice agent or API key to check computationally; the behavioural
+halves need a real model call. Self-check's structure independently
+corroborates the real 1987 source on four of six layers — only the final
+aggregation formula and (under voice) the ratings themselves are new.
+Provenance claim question is with the operator now, properly layered.
+Real build blocked on: a new ElevenLabs agent (dashboard access), an API
+key (same standing ask), and more production usage to validate against.
