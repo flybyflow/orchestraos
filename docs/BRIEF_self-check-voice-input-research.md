@@ -337,3 +337,95 @@ items pull against the forward ones, so it was measuring polarity, not
 compression. Isolating them (setting each item's *oriented* value) gives the
 table above. Reporting the first version would have been a confident wrong
 finding about the instrument's sensitivity.
+
+---
+
+# Addendum 2 — THOR's warning checked against the actual 1987 source
+
+gm flagged that THOR's weight matrix produces wrong rankings against real 1987
+ground truth (PR #123, `fd6e85b`), marked *"directional until weights
+re-derived"*, and warned: **do not assume the self-check's weight transcription
+is validated just because it shipped.** Correct warning. I checked it against
+`GPASCORE.ASF` — the actual 1987 scoring program, present at
+`~/conductor/repos/mic-program-toddito`.
+
+**The result goes the other way: the self-check's structure corroborates, and
+the residual is narrower than THOR's.**
+
+## What is confirmed from the source, not assumed
+
+- **The refusal message is verbatim.** *"Too many items were omitted to permit
+  the generation of an overall score or description"* appears exactly as our
+  `score.ts` quotes it. Provenance of the missing-data behaviour is established,
+  not inferred.
+- **The facets are 1987's, each with its own narrative block** — trust,
+  expectations, the client's respect for expertise (`value`), and the network of
+  supporters all appear as named groupings with dedicated prose.
+- **A facet size is corroborated by 1987's own wording:** *"That **one or both
+  items** regarding the extent to which members of the consulting team have
+  established a network of supporters was (were) unanswered"* — **network is two
+  items**, matching `items.ts` exactly.
+- **The four-rung ladder is 1987's**, visible on the expectations facet: *"has
+  done a good job"* / *"a slightly greater effort"* / *"a greater effort"* / *"a
+  much greater effort"*. That is exactly the four bands `bandFor` implements, and
+  the code already claimed this — now checked.
+- **1987 had per-facet partial-answer branches** (three distinct *"items … was
+  unanswered"* strings), which is *more* granular than our facet-level
+  scored/unscored. Our handling is a faithful simplification, not an invention.
+- **1987 had an overall** — the refusal text says so — with its own narrative
+  ladder (*"The relationship with this client is shaky … the client is
+  RESISTANT"*).
+
+## The residual, stated precisely
+
+**The aggregation formula is still unverified.** No recovered string reveals how
+1987 combined facets into the overall, and I read extracted *strings*, not
+decompiled logic — the arithmetic is compiled and I did not recover it. So
+"unverified" stands and the structure check does not validate the formula.
+
+But it substantially upgrades our choice. `score.ts` says:
+
+> Mean of facet scores, not of all items: otherwise the five-item trust facet
+> would outvote the one-item expectations facet five to one, which is a
+> weighting decision nobody made on purpose.
+
+That reads as an arbitrary tie-break. Given the source, it is not: **1987 treats
+facets as first-class units with their own scores, ladders and narratives**, so
+an overall built from facet-level units is the natural reading of that
+structure, not a guess.
+
+**Which reframes the open product decision.** `expectations` carrying a sixth of
+the headline is not a side effect of an arbitrary choice of ours — it follows
+from 1987's own facet-first design, inherited faithfully. The question for Todd
+is therefore *"do we want to depart from 1987 here"*, not *"should we fix our
+mistake"*. Those deserve different answers.
+
+## How this differs from THOR's situation
+
+| | THOR | self-check |
+|---|---|---|
+| numeric ground truth | exists (`combo_fixture.json`) | **none** |
+| against it | **fails** — wrong rankings on 2 cases | n/a |
+| raw answers replayable | **no** (fixture has scores only) | n/a |
+| structure vs source | not checked here | **corroborated** (facets, a size, ladder, missing-data) |
+| unverified surface | the weight matrix itself | **the final aggregation step only** |
+
+So the two are not the same risk. THOR's arithmetic is suspect and known-wrong
+in places. The self-check's inputs to the arithmetic are corroborated against
+the source program, and only the last combination step is unverified. gm's
+instruction — do not borrow THOR's assumption of correctness — is right, and
+following it produced a better answer than assuming either way.
+
+**What would close it:** recovering `GPASCORE.ASF`'s compiled aggregation, or
+finding a 1987 worked example with both the 16 answers and the resulting overall.
+The fixture note already anticipates this, calling itself *"the scoring half
+only."*
+
+## A method note, third instance today
+
+My first pass grepped the source for our facet names and got `trust 34, value
+30, awareness 8` — which looked like strong confirmation and was nothing of the
+kind: those are ordinary English in the org-diagnostic stage narratives that
+share the file. Caught by reading the hits rather than the counts, which is the
+same correction as twice earlier today. A count is a hypothesis; the occurrence
+is the evidence.
