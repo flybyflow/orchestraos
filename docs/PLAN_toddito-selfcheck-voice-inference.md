@@ -90,21 +90,42 @@ discovered-later bugs:
 
 ## 3. Sequencing — tests before build-time dependencies, not in parallel
 
-```
-1. builder-3's 2 cheap tests (already dispatched, running now):
-   - fabrication-on-silence: does a draft prompt emit a rating for an
-     untouched facet? Does the 86.9%-refusal protection survive?
-   - band-extreme reachability: do inferred ratings on synthetic
-     strong/weak transcripts actually reach the strong/weak bands?
-   Both run against the existing pure `scoreSelfCheck` -- no new infra,
-   no voice agent, no API key beyond a normal model call.
+**gm's explicit instruction: the three checks below are GO/NO-GO gates on
+the build plan, not something `test` runs at the end for a report.** A
+prompt draft that fails any one of them does not proceed to voice
+infrastructure — it gets rewritten and re-checked. None needs infra, a
+voice agent, or an API key.
 
-2. Draft the actual inference prompt against those two tests as the
-   acceptance bar, iterating on a handful of synthetic transcripts
-   (praise-only, criticism-only, mixed, silence-on-one-facet) before
-   touching any voice infrastructure. This is the highest-risk, most
-   iteration-heavy piece and should NOT be gated on the voice agent
-   existing yet.
+```
+GATE 1 (go/no-go) -- null-emission survives
+  Does a draft prompt emit "no rating" for a facet the conversation never
+  touches, rather than fabricating one? Confirm the 86.9%-refusal
+  protection is still reachable (MIN_ANSWERED/MIN_SCORED_FACETS can still
+  trigger). FAIL = the gates are structurally dead on arrival; do not
+  proceed until the prompt can genuinely abstain.
+
+GATE 2 (go/no-go) -- polarity fingerprint
+  Score a transcript of unambiguous, one-sided praise. Check `awareness`
+  (both items reverse-coded) does NOT come back `weak`. FAIL = the prompt
+  is polarity-blind and will produce believable-looking, backwards
+  reports; do not proceed.
+
+GATE 3 (go/no-go) -- within-facet variance survives
+  On a transcript with genuine mixed signal within one facet, confirm the
+  model emits disagreeing item-level ratings rather than smoothing to one
+  facet impression, and confirm a `thin`-band result is reachable at all
+  (needs facet mean 3.10-3.99 via real item disagreement, not a uniform
+  fill). FAIL = the 1987 ladder's "uneven relationship" rung is dead on
+  arrival; do not proceed.
+```
+
+1. Run GATES 1-3 on the first prompt draft, iterating on synthetic
+   transcripts (praise-only, criticism-only, mixed, silence-on-one-facet)
+   until all three pass. This is the highest-risk, most iteration-heavy
+   piece and must NOT be gated on the voice agent existing yet — pure
+   prompt engineering against `scoreSelfCheck`, no infra.
+
+2. Only once all three gates pass: move to voice infrastructure.
 
 3. THEN the build-time blockers, which don't block steps 1-2:
    - New ElevenLabs agent + env var (ELEVENLABS_AGENT_ID_* pattern already
