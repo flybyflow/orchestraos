@@ -278,14 +278,33 @@ hold it correctly.
      carry the validation burden until real usage accumulates.
 ```
 
-## 3a. Claims-framing question — REOPENED, escalated to the operator
+## 3a. Claims-framing question — REOPENED, escalated to the operator, REFINED from binary to layered
 
 gm initially decided this directly (no 1987-provenance claim), then
 revised: it's a claim made to the client about scientific provenance,
-exactly the category gm isn't supposed to guess on alone. Now escalated
-to the operator with this seat's framing. Pending their answer — not
-blocking anything else in this plan, but don't assume "no provenance
-claim" is final until the operator confirms it.
+exactly the category gm isn't supposed to guess on alone. Escalated to
+the operator — but the original framing (a binary "does the report claim
+1987 provenance, yes/no") was itself wrong, caught by builder-3 before it
+went out: **provenance here is layered, not binary**, checked against
+`GPASCORE.ASF` layer by layer:
+
+| layer | 1987? | basis |
+|---|---|---|
+| the 16 items | yes | recovered verbatim, `GPAQUEST.ASF` offset 42276 |
+| the 6 facets + membership | yes | named narrative blocks in source |
+| the four-rung ladder | yes | "good job / slightly greater / greater / much greater effort" |
+| refusing sparse data | yes | refusal string verbatim |
+| aggregation into the overall | ours | well-founded by 1987's facet-first structure, but unverified (arithmetic compiled, not recovered) |
+| the ratings under (B) | no | model-inferred from speech, not self-reported |
+
+**The actual question for the operator:** "the items, their grouping, and
+the four-step interpretation are verbatim 1987; the final score's formula
+and the voice-inferred ratings are ours. Is it acceptable to say that —
+in those terms — on the report?" A flat yes/no would get either
+understate 4 genuinely-1987 layers or overstate the 2 that aren't. Not
+blocking anything else in this plan; this only determines exact copy on
+the report, and per builder-3, it's a one-sentence change either way —
+cheaper than first estimated, not more expensive.
 
 ### Original framing of the question, for the record
 
