@@ -451,6 +451,36 @@ Three limitations stated rather than buried:
    and not to a standalone script. That constraint applies to *any* future
    toddito monitoring, not just this gate.
 
+### UPDATE 2026-10-08, after the operator's ruling — gate RETIRED, watch RE-SCOPED
+
+**The operator ruled one-to-many workspace visibility is INTENDED** (one
+consultant's reflection readable by their whole team), revisit after proper QA.
+No code change.
+
+That makes the privacy gate above **moot, and worse than moot**: its alert
+condition — an account with >1 profile holding self-check rows — IS one-to-many
+visibility. Left armed, the first two-person team to run a self-check would
+have fired `PRIVACY GATE TRIPPED` about the feature working as designed. An
+alarm that cries wolf on approved behaviour is worse than no alarm, because it
+trains the next real alert to be dismissed.
+
+So cron `94393324` is **deleted** and replaced by `91cd9869`, watching what is
+actually at risk now that rows will start existing:
+
+- **`account_id IS NULL` or dangling** on a `self_check_reports` row. The read
+  site filters `report.account_id !== ws.accountId`, so such a row is
+  **unreadable by its own owner** — a consultant's self-check silently
+  invisible to them, with no error anywhere. `account_id` is nullable, which is
+  why this is a real case and not a hypothetical.
+- **One informational note** (not an alert, not daily) the first time
+  one-to-many goes live on a real account, because that count is what the
+  operator will want when they revisit after QA.
+
+What this watch deliberately does **not** claim to cover: cross-ACCOUNT reads.
+Those are prevented in code plus RLS-with-no-policies, and a read leaves no
+signature a DB poll can see. Saying so beats implying coverage that does not
+exist.
+
 **Standing recommendation on the product question** (builder-3 and `review`
 independently agree): **person-private.** If workspace-visible turns out to be
 wrong, a colleague has already read someone's "weak" and no fix reaches that.
