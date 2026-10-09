@@ -416,17 +416,21 @@ model and wouldn't predict the real agent's behavior). Design, probes,
 and prompt content stay approved and don't wait on this.
 
 **Operator update, 2026-10-09T10:26 UTC — proceed to build/review/ship
-NOW on everything that doesn't need a live model call, through the
-normal pipeline, landed to main on the normal schedule.** Explicit
-constraint, confirmed directly with the operator (they didn't push
-back when framed as a safety check): this means landing CODE, not
-skipping validation for the LIVE feature. **GATES 1-5 still have to pass
-against the real model/agent before this is turned on for real users.**
-Dispatched to builder-3: build the extraction code, the pipeline wiring,
-the provenance copy (both variants), and key-less tests now — but the
-actual voice self-check entry point must stay gated off / not routed
-live until the gates pass for real. Code landing on main is not the
-feature going live; don't conflate the two in any status report.
+NOW on everything that doesn't need a live model call** (superseded
+below, kept for the record of how this was sequenced).
+
+**OPERATOR OVERRIDE, 2026-10-09T14:42 UTC — ship self-check live, skip
+the GATE 1-5 hold.** Operator, explicit: "Just put it live and we're
+gonna QA it ourselves." This replaces the gated-off instruction above —
+the operator is taking on the behavioral validation personally, not
+asking the fleet to hold for it. **Current instruction: finish the
+extraction code/wiring, land it through the normal review/ship pipeline,
+then wire the live entry point live once the code itself is reviewed and
+shipped — no gate-hold.** One requirement carried through: the PR itself
+must note plainly that the behavioral gates (1-5) are unvalidated against
+a real model/agent and the operator is QAing directly, so review/test
+know what they're actually gating is code correctness, not model
+behavior — don't let a clean review read as "the gates passed."
 ```
 
 ## 5. What's reusable vs. new
