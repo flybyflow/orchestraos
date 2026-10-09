@@ -414,6 +414,19 @@ later. GATE 5's simulate-conversation eval is explicitly HELD until the
 fix lands** (testing against qwen/temp-0 now would validate the wrong
 model and wouldn't predict the real agent's behavior). Design, probes,
 and prompt content stay approved and don't wait on this.
+
+**Operator update, 2026-10-09T10:26 UTC — proceed to build/review/ship
+NOW on everything that doesn't need a live model call, through the
+normal pipeline, landed to main on the normal schedule.** Explicit
+constraint, confirmed directly with the operator (they didn't push
+back when framed as a safety check): this means landing CODE, not
+skipping validation for the LIVE feature. **GATES 1-5 still have to pass
+against the real model/agent before this is turned on for real users.**
+Dispatched to builder-3: build the extraction code, the pipeline wiring,
+the provenance copy (both variants), and key-less tests now — but the
+actual voice self-check entry point must stay gated off / not routed
+live until the gates pass for real. Code landing on main is not the
+feature going live; don't conflate the two in any status report.
 ```
 
 ## 5. What's reusable vs. new
