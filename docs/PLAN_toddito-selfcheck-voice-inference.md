@@ -68,7 +68,7 @@ that part of the original claim holds and is still a real, valuable scope
 reduction. All four gates below remain live, un-resolved, go/no-go
 requirements on the new prompt.
 
-## 1. The four go/no-go gates on the extraction prompt — not optional, not resolved by architecture
+## 1. The go/no-go gates on the extraction prompt — not optional, not resolved by architecture (GATE 5, on the voice agent itself, is in §3c — more severe than all four of these, found later, testable sooner)
 
 **gm's explicit instruction: these are GO/NO-GO gates on the build plan,
 not something `test` runs at the end for a report.** A prompt draft that
@@ -292,6 +292,69 @@ without reading them aloud as a checklist — is a separate, harder design
 question**, unstarted. This may be the real risk to (B) producing usable
 coverage at all, more than the extraction prompt's correctness. Flagging
 as its own scope item, not yet assigned.
+
+## 3c. Voice agent design v1 — committed, one NEW HARD GATE found, plus a real unblock
+
+`docs/BRIEF_self-check-voice-agent-design.md` (builder-3). Ready for gm
+to create the actual ElevenLabs agent from.
+
+**The natural-conversation-vs-checklist tension dissolved, against
+builder-3's own first instinct:** the org agent's real production
+history (`TUL-34`, `TUL-41`) already tried the "adaptive, latitude-given"
+version and paid for it specifically — temp 0.7→0.3 after improvised
+off-script follow-ups, and the agent literally self-answering its own
+probe on Haiku. The scripted sequence isn't timidity, it's the residue of
+trying the alternative. Resolution: the org diagnostic's 25 probes are
+open QUESTIONS, not items to rate, with no 1:1 question-to-dimension map
+— so self-check gets **10 fixed conversational questions in order**
+whose natural answers cover all 16 items, no item text ever read aloud,
+naturalness living in the questions themselves, not agent latitude.
+Production's own fixes carried forward verbatim: the CRITICAL ROLE RULE
+block, Sonnet (not Haiku), temp 0.3, no invented follow-ups.
+
+**GATE 5 (NEW, HARD) — the agent can fabricate the transcript, and
+already has (TUL-41, observed, not hypothetical).** This is the most
+severe gate found so far: all four existing gates operate downstream of
+the transcript, so a fabricated respondent answer (the agent generating
+speech nobody said) is invisible to every one of them — worse, it makes
+`answered` go UP, pushing the refusal gates toward PASSING rather than
+refusing the exact thing they exist to catch. More severe here than on
+the org diagnostic: 180 THOR questions with a noise-tolerant weight
+matrix absorb one bad answer; 16 self-check items have no redundancy,
+and `expectations` is a single item — one fabrication scores a sixth of
+the headline outright, invented. **GATE 5 belongs on the AGENT, not the
+extractor** — nothing downstream can detect it once it happens.
+
+**Real unblock: GATE 5 is testable right now, no human respondent, no
+Anthropic key.** `docs/ELEVENLABS_AGENT.md` documents a validation
+harness (EL's simulate-conversation API + eval criteria) already used to
+validate the Lite agent as "8/8 probes in order, no self-answering,
+clean end_call" — "no self-answering" is already an eval criterion
+there. Coverage is half-testable the same way: simulate N conversations,
+measure which facets come back scored, two-facet-refusal as the pass
+bar. **This makes GATE 5 the first gate that can be validated, ahead of
+the extraction-side gates which still need the key.**
+
+**Probe design reasoning, not arbitrary:** all 5 reverse-coded items
+need event-based probes ("tell me about a time...", "how do you know
+that?"), never self-assessment questions — nobody volunteers "my client
+doesn't trust my full range" as a self-report, but a reverse-coded item
+exists precisely where free conversation would systematically
+underperform if asked directly. Two probes do specific, non-obvious
+work: P8 asks for a specific EVENT (not "do they know your full range,"
+which invites "yes"); P10's "...and how do you know that?" clause is
+load-bearing (the self-test transcript's own trap failed exactly here —
+satisfaction is not evidence of deliberate expectation-setting).
+
+**Open, stated honestly, not guessed past:** can the agent track
+coverage mid-call (no, not reliably on a system prompt alone — the
+10-fixed-probes design deliberately doesn't require it); whether 10
+probes can shrink to match Lite's 8 if needed (merge 5+6 if forced,
+never cut 8/9/10 — they're the only route to 4 of 6 facets); whether the
+event-recall probes actually land in practice (measurable by
+simulation). **Nothing here is validated against a real conversation
+yet** — reasoned from the instrument and from documented production
+failures, ready to build an agent from, not yet confirmed correct.
 
 ## 4. Sequencing
 
