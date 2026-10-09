@@ -356,6 +356,59 @@ simulation). **Nothing here is validated against a real conversation
 yet** — reasoned from the instrument and from documented production
 failures, ready to build an agent from, not yet confirmed correct.
 
+## 3d. PR #24 (a666915) — real bug found and fixed, free off-switch discovered, provenance blocked on a migration, one must-not-skip sequencing item
+
+**Real, severe bug found and fixed before it shipped:** `elevenlabs-
+config` picked the voice agent from `session.tier` alone, never checking
+`output_kind` — and self-check sessions carry `tier: "lite"` only because
+the column requires SOME value (per the self-check route's own comment:
+"not a new tier... neither lite/full prompt applies here"). **The first
+live voice self-check would have been handed the 25-probe ORG
+interviewer**, asking about the respondent's company, while self-check's
+own extraction prompt pulled 16 client-relationship ratings out of
+answers to the wrong questions entirely. Every rating in-range, every
+rating about the wrong subject, nothing downstream able to detect it —
+a sixth (new) failure mode worse than anything GATES 1-5 cover, because
+it's not about the model's behavior at all, it's a routing bug. Fixed:
+`output_kind` checked before `tier`, no tier fallback.
+
+**That fix is also the off-switch — no feature flag needed.** An unset
+`ELEVENLABS_AGENT_ID_SELF_CHECK` drops into the route's existing
+not-configured path (503, call never starts). Going live is setting one
+env var once the agent is actually ready — an ops action, not a code
+change.
+
+**Two of the four originally-dispatched build items already existed** —
+found, not rebuilt: `src/lib/self-check/prompt.ts` + `run.ts` already
+implement transcript→ratings with the null affordance (with a base rate,
+an improvement on the draft), the polarity rule, and the flat,
+facet-free manifest (GATE 3's structural solution, already shipped from
+PR #2). Pipeline wiring was already done in PR #2 too. Real new work was
+narrower: silence-is-not-disagreement with four do-not-infer patterns,
+and a worked polarity example on a real reverse-coded item.
+
+**Provenance copy is BLOCKED, not skipped — real gap, needs a migration
+builder-3 correctly didn't add themselves.** It cannot be keyed on
+`output_kind` as planned: both the form and voice paths are `self_check`.
+The actual discriminator (consultant self-rated vs. model-inferred) is
+recorded NOWHERE — `self_check_reports` has no such column.
+`supabase/migrations/` is Moe's CONFIRMED-ACTIVE restricted path (PR #15)
+— needs a `ratings_source text` column + one upsert field + one read
+branch from whoever owns that boundary, before the voice path's first
+real report, or the shipped "your own read" copy becomes a wrong claim
+the moment a voice-completed report exists. Latent today only because no
+agent is wired yet.
+
+**MUST-NOT-SKIP sequencing item, separate from the code landing:**
+`ELEVENLABS_AGENT_ID_SELF_CHECK` must stay UNSET until the dashboard
+fix (§3c: Sonnet 4.5, temp 0.3, `end_call` tool, dynamic variables)
+actually lands. The agent currently runs qwen at temp 0 with no
+`end_call` — exactly the configuration GATE 5 exists to prevent. Setting
+the env var before that fix means the first live call runs precisely the
+failure mode GATE 5 was written to catch. Not blocking the PR (code-
+only); blocking the moment anyone considers flipping the env var "to go
+live" per the operator's override.
+
 ## 4. Sequencing
 
 ```
