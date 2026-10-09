@@ -1,6 +1,20 @@
 #!/bin/bash
 # Post-merge invariants for toddito PR #1 (fix/report-tone-language).
 #
+# STATUS: PR #1 LANDED 2026-10-08 as PR #19, commit 9b48051, onto main 05a08c7.
+# Every invariant below now describes main rather than a pending merge, so this
+# script is a record, not a gate -- it will not be run again as-is. Kept because
+# each check is a regression that actually happened during the rebase and was
+# invisible to a clean merge, a green tsc and a green test suite. If any of
+# these is ever re-asserted, re-point it at the current main and it still works.
+# What it caught, in order of how little a clean merge proved about it:
+#   package.json taken wholesale, dropping vitest/@vercel/analytics/overrides
+#   six root config files 9 days stale, incl. eslint's whole production ruleset
+#   git silently taking PR #1's unguarded engagements GET over main's guarded one
+#   score.ts losing main's prose-reply path
+#   a clamp test that was staged, reported staged, and never committed once
+#
+
 # WHY THIS EXISTS. PR #1's rebase crosses three other PRs, and in four places
 # a *clean merge* does not prove the right thing happened -- taking one side
 # wholesale silently reverts a good fix, and the regression is invisible to the
@@ -47,6 +61,16 @@ chk "no stale _req signature"        "src/app/api/sessions/[id]/score/route.ts" 
 
 echo "OTHER RESOLUTIONS THAT A CLEAN MERGE WOULD NOT PROVE"
 chk "dashboard limit clamp kept"     "src/app/api/dashboard/route.ts" "MAX_PAGE_SIZE"
+# The clamp's TEST, not just the clamp. test wrote this file, I told them it was
+# staged, and then every commit on the branch shipped without it -- it was never
+# in a single one. The gate missed it because it checked the route and not the
+# test, and because "staged" is not "committed": the index was rebuilt by a later
+# checkout and the file went with it. Now asserted by content, not just path, so
+# an empty or stubbed file cannot satisfy it.
+chk "clamp TEST exists (never committed once)" \
+    "src/app/api/dashboard/route.test.ts" "limit=999999"
+chk "clamp test asserts the range call, not just the echoed limit" \
+    "src/app/api/dashboard/route.test.ts" "toHaveBeenCalledWith(0, 99)"
 chk "StageCurve crash guard kept"    "src/components/report/StageCurve.tsx" "if (!primaryPt) return null"
 chk "engagements GET is guarded"     "src/app/api/engagements/route.ts" "requireWorkspaceAccount(req)"
 chk "score.ts prose-reply path kept" "src/lib/scoring/score.ts" "replied in prose"
