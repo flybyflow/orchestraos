@@ -305,16 +305,24 @@ as its own scope item, not yet assigned.
 2. Only once all four gates pass: move to voice infrastructure.
 
 3. THEN the build-time blockers, which don't block steps 1-2:
-   - New ElevenLabs agent + env var (per-tier ELEVENLABS_AGENT_ID_*
-     pattern already exists; this facet needs its own, dashboard access
-     required)
-   - ANTHROPIC_API_KEY for real-model testing on real transcripts (same
-     standing blocker as the §14/PR#9 thread all session -- ask again
-     specifically for this initiative, don't assume the prior no
-     silently carries over)
+   - **ElevenLabs agent — UNBLOCKED, 2026-10-09T09:57 UTC.** gm has live
+     ElevenLabs MCP access against the real toddito/Pulse workspace
+     (confirmed via agents_list showing Pulse Lite/Full), can create the
+     self-check voice agent directly via `agents_create` once the
+     voice-agent conversational design (§3b's flagged risk) exists. No
+     dashboard access needed from anyone else.
+   - **ANTHROPIC_API_KEY — still open.** Operator says it's set on
+     Coolify, but that only means the deployed app can call Claude, not
+     that the fleet's local test harness can. gm asking for the actual
+     value or another path directly.
    - Real validation needs more production self-check data than exists
      (1 account, 0 self-check rows as of tonight) -- synthetic
      transcripts carry the validation burden until usage accumulates.
+
+**Current focus, while the key is chased:** the voice-agent conversational
+design (§3b) is now the critical path, not a parked item — once it
+exists, the agent itself can be created immediately with no further
+operator action.
 ```
 
 ## 5. What's reusable vs. new
