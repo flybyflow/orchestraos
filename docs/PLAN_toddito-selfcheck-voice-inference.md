@@ -382,10 +382,32 @@ failures, ready to build an agent from, not yet confirmed correct.
      (1 account, 0 self-check rows as of tonight) -- synthetic
      transcripts carry the validation burden until usage accumulates.
 
-**Current focus, while the key is chased:** the voice-agent conversational
-design (§3b) is now the critical path, not a parked item — once it
-exists, the agent itself can be created immediately with no further
-operator action.
+**Update 2026-10-09T10:06 UTC — agent created, NOT ready, one real
+blocker needs dashboard access.** gm created `agent_3101m4g20d5ce9tb0fmw7sfb65wa`
+("Pulse Self-Check") via ElevenLabs MCP using builder-3's approved
+design/probes — name/voice/language/first_message/prompt are correct.
+**The MCP connector's advanced-settings escape hatch is broken** ("Unexpected
+argument(s): body" on every attempt), so four settings defaulted WRONG and
+would reproduce the exact production failures GATE 5 exists to prevent if
+tested as-is:
+
+```
+llm: qwen35-397b-a17b           needed: claude-sonnet-4-5 (GATE 5 -- this
+                                 exact model fixed TUL-41 self-answering)
+temperature: 0                  needed: 0.3 (GATE 5 -- fixed TUL-34
+                                 improvised off-script follow-ups)
+tools: []                       needed: end_call system tool, or the
+                                 agent can't hang up after probe 10
+dynamic_variable_placeholders:  needed: consultant_name, client_name --
+  {}                            referenced throughout the prompt
+```
+
+**5-minute manual fix, needs ElevenLabs dashboard access:** Agent settings
+→ LLM: Claude Sonnet 4.5, Temperature: 0.3, add the `end_call` system
+tool, add the two dynamic variables. Correctly NOT reported as ready or
+tested against — gm flagged this rather than claiming false progress.
+This is now THE blocker on GATE 5 testing specifically (the one gate that
+was supposed to be testable without further operator action).
 ```
 
 ## 5. What's reusable vs. new
