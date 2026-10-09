@@ -408,6 +408,12 @@ tool, add the two dynamic variables. Correctly NOT reported as ready or
 tested against — gm flagged this rather than claiming false progress.
 This is now THE blocker on GATE 5 testing specifically (the one gate that
 was supposed to be testable without further operator action).
+
+**Operator deferred the fix (2026-10-09T10:23 UTC) — no rush, will do
+later. GATE 5's simulate-conversation eval is explicitly HELD until the
+fix lands** (testing against qwen/temp-0 now would validate the wrong
+model and wouldn't predict the real agent's behavior). Design, probes,
+and prompt content stay approved and don't wait on this.
 ```
 
 ## 5. What's reusable vs. new
