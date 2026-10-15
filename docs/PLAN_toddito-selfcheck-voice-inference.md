@@ -407,6 +407,18 @@ override note (same pattern as the demo-page override: operator's direct
 instruction, not the fleet's own judgement, standing restriction
 otherwise unchanged).
 
+**Correction, same day — the precondition note itself was incomplete.**
+review found: migration 035 landing alone fixes nothing, since nothing
+reads the new column yet. Corrected precondition, to be written into
+both the `.env.production.example` and `elevenlabs-config/route.ts`
+comment sites: **"Before setting ELEVENLABS_AGENT_ID_SELF_CHECK:
+`ratings_source` must exist AND the report's read-back copy must branch
+on it, so a voice report does not claim to be the consultant's own
+read."** The copy-branch work itself (keying the "your own read" vs
+"ours" sentence on `ratings_source`) is dispatched to builder-3
+separately. Not blocking anything today (env var stays unset either
+way) — just keeping the precondition accurate before anyone acts on it.
+
 **MUST-NOT-SKIP sequencing item, separate from the code landing:**
 `ELEVENLABS_AGENT_ID_SELF_CHECK` must stay UNSET until the dashboard
 fix (§3c: Sonnet 4.5, temp 0.3, `end_call` tool, dynamic variables)
