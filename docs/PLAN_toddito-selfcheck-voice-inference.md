@@ -419,6 +419,13 @@ read."** The copy-branch work itself (keying the "your own read" vs
 separately. Not blocking anything today (env var stays unset either
 way) — just keeping the precondition accurate before anyone acts on it.
 
+**Update — PR #27 open** (`feat/self-check-ratings-source`, `6ffccfc`,
+builder-2): migration 035 + the DO_NOT_EDIT.md override entry +
+`.env.production.example`'s precondition comment already corrected
+(crossed with the builder-3 dispatch above — narrowed their scope to
+just `elevenlabs-config/route.ts`'s comment to avoid duplicate edits).
+Review+test dispatched.
+
 **MUST-NOT-SKIP sequencing item, separate from the code landing:**
 `ELEVENLABS_AGENT_ID_SELF_CHECK` must stay UNSET until the dashboard
 fix (§3c: Sonnet 4.5, temp 0.3, `end_call` tool, dynamic variables)
