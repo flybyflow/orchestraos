@@ -106,23 +106,31 @@ whether v6-keonda specifically is the product surface being invested in
 going forward (a real product-direction question, not an engineering one
 — flag to gm/operator before spending build time, don't assume).
 
-**3e. Quick win, cheap, worth doing regardless of the rest of this plan's
-timeline:** `community-brain-3d`'s untracked local files (one machine,
-never committed) are a real, current single-point-of-failure — the same
-class of risk that already caused a near-loss once. This has nothing to
-do with "consumer-product polish" and everything to do with "don't lose
-real, live-verified, working code to a laptop problem." Recommend
-committing those files immediately, independent of everything else in
-this plan and definitely not waiting on the hackathon to clear first —
-the cost of doing this now is near zero and the cost of not doing it is
-total loss of real work.
+**3e. Real single-point-of-failure risk, confirmed — but NOT a "just
+commit it" quick win once actually checked.** Checked the actual
+checkout (`~/conductor/repos/keonda.io`) directly rather than acting on
+bshr's description alone: `community-brain-3d/` is indeed fully
+untracked, but the surrounding checkout is messier than "one clean
+directory to add" — modified tracked files (`adapter.py`, `cal.py`) and
+several OTHER untracked paths (`agent/graph/`, a separate `community-
+brain/` directory distinct from `community-brain-3d`, `seating-ui/`, a
+retros JSON) sit in the same working tree. Blindly committing everything
+here risks either freezing someone's in-progress edit as if finished, or
+missing context on what's safe to include. **Correcting my own first
+instinct:** this isn't a zero-judgment action — it needs someone with
+real context on this specific checkout (bshr, who did the research, or
+whoever's been working in it) to review and commit deliberately, not a
+reflexive `git add -A`. The underlying risk (real work living only on
+one machine) is still real and still worth closing fast — just not by
+the mechanical action I first proposed.
 
 ## 4. Recommended sequencing
 
 ```
-NOW, doesn't wait on anything:
-  3e. Commit community-brain-3d's untracked files. Near-zero cost,
-      real data-loss risk if skipped.
+NOW, doesn't wait on anything, but needs a human with checkout context
+(not a mechanical git add -A -- the tree has other in-progress state
+mixed in):
+  3e. Review and commit community-brain-3d's untracked files, deliberately.
 
 AFTER hackathon prep lands the 5 PRs (their deadline, not negotiable by
 this plan):
