@@ -426,6 +426,24 @@ builder-2): migration 035 + the DO_NOT_EDIT.md override entry +
 just `elevenlabs-config/route.ts`'s comment to avoid duplicate edits).
 Review+test dispatched.
 
+**Update — PR #26 open** (`8b412f6`, builder-3, **stacked on PR #27 —
+must land after it**): the actual copy-branch work. Form says "your own
+read"; voice adds "but the ratings behind it were inferred from what you
+said, not set by you" — both facts kept deliberately (didn't choose the
+numbers, but the view is still theirs). The "prompt for a conversation,
+not a measurement of one" sentence stays on BOTH paths, confirming the
+add-don't-replace call. Fallback direction, deliberately conservative:
+missing column → self-reported (correct, since voice is unreachable in
+that window anyway); present-but-unrecognized → INFERRED, never
+self-reported (never overstate settledness — nobody double-checks the
+confident claim). builder-3 independently caught the identical mistake
+(column-exists ≠ fix) in their own monitoring cron and self-corrected
+(`182b0af3` replaces the flawed `51cd7da3`). **Honest status: the voice
+path has never produced a real report** (1 row total, form-path, 16/16
+answered) — PR #26's voice branch is untested against reality and can't
+be until the agent's dashboard params are fixed and the env var is set.
+Stated plainly in the PR.
+
 **MUST-NOT-SKIP sequencing item, separate from the code landing:**
 `ELEVENLABS_AGENT_ID_SELF_CHECK` must stay UNSET until the dashboard
 fix (§3c: Sonnet 4.5, temp 0.3, `end_call` tool, dynamic variables)
