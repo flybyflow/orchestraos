@@ -426,6 +426,32 @@ builder-2): migration 035 + the DO_NOT_EDIT.md override entry +
 just `elevenlabs-config/route.ts`'s comment to avoid duplicate edits).
 Review+test dispatched.
 
+**Update 2026-10-15T21:10 UTC — DEPLOY-ORDERING HAZARD, urgent: migration
+035 merged but NOT applied to production.** PR #27 merged the code that
+writes `ratings_source` on every self-check persist, unconditionally.
+Checked prod directly: `self_check_reports.ratings_source` **does not
+exist** there. If the merged code deploys before the migration applies,
+**the next real self-check submission fails at `persist()`** —
+PostgREST rejects the unknown column, the consultant gets nothing.
+Status as of this check: armed, not fired — last self-check
+session/report is 6 days old (2026-10-09), nobody has hit the broken
+path yet. This is a deploy-ordering problem, not a code bug: **someone
+needs to confirm migration 035 is actually pushed to the production
+Supabase project**, not just merged to git. One silver lining: with the
+column absent, the `absent → self-reported` fallback (§3a's provenance
+logic) is load-bearing in production right now, correctly rendering
+every existing row.
+
+**Also found while checking, same session — real, escalated, not
+builder-3's to fix:** production has **zero constraint preventing a
+second `accounts.is_founder = true` row.** `accounts_total: 2,
+is_founder=true: 1, unique index on is_founder: 0`. One INSERT away from
+`founderAccount()` returning null and admin login silently 401ing with
+no error anywhere — fails closed (the safe direction), but it's a
+one-row-away silent lockout with no guard against it. Needs a partial
+unique index; `supabase/migrations/` is Moe's path, escalating rather
+than filing as a local-only finding.
+
 **Update — PR #26 open** (`8b412f6`, builder-3, **stacked on PR #27 —
 must land after it**): the actual copy-branch work. Form says "your own
 read"; voice adds "but the ratings behind it were inferred from what you
