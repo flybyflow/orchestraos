@@ -399,6 +399,14 @@ real report, or the shipped "your own read" copy becomes a wrong claim
 the moment a voice-completed report exists. Latent today only because no
 agent is wired yet.
 
+**Update 2026-10-15 — PR #24 landed (`93fa545`).** Migration 035
+(`ratings_source` provenance column, `02e79a1`, builder-2) exists on
+`feat/self-check-ratings-source` but had no PR yet — dispatched builder-2
+to open it through the normal pipeline and record the DO_NOT_EDIT.md
+override note (same pattern as the demo-page override: operator's direct
+instruction, not the fleet's own judgement, standing restriction
+otherwise unchanged).
+
 **MUST-NOT-SKIP sequencing item, separate from the code landing:**
 `ELEVENLABS_AGENT_ID_SELF_CHECK` must stay UNSET until the dashboard
 fix (§3c: Sonnet 4.5, temp 0.3, `end_call` tool, dynamic variables)
