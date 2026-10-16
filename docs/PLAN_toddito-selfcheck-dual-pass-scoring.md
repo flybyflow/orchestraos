@@ -19,11 +19,18 @@ plays for the org-diagnostic — plus the comparison/divergence layer on top.
   which *does* survive as recoverable text — the question was never "is the
   formula readable," it was "which file is it in."
 - builder-3's prior verification (items, facets, 4-rung ladder, refusal
-  behavior) is verbatim-confirmed against the same files. The **final
-  aggregation formula** is now partially recovered (§3 step 1): a weighted
-  count over an incidence matrix, not a mean — so `score.ts`'s current
-  mean-of-facets is confirmed to be a **structurally different operation**
-  from 1987's real method, not merely "unverified against" it.
+  behavior) is verbatim-confirmed against the same files. **Corrected
+  2026-10-16 — the line below overgeneralized builder-3's finding past its
+  source, caught by builder-3 one message later:** 1987's aggregation for
+  the **DEV/CULT dimensions** is a weighted count over a booleanised
+  incidence matrix (integer row weights, then plus-reduce) — traced via
+  `CALC`/`GENANSM`. **Whether Client Relationship uses the same method is
+  unestablished.** `CRG` (the CR-adjacent function found so far) reads a
+  different file component (31) and is a renderer, not a scorer — no CR
+  aggregation function has been traced yet. The Fable pass is targeting
+  exactly this. Do not treat `score.ts`'s mean-of-facets as confirmed
+  structurally different from 1987's *CR* method until that's traced; it
+  may turn out closer to a mean than this entry implied.
 - `GPAQUEST.ASF` strings confirm "Client Relationship" is THOR's own name for
   this module ("THE CLIENT RELATIONSHIP MODULE renders a diagnosis of the
   extent to which you have managed to build trust and credibility...").
@@ -185,11 +192,15 @@ running the adversarial case (not reasoning about it) revealed the gap.
    factor test against *global* counts never matched: the bitmaps are
    **per-section**, not file-wide. `CALC`'s arithmetic:
    `R←R='1' ... R[7;]×4 ... R[9 23;]×2 ... R←+/R` — booleanise the incidence
-   matrix, multiply specific rows by integer weights, plus-reduce. **So
-   `score.ts`'s mean-of-facet-means is not just unverified against 1987 — it
-   is a structurally different operation** (mean vs. weighted count). The
-   deterministic pass, once CR's own weights are recovered, implements a
-   weighted count, not a mean.
+   matrix, multiply specific rows by integer weights, plus-reduce. **This is
+   the DEV/CULT pipeline only — whether Client Relationship aggregates the
+   same way is unestablished** (corrected 2026-10-16, caught by builder-3
+   one message after this entry was first written; `CRG`, the CR-adjacent
+   function, is a renderer reading a different component (31), not a traced
+   scorer). Do not yet conclude `score.ts`'s mean-of-facets is structurally
+   different from 1987's *CR* method — it's plausible, given the shared
+   `GENANSM`/`CALC` machinery, but unconfirmed, and the Fable pass is
+   targeting exactly this.
 
    **Self-correction worth keeping, builder-3's own words:** "a failed factor
    test is not evidence of absence... I should have said inconclusive, not
