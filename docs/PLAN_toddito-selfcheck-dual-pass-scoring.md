@@ -538,6 +538,15 @@ up to whoever owns `fix/plotly-annotations-type` (sitting untouched at
 already on `16.3.7`, they may be carrying a branch for a problem that
 doesn't exist, caused by install drift in a different, shared worktree.
 
+**gm's follow-up: the deeper root cause was a wrong types package, not
+just node_modules drift.** gm had independently verified against a stale
+`@types/plotly.js` rather than `plotly.js`'s own native types (which is
+what TypeScript actually resolves) and was about to have `build` ship a
+fix for a bug that would have been real under the wrong types and
+nonexistent under the right ones. Caught with a fresh clone + `npm ci` +
+build + `tsc`, all exit 0; `build` told to stop/revert if started;
+builder-1 and review corrected directly by gm.
+
 **Resolved (builder-1, verified by plan independently): flat-item-mean does
 NOT bypass dimension-level computation — it is algebraically identical to
 it.** Every 1987 dimension is itself an equal (unit-weighted) mean over its
