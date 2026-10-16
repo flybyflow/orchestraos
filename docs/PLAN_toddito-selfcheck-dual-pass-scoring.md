@@ -19,17 +19,26 @@ plays for the org-diagnostic — plus the comparison/divergence layer on top.
   which *does* survive as recoverable text — the question was never "is the
   formula readable," it was "which file is it in."
 - builder-3's prior verification (items, facets, 4-rung ladder, refusal
-  behavior) is verbatim-confirmed against the same files. 1987's aggregation
-  for the **DEV/CULT dimensions** is a weighted count over a booleanised
-  incidence matrix (integer row weights, then plus-reduce) — traced via
-  `CALC`/`GENANSM`, and the Fable pass (§3 step 1) **confirmed this is
-  scoped to Dev-Stage weighting only — nothing in the CR module is weighted
-  that way.** Client Relationship's own method (relayed from the Fable
-  agent, not yet independently verified): a **unit-weighted mean per
-  dimension** — structurally closer to `score.ts`'s mean-of-facets than the
-  DEV/CULT method, though not identical (per-dimension weights 0.2/0.5/0.5
-  vs. our unweighted mean, plus a non-linear ±100/±33/0 score map vs. our
-  linear scale). See §3 step 1 for the full verified/relayed split.
+  behavior) is verbatim-confirmed against the same files. **Three-way scope,
+  verified not relayed (builder-3 read the bytes directly, 2026-10-16):**
+
+  | branch | method | status |
+  |---|---|---|
+  | DEV / CULT | weighted count over a booleanised incidence matrix | verified |
+  | Client Relationship | **unit-weighted mean per dimension** (0.2 for Trust's 5 items, 0.5 for the two-item dimensions — both exactly `1/n`) | **verified**, int16/float64 literals read directly at `102256`/`102414`/`102618` |
+  | our `score.ts` | mean of oriented item ratings per facet | shipped |
+
+  **"Structurally different from 1987's real method" was wrong for the
+  branch that matters — CR is mean-based, same family as `score.ts`, not
+  the DEV/CULT weighted-count.** Two real, narrower differences remain: (1)
+  1987's **score map is non-linear** (`+100, +33, 0, −33, −100`), ours is a
+  linear 1–7 scale — "mild agreement" is a third of the way out for them,
+  not half; (2) **granularity** — 1987 means over ten dimensions, we mean
+  over six facets (§2a's roll-up already accounts for this). See §3 step 1
+  for the fuller writeup, including one still-open question about whether
+  1987's *overall* (not per-dimension) score is a flat 16-item mean —
+  unverified, and it would bear on whether our facet-mean-of-means overall
+  is the same object as 1987's or a different one.
 - `GPAQUEST.ASF` strings confirm "Client Relationship" is THOR's own name for
   this module ("THE CLIENT RELATIONSHIP MODULE renders a diagnosis of the
   extent to which you have managed to build trust and credibility...").
@@ -256,27 +265,42 @@ checked; does not cover the item-split correction at `e10386b`.
      (doesn't just hedge) the §1 correction: CR does NOT use the DEV/CULT
      method.
 
-   *Relayed from the Fable agent, NOT yet independently verified by
-   builder-3 — treat as INFERRED, not VERIFIED, until someone checks it:*
-   - **CR aggregation = unit-weighted mean per dimension**, not a weighted
-     count: `Trust ×0.2, Credibility/Respect ×0.5, Network ×0.5`, the other
-     seven single-item dimensions presumably ×1. No CR incidence matrix and
-     no CR branch of `GENANSM` — CR is scored by three separate paths
-     (`S∆VEC∆CALC`, `S∆RELA`, and the COMBO chart code), architecturally
-     distinct from DEV/CULT.
+   **UPGRADED to verified (builder-3, same day, follow-up): CR aggregation
+   confirmed as a unit-weighted mean per dimension — read directly from the
+   bytes, not relayed from the agent.** `0.2` and `0.5` float64 literals sit
+   beside the `100 33 0 −33 −100` int16 row at `102256`/`102414`/`102618` —
+   exactly `1/5` (Trust's five items) and `1/2` (the two-item dimensions).
+   No CR incidence matrix, no CR branch of `GENANSM` — CR runs through three
+   separate paths (`S∆VEC∆CALC`, `S∆RELA`, the COMBO chart code),
+   architecturally distinct from DEV/CULT but the *same family* (mean) as
+   `score.ts`. See the §1 table for the three-way scope.
+
+   *Still relayed from the Fable agent, not independently verified:*
    - `MV6COMBO.ASC`'s six columns are `LOW HIGH COMB RELC AVG RELA`; col 6 =
      `100×(AVG−min)/(max−min)` within section — agent reports cols 1,2,4,5,6
      verified exactly against Strategy/Dev/One-Man-Rule rows, down to the
      decimal on 13/15 One-Man-Rule cells, from raw rater answers.
-   - Reverse items **4, 5, 9, 10, 15 — confirms our shipped reverse list
-     exactly.** (Low-risk, worth taking as settled even unverified-by-us —
-     it corroborates existing shipped code rather than informing new code.)
-   - A separate **pooled** CR aggregate row uses a ±50 mild weight,
-     *different* from the ten rows' ±33 — an internal inconsistency in the
-     1987 source itself, not a transcription error on our side.
    - **`S∆RELA` refuses below 13 of 16 answered.** Our `MIN_ANSWERED_OVERALL`
      is **12**. Worth someone checking whether this is coincidence or
      whether our threshold should be 13 — unresolved, not yet a decision.
+
+   *Verified, builder-3 directly:*
+   - Reverse items **4, 5, 9, 10, 15 — confirms our shipped reverse list
+     exactly.**
+   - A separate **pooled** block at `103298` uses `±50`, not `±33` — a
+     single hit, matching the agent's earlier report of a pooled CR
+     aggregate using a different weight from the ten per-dimension rows (an
+     inconsistency in the 1987 source itself, not a transcription error).
+     **Open question, explicitly unverified — the divisor:** no `float64` in
+     `(0,1]` sits near that block, so the ±50 *map* is confirmed but not the
+     `÷16` a flat whole-instrument mean would need. If 1987's *overall*
+     pools all sixteen items flat, it's a different object from our
+     facet-mean-of-means (unequal-weighted by construction, since facets
+     have different item counts) — which would mean Addendum 2's claim that
+     our facet-mean choice is "well-founded by 1987's facet-first structure"
+     holds for the *per-facet* means (now strongly supported) but not
+     necessarily for the *overall* number. Next thing to check, not yet
+     resolved.
 
    **Ground truth is structurally absent, not merely unfound — the Fable
    agent independently confirms why.** All 14 M/S rater files have CR
@@ -321,9 +345,17 @@ ground truth exist and pass *before* step 3 lands, not after.
 
 ## 5. Decision point (escalated to gm, 2026-10-16) — the gate is unmeetable for CR, not just unmet
 
-§3 step 1 closes with the formula substantially recovered (part verified by
-builder-3 directly, part relayed-from-agent and labelled as such) but **zero
-recoverable CR ground truth on disk** — not "not found yet," confirmed
+**Update: the formula is now mostly verified directly by builder-3, not
+relayed (see §1/§3 step 1) — CR is a unit-weighted mean per dimension, same
+family as `score.ts`, not the structurally-different weighted-count method
+DEV/CULT uses. That narrows this decision; it doesn't remove it.** Two
+specific, now-precisely-named gaps remain between `score.ts` and 1987's real
+CR method — a non-linear score map (±100/±33/0 vs our linear 1–7) and
+granularity (ten dimensions vs our six facets, already handled by §2a's
+roll-up) — plus one still-open question about whether 1987's *overall*
+pools flat across all 16 items rather than via facet means. §3 step 1
+closes with the formula substantially recovered but **zero recoverable CR
+ground truth on disk** — not "not found yet," confirmed
 structurally absent (every rater file has CR unanswered; no CR program
 output survives). The plan's own fallback ("if no ground truth is
 recoverable, the honest deliverable is 'not recoverable'") was written for
