@@ -180,7 +180,7 @@ Original flags, for the record, below.
 
 Same recommendation as before: mirror `docs/ARCHITECTURE.md` §4's own
 "transport-swap delta" table structure rather than inventing a new one.
-`BLUEBUBBLES_*` env block → `SENDIVO_API_KEY`, `SENDIVO_WEBHOOK_*`;
+`BLUEBUBBLES_*` env block → `SENDIVO_API_KEY`, `SENDIVO_WEBHOOK_*`; <!-- pragma: allowlist secret -->
 `platform_toolsets.bluebubbles` → `platform_toolsets.sendivo` (same chat-only
 lockdown, also what §1c's entrypoint check validates); Caddyfile gets a real
 public route for the inbound webhook (same shape as the already-inert
