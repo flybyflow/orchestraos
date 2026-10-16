@@ -767,3 +767,22 @@ without manufacturing one. Not deciding this myself — it's a visible
 scope reduction from what was asked (a verdict-producing comparison) to
 something narrower, even though the engineering reasoning for it is now
 solid, not just a preference.
+
+**Crossed in flight: builder-1's round 3 (`ab626d0`) landed before this
+escalation reached them — not a process failure, pure message timing.**
+Before settling on (b), they tried (a) first: inverted the legacy map to
+an equivalent rating so both passes compare on one shared ladder. Verified
+it's genuinely **not inert** (real divergent cases exist, 12-30% rate
+depending on facet) — but correctly recognized that rate can't be told
+apart from a real finding without ground truth to calibrate against,
+which is the same gate (§5) blocking everything else in this arc. So (a)
+isn't dead, it's blocked on the identical absent-ground-truth problem.
+Went with **(b)** — matches review's own stated preference exactly: both
+bands shown side by side, a `bothScored` flag instead of a judgment call,
+the red divergence callout removed from the UI. Suite 304/306, clean.
+
+**This doesn't pre-empt gm's decision — the code existing doesn't
+settle the product question.** gm can still choose to ship `ab626d0` as
+built, ask for (a) once ground truth exists, or something else; the
+diligence here (testing (a) before defaulting to (b)) is useful evidence
+either way, not a done deal.
