@@ -718,6 +718,20 @@ expected-fail / `next build` 0. Does not set
 `ELEVENLABS_AGENT_ID_SELF_CHECK` — intended pre-launch posture, still
 blocked on the `agents_update` bug regardless.
 
+**Test-g2 independently verified the two safety properties — and found
+they had zero existing test coverage.** `tsc`/`vitest`/`next build`
+matched builder-3's numbers, but a build log registering the route proves
+nothing about the guard logic inside it, and no `page.test.tsx` existed.
+Wrote a throwaway harness calling `SelfCheckVoicePage()` directly across 6
+scenarios (mismatched account, wrong `output_kind`, nonexistent session,
+already-scored, matched+unscored, no workspace account) — all passed.
+**Then checked the harness itself wasn't vacuous**: commented out the
+account/`output_kind` guard, reran, 3/6 failed as expected (including a
+null-session crash the guard was also preventing) — confirmed it catches
+real logic, not passing by construction. Deleted the throwaway file,
+restored `page.tsx`, worktree clean. Both safety properties now genuinely
+verified, not just asserted by the PR description.
+
 **Real security finding, flagged by builder-3, not resolved — escalating
 rather than deciding it myself, same as SEC-01/SEC-02 earlier this
 session.** `elevenlabs-config` is public by design for the org diagnostic
