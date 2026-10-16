@@ -72,20 +72,25 @@ judgement call anymore:
   (`GPAQUEST.ASF` offset 42276, 204-byte fixed-width records, exactly 16
   before the next section starts) — CR01–CR16 against 1987 items 1–16. We
   are not a subset; a recovered formula applies directly to our data.
-- The derived 10→6 map (exact, lossless 10→6 direction):
+- The derived mapping — **a dated derivation snapshot, not a second source
+  of truth.** `items.ts` is canonical for item→facet; it just doesn't carry
+  the 1987 dimension name, which is the one column below it cannot supply.
+  The `our facet` column is redundant with `items.ts` (kept for readability);
+  if it ever disagrees with `items.ts`, that's a visible flag to resolve, not
+  two systems silently diverging:
 
-  | 1987 dimension | 1987 items | our facet |
-  |---|---|---|
-  | Trust | 1,2,3,4,5 | `trust` — identical |
-  | Realistic Expectations | 6 | `expectations` — identical |
-  | Network | 14,16 | `network` — identical |
-  | Aware of Services | 9 | `awareness` |
-  | Use of Competitors | 10 | `awareness` |
-  | Perceived Relevance | 7 | `value` |
-  | Price | 15 | `value` |
-  | Time Invested | 8 | `access` |
-  | Access | 11,12 | `access` |
-  | Credibility/Respect | 13 | `access` |
+  | 1987 dimension | 1987 items | our facet | source |
+  |---|---|---|---|
+  | Trust | 1,2,3,4,5 | `trust` | read — unambiguous |
+  | Realistic Expectations | 6 | `expectations` | read — unambiguous |
+  | Network | 14,16 | `network` | read — unambiguous |
+  | Aware of Services | 9 | `awareness` | read — unambiguous |
+  | Use of Competitors | 10 | `awareness` | read — unambiguous |
+  | Perceived Relevance | 7 | `value` | read — unambiguous |
+  | Price | 15 | `value` | read — unambiguous |
+  | Time Invested | 8 | `access` | read — unambiguous |
+  | Access | 11,12 | `access` | read — unambiguous |
+  | Credibility/Respect | 13 | `access` | **judgement, not a read** — item 13 is "talks about long term work"; builder-3's call, not corroborated by the 1987 source itself. Worth a second opinion if the comparison layer turns out sensitive to this one. |
 
 - **Why compare at 6, not 10**: seven of 1987's ten dimensions are
   single-item. A divergence signal computed over single-item dimensions is
@@ -102,11 +107,19 @@ via `items.ts`'s existing facet assignments, don't maintain a second
 mapping" is valid, not just convenient — if a dimension ever split across
 two facets, the roll-up would be ambiguous (which facet gets the
 contribution?) with no rule to resolve it. The method works because the
-partition happens to be clean, not by construction. **Whoever writes the
-roll-up code should add a test asserting this partition stays clean** — same
-shape as `MIN_ANSWERED_OVERALL`'s "emergent property, now locked by a test"
-in `score.ts`: a future `items.ts` facet reassignment could break this
-silently otherwise, and nothing today would flag it.
+partition happens to be clean, not by construction, and the §2a table above
+makes a future drift *visible* rather than silent (it would disagree with
+`items.ts`) — detectable beats silent, so this is a downgrade from "could
+break silently," not a non-issue.
+
+**Approved now, ahead of the scorer (builder-3's proposal): a ~20-line test
+fixture** carrying the 1987 `dimension → item ordinals` mapping, asserting
+that rolling it up through `items.ts`'s facet assignments reproduces our
+shipped facet sizes (`trust 5, access 4, awareness 2, value 2, network 2,
+expectations 1`). This is gate-shaped, not scorer code — it validates a
+recovered-structure claim against the shipped instrument, which the
+tests-before-scorer gate already asks for, and it is cheap enough to build
+during the research phase rather than waiting for step 3.
 
 Net: **recover at 10** (the formula that actually exists), **convert 10→6**
 via the table above, **display at 6** (unchanged, per gm), **compare
