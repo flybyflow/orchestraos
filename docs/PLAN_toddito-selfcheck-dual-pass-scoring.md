@@ -64,15 +64,41 @@ variants, `CPCSP.AWS`/`GPCSP.AWS` (same size, paired, worth checking as a pair).
   container, not x86 disassembly.
 
 **Decision (plan, 2026-10-16): target the recovery at 1987's native ten-
-dimension granularity**, since that's what any real ground truth will be
-shaped like and what the source actually computes. Roll the recovered
-ten up to our shipped six **using the existing `items.ts` facet
-assignments as the mapping** (that mapping already defines which items —
-and therefore which of 1987's ten constructs — belong to which of our six
-facets; don't re-derive it from scratch). The comparison/divergence layer
-(step 4 below) operates at our six-facet granularity for the report-facing
-side; any ground-truth validation tests (step 2 below) operate at whatever
-granularity the actual worked examples turn out to have, which is likely ten.
+dimension granularity**, roll up to our shipped six for the report-facing
+comparison. **Resolved with evidence by builder-3, same day** — not just a
+judgement call anymore:
+
+- Our 16 items are the **complete** 1987 module, 1:1 by ordinal
+  (`GPAQUEST.ASF` offset 42276, 204-byte fixed-width records, exactly 16
+  before the next section starts) — CR01–CR16 against 1987 items 1–16. We
+  are not a subset; a recovered formula applies directly to our data.
+- The derived 10→6 map (exact, lossless 10→6 direction):
+
+  | 1987 dimension | 1987 items | our facet |
+  |---|---|---|
+  | Trust | 1,2,3,4,5 | `trust` — identical |
+  | Realistic Expectations | 6 | `expectations` — identical |
+  | Network | 14,16 | `network` — identical |
+  | Aware of Services | 9 | `awareness` |
+  | Use of Competitors | 10 | `awareness` |
+  | Perceived Relevance | 7 | `value` |
+  | Price | 15 | `value` |
+  | Time Invested | 8 | `access` |
+  | Access | 11,12 | `access` |
+  | Credibility/Respect | 13 | `access` |
+
+- **Why compare at 6, not 10**: seven of 1987's ten dimensions are
+  single-item. A divergence signal computed over single-item dimensions is
+  dominated by one-rating-step noise, which undermines "divergence = clinical
+  signal." At 6, every facet except `expectations` absorbs noise across 2+
+  items. Our collapse doesn't lose fidelity — it *reduces* a fragility 1987
+  already had. `expectations` stays single-item on both sides regardless,
+  so it's the one facet where a divergence signal is weakest.
+
+Net: **recover at 10** (the formula that actually exists), **convert 10→6**
+via the table above, **display at 6** (unchanged, per gm), **compare
+dual-pass at 6** (noise reason above). Ground-truth validation tests operate
+at whatever granularity the actual worked examples turn out to have.
 
 ## 3. Task sequencing
 
