@@ -514,3 +514,26 @@ now carries two independent layers of uncertainty: the formula has no
 ground truth to validate against (§5), AND two of seven score-map points
 are our own invention, not 1987's. The "directional, unvalidated" label
 should account for both, not just the first.
+
+## 7. PR #31 open (`642e9c2`, builder-1) — implementation done, one open question before review completes
+
+`legacy-score.ts` (10-dim unit-weighted mean, non-linear score map, facet
+rollup, divergence vs `score.ts`), wired into `run.ts`'s persist, disclosed
+per-facet-row + closing paragraph on the one report surface. Migration 037
+(renumbered from 036 after catching a collision with open PR #28). Suite
+303/305 (2 pre-existing unrelated); `npm run build` is broken on `main`
+itself right now, pre-existing and unrelated (plotly.js), separately
+flagged to gm — not counted against this PR.
+
+**Open question, not yet resolved: is the facet rollup a flat mean over
+all items in a facet, or a mean of dimension-means?** Three of our six
+facets merge 1987 dimensions of unequal item count (`value` 1+1,
+`awareness` 1+1, `access` 1+1+2) — the two methods give different numbers
+for those three. builder-1's framing (no 1987 ground truth exists for
+*our* facets, so combining dimensions is our own choice, not a fidelity
+question) is right as far as it goes, but only justifies freedom in the
+across-dimension combination, not skipping dimension-level computation
+entirely. Pushed back for the specific mechanism + the discriminating test
+before accepting it as settled; routed to review to scrutinize
+independently in parallel rather than blocking the rest of the PR's review
+on this one question.
