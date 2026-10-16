@@ -113,6 +113,24 @@ at whatever granularity the actual worked examples turn out to have.
    Deliverable: a brief naming the recovered formula (or the honest limit of
    what's recoverable, at ten-dimension granularity) and whatever ground-truth
    cases exist, same "confirmed vs inferred" discipline as the rest of this arc.
+
+   **Container characterisation done (builder-3, 2026-10-16).** `GPASCORE.ASF`
+   decoded: 14-entry index at bytes 8–120 (`uint32 offset, uint16 len×2`),
+   chains with 0 breaks, confirms parse-not-decompile for this region. But it
+   only indexes 22% of the file (51025 / 225280 bytes) — the other 78% holds
+   the narrative/ladder/refusal content already verified, so there's at least
+   one more structure here. **Negative result, tested not assumed:** the two
+   long bitmaps in records 2/3 (960 and 1540 bits) were the obvious
+   item-to-dimension incidence-matrix hypothesis — tested against real counts
+   (59 scored dims in `MV6COMBO.ASC`, ≤245 item records), neither factors to
+   match. Ruled out rather than kept refining toward a fit (that refinement-
+   until-it-fits move is exactly the failure mode to avoid here).
+   No weight tables, no arithmetic in the indexed 22%. Fable-pass target
+   order, updated: (1) APL workspaces (`MGP*.ASF`, confirmed `APL*PLUS/PC
+   RTSVERS 7.1`) + `GPATHOR?.EXE` — interpreted, often recoverable without
+   decompilation; (2) the unindexed 78% of `GPASCORE.ASF`; (3) `CPCSP.AWS`/
+   `GPCSP.AWS` (89861 bytes each, same size — paired, worth one look).
+   Ground truth: still none. `MV6COMBO.ASC` confirmed not sufficient (§2).
 2. **Build real tests against that ground truth FIRST**, before the
    deterministic scorer is trusted anywhere near a real session. Same
    shape as THOR's F8: if the reverse-engineered formula doesn't reproduce
