@@ -133,9 +133,20 @@ mixed in):
   3e. Review and commit community-brain-3d's untracked files, deliberately.
 
 AFTER hackathon prep lands the 5 PRs (their deadline, not negotiable by
-this plan):
+this plan) — **both CONFIRMED GO by the operator, 2026-10-16, via gm:**
   3a. Multi-tenant isolation audit, using #22's tests as the bar.
+      Operator specified tooling: the `/cso` skill (security audit) plus
+      gstack's data-consolidation skills.
   3b. Remove jason-cre.yaml/bdr_*.py from keonda.io's git history.
+      Operator said yes, do it -- a git-history rewrite, not just a
+      working-tree delete, so treat as irreversible-by-default once run
+      (force-push implications on keonda.io) and confirm the sequencing
+      point below before starting.
+
+  **Sequencing gate, not yet cleared:** both wait on builder-2's 5
+  keonda.io PRs actually landing (merged, not just dispatched -- a
+  dispatch confirmation is not a merge confirmation). Not dispatched yet;
+  watching for builder-2's merge confirmation before starting either.
 
 SEPARATE OPS ACTION, own go-ahead, irreversible:
   3c. Archive/scrub ~/.hermes/profiles/jason-cre's real data.
