@@ -486,3 +486,31 @@ set up DOS emulation for the three verified-runnable `.EXE`s
 parameterised entrypoint, supply real CR answers, capture the program's
 actual output as genuine ground truth. If it works, that's the trigger to
 revisit "directional" → "validated," not before.
+
+**Real gap found and resolved during build (builder-1, 2026-10-16): our
+scale is 7 points, 1987's score map is for 5.** `prompt.ts`'s
+`SCALE_DESCRIPTION` is 1987's exact 5 anchors (strongly disagree / disagree
+/ neither / agree / strongly agree) with two new "slightly" categories
+inserted — ours 1,2,4,6,7 correspond exactly to 1987's 1,2,3,4,5
+(−100,−33,0,+33,+100, verified). Ours 3 ("slightly disagree") and 5
+("slightly agree") have **no 1987 analogue at all.**
+
+**Decided (plan, 2026-10-16): linear interpolation at the midpoint of the
+known neighbors** (3 → −16.5, 5 → +16.5), not a nearest-neighbor snap to
+one side. Reasoning: snapping would make "slightly disagree" score
+identical to either "disagree" or "neither," discarding the fact that the
+instrument offers it as a genuinely distinct option — an invented
+discontinuity, not a recovered one. Midpoint is the minimal addition that
+preserves the already-verified points exactly and treats the new category
+as what it is: new, not 1987's. **Explicitly not a candidate for a global
+rescale of all 7 points** — that would overwrite verified 1987 values at
+positions 1,2,4,6,7 with invented ones, trading something known for
+something guessed. Must be labelled in code as our own interpolation, not
+recovered 1987 data — same honesty standard as the formula's VERIFIED/
+INFERRED split in §3 step 1.
+
+**Compounds the disclosure requirement, doesn't replace it.** The scorer
+now carries two independent layers of uncertainty: the formula has no
+ground truth to validate against (§5), AND two of seven score-map points
+are our own invention, not 1987's. The "directional, unvalidated" label
+should account for both, not just the first.
