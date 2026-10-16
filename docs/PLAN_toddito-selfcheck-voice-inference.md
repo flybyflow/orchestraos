@@ -738,3 +738,29 @@ needs session-id-scoped auth for the self-check branch specifically, or
 whether the UUID-as-bearer-token model is accepted as sufficient here too
 (same as the org diagnostic) given self-check UUIDs aren't distributed via
 a public channel the way org links sometimes are.
+
+**`agents_update` bug independently confirmed (plan, 2026-10-16) — real,
+not a malformed call on builder-3's part.** Fetched the agent directly
+(`agent_3101m4g20d5ce9tb0fmw7sfb65wa`, confirmed it's `Pulse Self-Check`,
+matches builder-3's numbers exactly: qwen, temp 0, empty `built_in_tools`,
+`created_at == updated_at`). Attempted both rejected paths myself:
+top-level `prompt` with the corrected (consultant-name-removed) text →
+`{"error": "Unexpected argument(s): prompt"}`; the `body` escape hatch with
+`llm`/`temperature`/`built_in_tools`/`speculative_turn` → `{"error":
+"Unexpected argument(s): body"}`. Both fields are declared in the tool's
+own schema and both are rejected by its implementation — a genuine
+schema/implementation mismatch in the MCP tool itself, confirmed by two
+independent callers now.
+
+**Untried lead for builder-3: `agents_create_draft`.** Structurally
+different tool — not `agents_update` — that takes a full
+`conversation_config` object (plus `platform_settings`, `workflow`,
+`name`, all required) rather than a patch. Not attempted: it requires
+reconstructing the agent's entire config (large, fetched via `agents_get`
+above) rather than a targeted patch, and no `agents_publish_version` tool
+surfaced in this session's loaded set — unclear whether a created draft
+needs a separate promotion step this session can't reach, or whether
+that's dashboard-only too. Handing to builder-3 rather than attempting the
+full reconstruction myself: higher value-density for them given their
+existing context, and a malformed hand-copied config is a worse outcome
+than leaving the agent alone.
