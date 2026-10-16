@@ -676,3 +676,30 @@ does **not** require setting `ELEVENLABS_AGENT_ID_SELF_CHECK` yet — that's a
 separate ops action gated on precondition (1) above, not on this UI
 existing. Normal pace: plan → build → review → ship, same as the rest of
 this arc.
+
+**Pre-build answer (builder-3): no new creation route needed.**
+`POST /api/self-check {client_label}` already produces a voice-compatible
+row (`output_kind: 'self_check'`, `tier: 'lite'`, etc.) — `SelfCheckForm.tsx`
+is its only caller today, driving the form path. The entry UI's real job is
+smaller than assumed: take that existing `session_id` to a voice page
+instead of the question grid.
+
+**Decided (plan, 2026-10-16): drop `{{consultant_name}}` from the agent
+prompt, don't echo `display_name`.** builder-3 found the agent prompt
+references `{{consultant_name}}`, which nothing in `elevenlabs-config`'s
+dynamic-variable payload supplies (only `client_name` and five other fields
+are echoed). Two options: echo `display_name` (widens the SEC-03 bounded-PII-
+exposure surface by one field — the browser is the courier, not the
+consumer, per that route's existing reasoning) or drop the variable (zero
+security cost, interview reads fine without it). **Dropping it strictly
+dominates** — there's no scenario where adding a PII field for a cosmetic
+personalization touch is worth it. Not escalating; this is a standard
+security-conservative default, not a product-risk call. Apply when
+`agents_update` is unblocked (see below) — remove the `{{consultant_name}}`
+line from the prompt.
+
+**Open: does the `agents_update` body bug (reproduced by builder-3) also
+block the config fix I authorized earlier this session (llm/temperature/
+`end_call`/`speculative_turn`)?** Not yet confirmed either way — asked
+builder-3 directly rather than assuming the two calls share the same
+failure path.
