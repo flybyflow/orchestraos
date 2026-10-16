@@ -95,6 +95,19 @@ judgement call anymore:
   already had. `expectations` stays single-item on both sides regardless,
   so it's the one facet where a divergence signal is weakest.
 
+**Load-bearing precondition on the roll-up method (builder-3, verified
+2026-10-16): every one of 1987's ten dimensions lands entirely inside a
+single one of our six facets — none straddles two.** That is *why* "roll up
+via `items.ts`'s existing facet assignments, don't maintain a second
+mapping" is valid, not just convenient — if a dimension ever split across
+two facets, the roll-up would be ambiguous (which facet gets the
+contribution?) with no rule to resolve it. The method works because the
+partition happens to be clean, not by construction. **Whoever writes the
+roll-up code should add a test asserting this partition stays clean** — same
+shape as `MIN_ANSWERED_OVERALL`'s "emergent property, now locked by a test"
+in `score.ts`: a future `items.ts` facet reassignment could break this
+silently otherwise, and nothing today would flag it.
+
 Net: **recover at 10** (the formula that actually exists), **convert 10→6**
 via the table above, **display at 6** (unchanged, per gm), **compare
 dual-pass at 6** (noise reason above). Ground-truth validation tests operate
