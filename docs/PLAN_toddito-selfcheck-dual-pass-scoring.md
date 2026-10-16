@@ -157,6 +157,16 @@ snapshot rather than a silent truth. Same error class as this session's
 what was intended, not what the assertions actually excluded, and only
 running the adversarial case (not reasoning about it) revealed the gap.
 
+**Independently verified (test-g2, 2026-10-16):** reproduced the mutation-catch
+claim from a clean worktree pinned to `406d079` — `tsc` clean, `vitest` 37/292
++2 expected-fail matches, and re-applied the CR13/CR15 swap directly to confirm
+it now fails (the 4th assertion specifically, exit 1, matching the commit
+message's claim that this test used to pass before the fix). The other two
+mutation probes (straddle, size-change) were not independently re-run —
+lower-risk, same underlying mechanism as the one that was re-verified — not
+required given the swap mutant (the one that actually changed behavior) is
+confirmed.
+
 ## 3. Task sequencing
 
 1. **builder-3 — research, no scoring code yet.** ~~Reverse-engineer
