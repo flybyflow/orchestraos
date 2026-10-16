@@ -661,3 +661,30 @@ builder-3's derivation — two independent reads agree); a weak assertion
 (`not.toBeCloseTo`) that's harmless here (carried by a `toBe` on the prior
 line) but proves less than it looks like; `score.ts`'s diff is
 exports-only, no logic change.
+
+## 9. PR #31 @ `8b3d643` — F1/F2/F3 addressed, better fix than the directed one, awaiting review re-check
+
+**builder-1 tried the direction I gave (recalibrate legacy's own band
+thresholds) and it measured worse, not better** — 32-37% false-divergence
+on larger facets vs the original 16-17%, caught by enumerating the full
+answer space before trusting it, same discipline review used to find the
+bug. **Shipped a different fix instead: same `bandFor` ladder on both
+sides, unchanged, but the comparison now requires a 2+ notch gap to flag
+divergence** (weak=0/thin=1/solid=2/strong=3 — adjacent bands, e.g.
+solid vs thin, no longer count; only a jump of 2 or more does).
+Re-checked against my own per-rating table (§8): every uniform-answer
+divergence found there is exactly 1 notch — both would now read 0% false
+divergence. builder-1 reports this holds across the full enumerated
+answer space for all four facet sizes, 0% false-divergence everywhere.
+**Worth noting I was wrong to direct "recalibrate," not just non-committal
+about the number** — the actual fix doesn't touch thresholds at all, it
+changes what counts as a disagreement. The better solution came from
+builder-1 testing the suggested one and finding it failed, not from
+better foresight on my end.
+
+F2 (real wired-together band-comparison tests) and F3 (qualified header +
+partial-data test fixture) also addressed. Suite 315/317, typecheck/lint/
+build clean. **Not self-cleared** — builder-1 explicitly routed back to
+review for re-check rather than treating their own fix as closing the
+loop. Awaiting review's independent re-verification of the 0%-across-all-
+facet-sizes claim before this is actually resolved.
