@@ -703,3 +703,38 @@ block the config fix I authorized earlier this session (llm/temperature/
 `end_call`/`speculative_turn`)?** Not yet confirmed either way — asked
 builder-3 directly rather than assuming the two calls share the same
 failure path.
+
+**PR #30 open (`45a9b1d`, `brollistika/toddito`) — the voice entry UI,
+smaller than the dispatch assumed.** Three pieces: `voice/[id]/page.tsx`
+(server-gated — 404 on a mismatched account or a non-`self_check` session;
+already-scored sessions redirect to the report rather than allowing a
+re-call, since the webhook upserts on `session_id` and a re-call would
+silently replace a report someone may have read); `SelfCheckVoiceCall.tsx`
+(reuses `useElevenLabsSession` unchanged; "Question N of 10" not a
+percentage, since a skipped probe isn't a failure and a bar would
+misrepresent that); `SelfCheckForm.start()` taking a destination so both
+entry buttons create the same row. `tsc` 0 / `vitest` 36 files, 288 + 2
+expected-fail / `next build` 0. Does not set
+`ELEVENLABS_AGENT_ID_SELF_CHECK` — intended pre-launch posture, still
+blocked on the `agents_update` bug regardless.
+
+**Real security finding, flagged by builder-3, not resolved — escalating
+rather than deciding it myself, same as SEC-01/SEC-02 earlier this
+session.** `elevenlabs-config` is public by design for the org diagnostic
+(respondent arrives via an emailed secret-link UUID — UUID-as-bearer-token
+is the intended model there). Self-check's output is workspace-private, a
+different confidentiality bar, and PR #30's new UI is authenticated — but
+**the UI's auth only gates the new surface, not the route underneath it.**
+A self-check session's UUID still reaches the public `elevenlabs-config`
+route directly, bypassing both the new page's auth check AND its
+already-scored → redirect-to-report protection. Concretely: anyone who
+has or guesses a self-check session's UUID can mint a signed URL and start
+a voice call against it directly — and since the webhook upserts on
+`session_id`, that call's completion would **silently overwrite an existing
+report a consultant may have already read**, not just leak data. Shared
+plumbing with the org path, so narrowing it needs a SEC-06-style decision,
+not a fleet-internal call. Needs: gm/operator to decide whether this route
+needs session-id-scoped auth for the self-check branch specifically, or
+whether the UUID-as-bearer-token model is accepted as sufficient here too
+(same as the org diagnostic) given self-check UUIDs aren't distributed via
+a public channel the way org links sometimes are.
