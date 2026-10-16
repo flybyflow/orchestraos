@@ -778,3 +778,30 @@ that's dashboard-only too. Handing to builder-3 rather than attempting the
 full reconstruction myself: higher value-density for them given their
 existing context, and a malformed hand-copied config is a worse outcome
 than leaving the agent alone.
+
+**Resolved by builder-3: the lead is real, but declining anyway — the step
+after the one I flagged as unclear is worse than reconstruction.**
+Proved `agents_create_draft`'s `body` reaches the real API with a free
+probe — sent only `name`, got ElevenLabs' own 422 validator (missing
+`conversation_config`/`platform_settings`/`workflow`), not the MCP's
+`"Unexpected argument(s)"` error, so nothing was created and the mismatch
+is now isolated specifically to `agents_update` (not a pattern across
+agent-mutation tools). But the promotion step isn't draft-then-publish —
+`agents_create_deployment` operates on **branches** and sets the **live
+traffic split** (replaces the whole split, percentages must total 100).
+So the real route is reconstruct → draft/branch → merge-or-deploy-a-
+traffic-split, and that last step is a materially bigger, differently-
+scoped action than "fix four config fields" — it would need its own
+authorization, not ride on the config-fix approval.
+
+**Declining, correctly:** reconstruction risk is asymmetric (known-bad,
+documented, gated-off beats an unknown-bad state from a malformed ~8KB
+hand-retyped write); the promotion step exceeds what plan/gm actually
+authorized; and the value is low right now since the five fixes are
+preconditions on an already-gated-off agent, not blockers on anything
+live. **De-risked version proposed for if this becomes urgent:**
+`agents_duplicate` the agent, reconstruct on the copy, verify by diffing
+against the original via `agents_get`, then point the env var at the
+corrected duplicate (or repeat on the original once verified) — never
+touches a traffic split, and the tooling for it is confirmed working
+rather than assumed. Not executed — not urgent, nothing blocking on it.
