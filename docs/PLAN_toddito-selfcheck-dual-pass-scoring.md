@@ -452,3 +452,37 @@ against a higher-priority voice-agent buildout. Option (c) (DOS emulation)
 stays on record as the correct next move if this track reopens, not as a
 dead end. builder-3 reassigned off research, onto the voice-UI buildout —
 see new work below.
+
+## 6. Operator decided (via gm, 2026-10-16): option 2, build and ship labeled — plus the emulation side-quest, in parallel, not blocking
+
+**Operator's direct call: build the CR deterministic scorer, ship it
+labeled as directional/unvalidated — same posture as THOR's own `fd6e85b`
+(§5 option 2, confirmed). Separately greenlit builder-3's DOS-emulation
+idea (§5, "option (c)") as a parallel side-quest — explicitly not blocking
+the labeled-ship work.** Sequence: build the labeled scorer now; the
+emulation work, if it produces real ground truth later, is what upgrades
+"directional" to "validated" — it doesn't gate shipping.
+
+**Task, dispatched to builder-1** (builder-3 stays on the voice-UI
+buildout, the higher-priority active task): build the CR deterministic
+pass per §3 step 3/4's design — ten-dimension native computation (unit-
+weighted mean per dimension, non-linear ±100/±33/0 score map, per §1's
+table), rolled up to our six facets via `items.ts`'s mapping, compared
+against the LLM pass. **The label is not optional UI polish — it is the
+thing that makes this honest to ship**, per §5's own reasoning: a
+divergence signal needs to know which side to trust, and this scorer has
+no ground truth behind it. Concretely: disclose "directional, unvalidated"
+wherever the deterministic score or a divergence flag reaches a report —
+not just a code comment. Follow §2a's load-bearing precondition (the
+10→6 partition is clean, PR #29 already locks it with a test) and keep the
+pooled-row/overall-aggregation open question (§3 step 1) in mind — the
+*per-dimension* formula is solid, the *overall* number's exact mechanics
+are still one open item.
+
+**DOS-emulation side-quest**, queued for builder-3 once the voice-UI entry
+work lands (not urgent, operator explicitly said parallel/non-blocking):
+set up DOS emulation for the three verified-runnable `.EXE`s
+(`CPCSP.EXE`, `CSPSYS.EXE`, `GPATHOR1.EXE`), drive `GPDD.BAT`'s
+parameterised entrypoint, supply real CR answers, capture the program's
+actual output as genuine ground truth. If it works, that's the trigger to
+revisit "directional" → "validated," not before.
