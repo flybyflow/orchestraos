@@ -525,15 +525,30 @@ per-facet-row + closing paragraph on the one report surface. Migration 037
 itself right now, pre-existing and unrelated (plotly.js), separately
 flagged to gm — not counted against this PR.
 
-**Open question, not yet resolved: is the facet rollup a flat mean over
-all items in a facet, or a mean of dimension-means?** Three of our six
-facets merge 1987 dimensions of unequal item count (`value` 1+1,
-`awareness` 1+1, `access` 1+1+2) — the two methods give different numbers
-for those three. builder-1's framing (no 1987 ground truth exists for
-*our* facets, so combining dimensions is our own choice, not a fidelity
-question) is right as far as it goes, but only justifies freedom in the
-across-dimension combination, not skipping dimension-level computation
-entirely. Pushed back for the specific mechanism + the discriminating test
-before accepting it as settled; routed to review to scrutinize
-independently in parallel rather than blocking the rest of the PR's review
-on this one question.
+**Resolved (builder-1, verified by plan independently): flat-item-mean does
+NOT bypass dimension-level computation — it is algebraically identical to
+it.** Every 1987 dimension is itself an equal (unit-weighted) mean over its
+own items (confirmed: Trust ×0.2 over 5 items, the ×0.5 pairs over 2 items
+each — all `1/n`, no dimension has non-uniform internal weights). Given
+that, for dimension sizes `n_1..n_k` summing to facet size `N`:
+
+```
+Σ (n_i/N) × dim_mean_i  =  Σ (n_i/N) × (1/n_i) × Σ(items in dim_i)
+                        =  (1/N) × Σ(all items in facet)
+                        =  flat item mean
+```
+
+So flat-item-mean *is* item-count-weighted combination of 1987's own
+correctly-computed dimension scores — not a different, cruder method that
+happens to agree. The only real choice was ever the across-dimension
+combination rule: item-count-weighted (what's built, and the only one that
+adds no new free parameter — "treat every item in the facet the same,"
+matching what `score.ts`'s own facets already do) vs. equal-dimension-
+weighted regardless of size (the alternative, which would treat
+`access`'s 2-item Credibility/Respect dimension as one-third of the facet
+rather than half). They diverge only on `access` (1+1+2) — `value` and
+`awareness` are both 1+1 splits where the two rules coincide. Verified
+independently (re-derived the algebra, didn't take the proof on trust) and
+confirmed landed: `14b599a`, proof in `legacy-score.ts`'s file header, a
+test asserting both computation paths agree exactly. Suite 304/306,
+typecheck/lint clean. Not a fidelity concern — cleared.
