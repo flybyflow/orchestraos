@@ -346,6 +346,44 @@ which invites "yes"); P10's "...and how do you know that?" clause is
 load-bearing (the self-test transcript's own trap failed exactly here —
 satisfaction is not evidence of deliberate expectation-setting).
 
+**Live config check (builder-3, 2026-10-16) — the agent was never updated
+from its creation defaults, confirmed via `agents_get`:** `llm: qwen35-397b-a17b`
+(not Sonnet), `temperature: 0` (not 0.3), `built_in_tools: {}` (`end_call`
+not enabled), `created_at == updated_at`. The prompt itself is correct —
+all ten probes verbatim, CRITICAL ROLE RULE, follow-up rules, banned
+phrases — only the config was never applied.
+
+Two things this is worse than "just unconfigured":
+1. **The config contradicts its own prompt.** The prompt's last line
+   instructs the agent to invoke `end_call` to hang up; `built_in_tools` is
+   empty, so the agent has no such tool. A real call cannot terminate as
+   designed — it runs to `max_duration_seconds` or improvises an ending.
+2. **`temperature: 0` is not a safer version of 0.3 — it's closer to the
+   documented failure GATE 5 exists to prevent.** TUL-34's 0.7→0.3 fix
+   targeted *improvisation*; TUL-41's self-answering was Haiku at **low**
+   temperature, "attracted to complete-the-turn patterns" — temp 0
+   maximises exactly that pull. `temp 0` + non-Sonnet is adjacent to TUL-41,
+   not a conservative fallback from it.
+
+**New item, not in the original design (builder-3's own gap, named as
+such): `speculative_turn: true`.** The agent starts generating before turn
+confidence is reached — for an interview whose central rule is "wait out
+silence, never fill it," this biases toward speaking into a pause, adjacent
+to self-answering. Add `speculative_turn: false` to the GATE 5 config list.
+
+**Decided (plan, 2026-10-16): authorized to apply via `agents_update`,
+builder-3 has the needed permissions (`agent_edit_llm`,
+`agent_manage_attached_tools`).** This is executing the already-committed
+design above (Sonnet/0.3/`end_call`/no-invented-follow-ups), not a new
+decision — `speculative_turn: false` folds into the same GATE 5 rationale.
+Low external risk: `ELEVENLABS_AGENT_ID_SELF_CHECK` is still deliberately
+unset, so no real call currently routes to this agent — fixing its config
+now is pre-launch, not a live-traffic change. If the MCP's advanced-body
+escape hatch rejects these fields again (prior history, noted by
+builder-3), report back rather than forcing it — that may still need
+dashboard access, which stays the fallback. Verify every field via a fresh
+`agents_get` after applying, not from the write call's own response.
+
 **Open, stated honestly, not guessed past:** can the agent track
 coverage mid-call (no, not reliably on a system prompt alone — the
 10-fixed-probes design deliberately doesn't require it); whether 10
