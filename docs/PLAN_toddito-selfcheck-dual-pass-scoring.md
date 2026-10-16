@@ -662,7 +662,7 @@ builder-3's derivation — two independent reads agree); a weak assertion
 line) but proves less than it looks like; `score.ts`'s diff is
 exports-only, no logic change.
 
-## 9. PR #31 @ `8b3d643` — F1/F2/F3 addressed, better fix than the directed one, awaiting review re-check
+## 9. PR #31 @ `8b3d643` — SUPERSEDED, see §10: the 0%-false-divergence fix made the detector inert, not accurate
 
 **builder-1 tried the direction I gave (recalibrate legacy's own band
 thresholds) and it measured worse, not better** — 32-37% false-divergence
@@ -688,3 +688,82 @@ build clean. **Not self-cleared** — builder-1 explicitly routed back to
 review for re-check rather than treating their own fix as closing the
 loop. Awaiting review's independent re-verification of the 0%-across-all-
 facet-sizes claim before this is actually resolved.
+
+## 10. PR #31 — review's re-check: the 2+ notch fix didn't reduce false divergence, it deleted divergence entirely
+
+**review enumerated the complete reachable input space (not a sample —
+both scorers are pure functions of the same `responses` object, so the
+per-facet enumeration IS the input space) and found 0/19362 diverge under
+the 2+ notch rule, across all six facets.** The "0% false-divergence" the
+header claims and "0% divergence, period" are **the same number** here,
+because a complete enumeration can't distinguish "false" from "true"
+divergence — there's no case held out to tell them apart. The threshold
+was tuned until the detector stopped detecting, and the metric that was
+supposed to validate it rewarded exactly that. **Independently verified by
+plan, not taken on trust**: simulated the real transforms (`toTenScale`,
+the score map, both rescalings, `bandFor`) for facet sizes 1 and 2 —
+max band-gap is exactly 1 notch in both, matching review's 0/7 and 0/49
+exactly. The two `compareFacetScores` tests that assert "diverge" pass on
+hand-built band pairs no real response set can produce — the branch is
+covered and unreachable at the same time.
+
+**Consequences, stated precisely:** the red "differs from the read above"
+branch in `page.tsx` is dead code; the closing paragraph's "worth a second
+look" promise can never be fulfilled; and — the one that actually costs
+something — **every report now tells the consultant the two methods
+agree**, which isn't a finding, it's a mathematical certainty of the
+comparison rule given these two transforms. A false corroboration is
+worse than a noisy flag, because a noisy flag gets questioned and a
+confident "they agree" doesn't. Root cause, structurally: the legacy
+map's nonlinearity is strongest at the extremes and items average it out
+as facet size grows, while the linear LLM scale doesn't have that
+shape — the two transforms' bands can diverge by at most 1 notch across
+this entire instrument's facet sizes, so *any* 2+-notch threshold was
+dead on arrival, not just empirically lucky.
+
+**review's three live options, their recommendation is (b):**
+(a) put both passes on a common footing before comparing (invert the
+legacy map to an equivalent rating, or compare each value's position
+within its own scale's range) so a disagreement is about the respondent,
+not the transform; (b) **drop the verdict entirely** — show both numbers
+side by side with the shape caveat, no agree/diverge claim; (c) keep a
+threshold but calibrate it so some reachable region actually fires, and
+prove that region exists.
+
+**Standing lesson, explicitly carried forward by review:** "an enumeration
+over the complete input space that returns zero of anything is evidence
+the check is inert, not evidence it is clean." Same shape as this
+session's "a validation check can reward the failure it should catch" —
+third occurrence of that exact pattern in this project, now specifically
+inside the feature this entire initiative was built to deliver.
+
+**Escalating (b) vs (a)/(c) to gm/operator rather than deciding alone —
+see §11.** Two failed threshold attempts (recalibration, notch-gap) plus
+review's own structural argument (max gap ≤ 1 notch, not a tuning
+accident) make (a)/(c) look like a dead end for this specific scale pair
+without inverting one of the transforms first, which is a bigger design
+change than anything authorized so far. (b) is almost certainly right
+engineering-wise, but it's also a real scope reduction from what the
+operator asked for (a verdict-producing comparison, "agreement raises
+confidence, divergence is a signal") down to "two numbers, no verdict" —
+that's a product decision, not an engineering one, even though the
+engineering case for it is now strong.
+
+## 11. Decision needed (escalated to gm, 2026-10-16): drop the divergence verdict, or keep trying to make one reachable
+
+Third attempt at a verdict rule has now failed, and this time with a
+structural (not just empirical) reason why: the two scales' bands can
+never diverge by more than 1 notch across this instrument, so no
+threshold-based rule on top of these two specific transforms will ever
+both fire sometimes and not fire on noise. Making (a) or (c) work would
+require inverting one transform into the other's space first — a real
+design change, not a threshold tweak, and nobody has scoped that yet.
+
+Recommendation if asked: **(b), drop the verdict, show both numbers with
+the shape caveat.** The whole layer already ships labeled directional/
+unvalidated; a verdict adds a claim ("they agree" / "this diverges") the
+evidence can't support, while two numbers side by side add information
+without manufacturing one. Not deciding this myself — it's a visible
+scope reduction from what was asked (a verdict-producing comparison) to
+something narrower, even though the engineering reasoning for it is now
+solid, not just a preference.
