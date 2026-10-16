@@ -302,6 +302,32 @@ checked; does not cover the item-split correction at `e10386b`.
      necessarily for the *overall* number. Next thing to check, not yet
      resolved.
 
+   **Divisor follow-up (builder-3): upgraded, still inferred, and the
+   research track has hit its limit.** The literal `16` sits immediately
+   after the ±50 map in the byte stream (adjacency), with no `0.0625` or
+   other reciprocal constant nearby — consistent with, not proof of, an
+   integer-divide. Reading the actual operation needs the APL opcode table
+   decoded, not more literal-hunting — "a materially bigger job than what
+   got us here," per builder-3, and explicitly flagged as **a decision
+   point, not something to just start.**
+
+   **One agent claim builder-3 could not locate at all** (recorded as
+   *not located*, not *refuted* — genuinely different): a four-group
+   mapping for the narrative/ladder path (`S∆RELA`), which — if real — means
+   **1987 scored Client Relationship at three different granularities**:
+   4 groups (narrative, unlocated), 10 dimensions (chart, **verified**), 1
+   pooled row (±50, verified map / inferred divisor). Worth stating plainly:
+   if this holds, "what was the 1987 CR score" doesn't have one answer, and
+   that's worth knowing *before* anyone builds a comparison layer against
+   "the" 1987 number rather than after.
+
+   **None of this moves the gate.** No CR ground truth exists on disk
+   regardless of how fully the formula gets decoded — a fully-decoded
+   formula still ships unvalidated against a real worked example. Given
+   that, **further opcode-decoding work is paused pending gm/operator's §5
+   decision** — spending more research on a formula whose validation path
+   is already closed doesn't change what ships.
+
    **Ground truth is structurally absent, not merely unfound — the Fable
    agent independently confirms why.** All 14 M/S rater files have CR
    answered at the default value (3 = "unanswered" to the program). Three
@@ -371,6 +397,19 @@ to validate it against. Options, not yet decided:
 3. Continue hunting for ground truth outside `~/conductor/repos/mic-program-toddito/`
    — lower odds given the hunt inside it is now exhausted (MV6COMBO, all 14
    M/S rater files, the 3 TGP partial raters), but not literally zero.
+
+**Added consideration (builder-3, same day): "the" 1987 CR score may not be
+one number.** Evidence so far suggests 1987 may have scored CR at three
+different granularities — a 4-group narrative path (unlocated, not
+refuted), the 10-dimension chart (verified), and a separately-weighted
+pooled row (±50 map verified, divisor inferred). Decoding which of these
+(if any) the deterministic pass should target needs the APL opcode table
+decoded — a materially bigger research job, explicitly paused pending this
+decision rather than started, since **no option above requires it**: hold
+and ship-labelled both work off what's already recovered, and ground truth
+being absent means a fuller decode wouldn't change what can be validated
+anyway. If (3) is chosen and ground truth somehow turns up, that's the
+point to revisit the bigger decode, not before.
 
 Not plan's call alone — this is a product-risk decision (ship a flagged-
 unvalidated deterministic score to real consultants, or hold it), same
