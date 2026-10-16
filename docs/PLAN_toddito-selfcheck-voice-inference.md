@@ -593,3 +593,48 @@ aggregation formula and (under voice) the ratings themselves are new.
 Provenance claim question is with the operator now, properly layered.
 Real build blocked on: a new ElevenLabs agent (dashboard access), an API
 key (same standing ask), and more production usage to validate against.
+
+## 6. Status check + dispatch (2026-10-16) — operator priority redirect, voice entry UI confirmed missing
+
+**Operator (via gm): "keep going with the buildout, get this working toward
+being a voice agent rather than 1-7 scoring."** This is now the priority;
+the separate dual-pass deterministic-scoring research track
+(`docs/PLAN_toddito-selfcheck-dual-pass-scoring.md`) is paused for timeline
+reasons, builder-3 reassigned here.
+
+**Confirmed directly against the synced repo (not assumed, not relayed):**
+
+- Backend is partly ready. `src/app/api/sessions/[id]/elevenlabs-config/route.ts`
+  already branches on `session.output_kind === "self_check"` and reads
+  `ELEVENLABS_AGENT_ID_SELF_CHECK` — this is shared plumbing with the main
+  interview's signed-URL mint, not new code. Leaving the var unset is the
+  documented off-switch (503/`configured:false`), gated on two preconditions
+  written beside it in `.env.production.example`: (1) the agent itself runs
+  Sonnet 4.5 / temp 0.3 / `end_call` / the CRITICAL ROLE RULE — **not yet
+  checked this session, verify via the ElevenLabs MCP before anyone sets the
+  var**; (2) the read-back copy branches on `ratings_source` — **this one is
+  landed** (`src/lib/self-check/provenance.ts` exists, per PR #26).
+- **The UI entry point does not exist.** `src/app/dashboard/self-check/[id]/page.tsx`
+  (306 lines, checked directly) has zero voice wiring — no
+  `useElevenLabsSession`, no call to `elevenlabs-config`, no start-call
+  affordance. `src/app/session/[id]/page.tsx` is the reference pattern gm
+  pointed at (confirmed via the operator's instinctai.io/lab/pulse pointer,
+  see the earlier message thread) — personal link, mobile-first voice call,
+  `useElevenLabsSession` hook, progress tracking not-started→in-progress→scored.
+- A self-check voice session is a `sessions`-table row with
+  `output_kind = "self_check"` (same table the main interview uses, not the
+  separate `self_check_reports` REST resource under `/api/self-check/[id]`,
+  which is the existing form-based flow) — worth confirming exactly how such
+  a row gets created today (if at all) before building the entry UI, since
+  that's the piece that would wire a self-check voice call to the
+  already-existing backend branch above.
+
+**Dispatched to builder-3**, who has the standing self-check focus boundary
+and the deepest context here: build the voice-call entry point into
+`src/app/dashboard/self-check/[id]/page.tsx`, mirroring
+`src/app/session/[id]/page.tsx`'s `useElevenLabsSession` pattern against a
+self-check-kind session rather than the org-diagnostic's. Building the UI
+does **not** require setting `ELEVENLABS_AGENT_ID_SELF_CHECK` yet — that's a
+separate ops action gated on precondition (1) above, not on this UI
+existing. Normal pace: plan → build → review → ship, same as the rest of
+this arc.

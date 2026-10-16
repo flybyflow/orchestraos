@@ -175,12 +175,15 @@ snapshot rather than a silent truth. Same error class as this session's
 what was intended, not what the assertions actually excluded, and only
 running the adversarial case (not reasoning about it) revealed the gap.
 
-**Independently verified by test-g2, but pinned to `406d079` — now stale,
-head moved to `e10386b` above, needs re-pin:** reproduced the mutation-catch
-claim from a clean worktree — `tsc` clean, `vitest` 37/292 +2 expected-fail
-matches, and re-applied the CR13/CR15 swap directly to confirm it now fails
-(the 4th assertion specifically, exit 1). Good verification of the commit it
-checked; does not cover the item-split correction at `e10386b`.
+**test-g2 re-verified at `e10386b`, current head.** `tsc` clean, `vitest`
+37/292 +2 expected-fail matches. Reproduced the CR13/CR15 swap mutant
+directly: now fails **harder** than at `406d079` — 3 of 4 assertions fail,
+not 1, because the item-split fix moved CR12 into `Credibility/Respect`
+without moving CR13, so swapping CR13 alone now also trips the straddle
+assertion (CR12 and CR13 end up on opposite sides of the access/value
+boundary). Consistent with the item-split fix and the commit message.
+Confirmed, mutation-catch verified independently at current head. Review's
+verdict still outstanding as of this writing.
 
 ## 3. Task sequencing
 
@@ -420,3 +423,32 @@ layer on a formula nobody can validate contradicts the operator's own stated
 reason for this initiative (divergence as clinical signal requires knowing
 which side of a divergence to trust), so the disclosure isn't optional
 polish, it's the thing that makes shipping honest.
+
+**Correction, same day: "unmeetable" overgeneralized "nothing on disk" —
+there is an untried option (c).** builder-3 caught their own earlier framing
+(and mine, by extension) widening "no worked example exists on disk" into
+"the gate is unmeetable." It isn't, necessarily: `CPCSP.EXE`, `CSPSYS.EXE`,
+`GPATHOR1.EXE` are all runnable DOS MZ binaries, and `GPDD.BAT` is a
+non-interactive, parameterised entrypoint (`cspsys q=gpddms s=0 h=10 c=0
+z=1`) — the real shipped program, not fragments. **Option (c): run the 1987
+program itself under DOS emulation, feed it real CR answers, capture its
+actual output.** That's ground truth produced by the binary, not a
+reconstruction — strictly stronger than anything derivable from literals,
+and it would retire the gate properly rather than paper over it (the actual
+point of the PR #123 precedent). Explicitly **not attempted** — no DOSBox
+set up, nothing run, and whether the program needs interactive menu
+navigation or a hand-built `ANSV` workspace entry is unknown. "Plausibly
+meetable with emulation," not "meetable." Correctly held as a scope
+decision, not started mid-research-pass.
+
+**Operator priority redirect (via gm, 2026-10-16): pause this entire
+research track, not just the opcode-decode piece.** Operator: "keep going
+with the buildout, get this working toward being a voice agent rather than
+1-7 scoring." This functionally resolves the hold/ship/keep-hunting
+question as **hold, for now** — but on priority/timeline grounds, not
+because option (c) was ruled out. The distinction matters for whoever picks
+this back up: nothing here was decided as *infeasible*, it was deprioritized
+against a higher-priority voice-agent buildout. Option (c) (DOS emulation)
+stays on record as the correct next move if this track reopens, not as a
+dead end. builder-3 reassigned off research, onto the voice-UI buildout —
+see new work below.
