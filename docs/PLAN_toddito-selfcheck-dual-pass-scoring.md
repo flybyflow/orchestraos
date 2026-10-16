@@ -130,6 +130,26 @@ via the table above, **display at 6** (unchanged, per gm), **compare
 dual-pass at 6** (noise reason above). Ground-truth validation tests operate
 at whatever granularity the actual worked examples turn out to have.
 
+**PR #29 open (`406d079`, `brollistika/toddito`): the fixture test above,
+built.** Four assertions — full item coverage, no dimension straddles two
+facets (names the offender), the ten roll up to our exact shipped sizes,
+the recorded mapping. `tsc`/`vitest` clean (37 files, 292 passed + 2
+expected-fail).
+
+**Worth keeping as its own lesson: builder-3's first version of this test
+claimed a guarantee it didn't provide, and only mutation testing caught it.**
+The original 3 assertions were structure-only, commented as "guard the
+reverse direction." A size-preserving facet swap (CR13↔CR15: `Price`→`access`,
+`Credibility/Respect`→`value`) changes no size, creates no straddle, and
+passed all three — the exact case the comment claimed was covered. Fixed by
+hardcoding the facet column as the 4th assertion, which necessarily encodes
+builder-3's one judgement call (item 13) as asserted fact — acceptable
+*because* §2a already frames that mapping as a dated, visibly-flaggable
+snapshot rather than a silent truth. Same error class as this session's
+"OR-clause needs a deciding fixture" lesson: a guard's comment described
+what was intended, not what the assertions actually excluded, and only
+running the adversarial case (not reasoning about it) revealed the gap.
+
 ## 3. Task sequencing
 
 1. **builder-3 — research, no scoring code yet.** ~~Reverse-engineer
