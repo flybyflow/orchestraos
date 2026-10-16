@@ -786,3 +786,48 @@ settle the product question.** gm can still choose to ship `ab626d0` as
 built, ask for (a) once ground truth exists, or something else; the
 diligence here (testing (a) before defaulting to (b)) is useful evidence
 either way, not a done deal.
+
+## 12. PR #31 @ `ab626d0` — APPROVED (review, 2026-10-16). Engineering is done; the product-scope question in §11 is unaffected
+
+review verified by exit code, not summary (37 files, 304 passed + 2
+expected-fail, `tsc`/`build` clean), confirmed the verdict is genuinely
+removed (no `DivergenceVerdict`, no consumer, dead UI branch gone with
+it), and — same discipline as test-g2's PR #30 pass — **mutated
+`compareFacetScores` to return `legacyBand: llm.band`** (quietly mirror
+one band instead of computing two) and confirmed a real test fails,
+proving the plumbing still carries two independently-computed bands.
+Called out builder-1's attempt 3 specifically: building option (a),
+proving it's not inert, measuring it, *then declining to ship it* because
+the rate couldn't be separated from the shape artifact without ground
+truth — "an un-shippable result that cost real work is exactly what gets
+rationalised into shipping." All three attempts recorded with their
+numbers in the docstring.
+
+**review's own self-correction, worth carrying forward:** the per-rating
+table in §8 was computed in *oriented* rating space (reverse-coding
+applied), and `allAt(N)` test helpers pass *raw* ratings — five of sixteen
+items are reverse-coded, so `allAt(6)` does not reproduce "rating 6" in
+the oriented sense the table used. Re-measured through the real wired
+path: `allAt(6)` raw still diverges on 3/6 facets (trust/value/awareness
+agree, expectations/access/network diverge) — the conclusion holds, the
+specific fixture doesn't transfer directly. Not blocking, but: if anyone
+writes a new fixture from §8's table directly, use oriented ratings, not
+`allAt(N)`.
+
+**Non-blocking suggestion on record for whoever picks this up next:**
+the only test running both scorers on one `responses` still uses
+`allAt(4)` — the single input where the two scales coincide, so it can't
+show the second pass does anything. `allAt(6)` (raw) is the fixture that
+can: assert `bothScored` on all six facets and the three real divergent
+bands above. Four lines, pins the premise the whole side-by-side UI rests
+on.
+
+**Status: engineering fully closed and approved. §11's product-scope
+question (ship the verdict-free (b), or hold for (a) once ground truth
+exists) is unaffected by this approval — review approving the
+mechanical correctness of (b) is not the same authority as gm/operator
+accepting the scope reduction from what was asked.** Recommendation to
+gm: merge now — (b) is sound and honest on its own, and merging doesn't
+foreclose adding a verdict later once (a) has ground truth to calibrate
+against. Holding a fully-reviewed, correct PR idle costs more than
+merging and revisiting.
