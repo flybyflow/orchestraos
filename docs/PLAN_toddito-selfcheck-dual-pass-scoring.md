@@ -573,4 +573,91 @@ rather than half). They diverge only on `access` (1+1+2) — `value` and
 independently (re-derived the algebra, didn't take the proof on trust) and
 confirmed landed: `14b599a`, proof in `legacy-score.ts`'s file header, a
 test asserting both computation paths agree exactly. Suite 304/306,
-typecheck/lint clean. Not a fidelity concern — cleared.
+typecheck/lint clean. **Partial correction below (F3) — the proof is
+exactly right for complete data; I didn't check the partial-data case.**
+
+## 8. PR #31 @ `14b599a` — CHANGES NEEDED (review, 2026-10-16), 2 blocking
+
+**The scorer's arithmetic is right. The comparison layer built on top of
+it is not — and this is the actual deliverable the operator asked for
+("divergence = clinical signal"), not a side detail.**
+
+**F1 — BLOCKING, most severe finding of this whole arc.** Both passes
+land on 0-10 and are read through the *same* band ladder (7.5/5.0/3.5),
+but they get there via differently-shaped transforms — linear for the LLM
+pass, the non-linear ±100/±33/0 legacy map for the other. They coincide
+at exactly one point (rating 4 / map 0, both → 5.0, the ladder's own
+"solid" floor) and diverge everywhere else. **Verified independently,
+recomputed from scratch, not taken on trust:**
+
+```
+rating  llm_10  llm_band  legacy_10  legacy_band
+1       0.0     weak      0.0        weak
+2       1.67    weak      3.35       weak
+3       3.33    weak      4.17       thin      DIVERGE
+4       5.0     solid     5.0        solid
+5       6.67    solid     5.83       solid
+6       8.33    strong    6.65       solid     DIVERGE   <- most likely real answer
+7       10.0    strong    10.0       strong
+```
+
+Review enumerated the full answer space (not just the uniform case): 16-29%
+of answer vectors diverge per facet depending on facet size, concentrated
+exactly where real answers cluster (5, 6). **Combined, review estimates
+roughly three reports in four would show at least one red "differs from
+the read above" flag — purely from scale mismatch, not real disagreement.**
+This is the inverse of the entire point of building a dual pass: instead
+of "divergence is a signal to trust," the feature as built would train
+consultants to ignore the divergence flag within days, because it fires
+on the most common healthy-relationship answer. Root cause: `score.ts`'s
+band thresholds were calibrated for the *linear* scale (5.0 chosen so
+all-"Neither" lands solid, per `score.ts:118`) — that anchor survives the
+move to the legacy scale by coincidence (0 maps to 5.0 too), nothing else
+does. Reusing the ladder "because it's already shipped and reviewed" is
+where the error enters — applying one ladder to two differently-shaped
+scales *is* inventing a new comparison, just silently.
+
+**Direction (plan, 2026-10-16): recalibrate the legacy band thresholds at
+the legacy scale's own anchors, don't suppress the divergence display.**
+Review correctly declined to design the fix and offered two options —
+recalibrate, or stop rendering red-divergence until proven not
+ladder-dominated. Suppressing the display punts the actual deliverable;
+recalibrating preserves it. Not designing the exact thresholds myself
+(that's an engineering judgment call requiring the same care `score.ts`'s
+own 5.0-floor reasoning got) — dispatched to builder-1 with this
+direction, not a specific number.
+
+**F2 — BLOCKING, and it's why F1 shipped undetected.** No test compares a
+real LLM band against a real legacy band on the same input — every
+`compareFacetScores` test hand-writes fabricated bands. The one test that
+runs both scorers together uses `allAt(4)`, the single uniform answer
+where the two transforms coincide by construction. **Same shape as this
+session's "OR-clause needs a deciding fixture" lesson** — a fixture that
+can only pass is not evidence. Fix: add verdict assertions for `allAt(3)`,
+`allAt(5)`, `allAt(6)` so F1 becomes structurally impossible to
+reintroduce.
+
+**F3 — the "algebraically identical" proof I verified holds only for
+complete data, and I didn't check the partial case.** When a dimension is
+refused for sparseness, its answered items still feed the facet's flat
+mean even though the dimension itself reports null. Reproducing example
+(review's, re-verifiable): `CR08=1, CR11=1, CR12=7, CR13` unanswered →
+`Credibility/Respect` refused (1/2 answered) but facet `access` = −33.33,
+a number no combination of *scoreable* dimension scores produces (the
+weighted combination of what actually scored is −100; CR12's +100 is
+leaking in through the flat-item path from a dimension declared too
+sparse to score). Review calls this defensible (mirrors `score.ts`'s own
+facet rule exactly) but undocumented — the header's "preserves each
+dimension's own weighting exactly" is unqualified and should say
+"for complete responses" plus document what happens to items in a refused
+dimension. **Owning this precisely: I verified the algebra correctly for
+complete data (§7, re-derived independently) — I did not think to check
+the sparse/partial-answer interaction, and that's the actual gap, not the
+proof itself.**
+
+Not blocking, on record: the score-map anchors and ten-dimension partition
+independently re-derived and confirmed correct by review (separately from
+builder-3's derivation — two independent reads agree); a weak assertion
+(`not.toBeCloseTo`) that's harmless here (carried by a `toBe` on the prior
+line) but proves less than it looks like; `score.ts`'s diff is
+exports-only, no logic change.
