@@ -520,10 +520,23 @@ should account for both, not just the first.
 `legacy-score.ts` (10-dim unit-weighted mean, non-linear score map, facet
 rollup, divergence vs `score.ts`), wired into `run.ts`'s persist, disclosed
 per-facet-row + closing paragraph on the one report surface. Migration 037
-(renumbered from 036 after catching a collision with open PR #28). Suite
-303/305 (2 pre-existing unrelated); `npm run build` is broken on `main`
-itself right now, pre-existing and unrelated (plotly.js), separately
-flagged to gm — not counted against this PR.
+(renumbered from 036 after catching a collision with open PR #28).
+
+**Both the suite count and the "pre-existing build break" premise were
+wrong, corrected by test-g2's independent verification.** Suite is
+**304 passed + 2 expected-fail = 306**, not 303/305 — off by exactly +1,
+traced to the diff adding exactly 16 new tests in `legacy-score.test.ts`
+(290 pre-PR + 16 = 306, matching test-g2's number, not builder-1's). The
+"pre-existing plotly.js build break on `main`" **does not actually
+reproduce** on either `main` or this PR once the environment matches its
+own lockfile — `node` reported `v16.2.12` in this shared worktree while
+`package.json` pins `16.3.7`; a stale `node_modules` install, not a real
+type incompatibility. After `npm install` resynced the worktree: `tsc`
+clean, `next build` exit 0, on both `main` and `642e9c2`. **Worth a heads
+up to whoever owns `fix/plotly-annotations-type` (sitting untouched at
+`fecdc66` in `/private/tmp/td-plotly`)** — if their worktree's `next` was
+already on `16.3.7`, they may be carrying a branch for a problem that
+doesn't exist, caused by install drift in a different, shared worktree.
 
 **Resolved (builder-1, verified by plan independently): flat-item-mean does
 NOT bypass dimension-level computation — it is algebraically identical to
