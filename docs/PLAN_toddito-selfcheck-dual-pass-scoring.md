@@ -14,12 +14,16 @@ plays for the org-diagnostic — plus the comparison/divergence layer on top.
 ## 1. The gap (confirmed, not recalled)
 
 - `GPASCORE.ASF` and `GPAQUEST.ASF` (`~/conductor/repos/mic-program-toddito/`)
-  are genuinely compiled, not text — `file` reports `data` on both, 225KB /
-  53KB. There is no source to read the aggregation formula from directly.
+  are `data`-typed (binary), not text. **Superseded, see §3 step 1:** the
+  aggregation logic itself lives in `GPALIB.ASF`, the APL function library,
+  which *does* survive as recoverable text — the question was never "is the
+  formula readable," it was "which file is it in."
 - builder-3's prior verification (items, facets, 4-rung ladder, refusal
-  behavior) is verbatim-confirmed against the same files. Only the **final
-  aggregation formula** was never recovered — `score.ts`'s current mean-of-facets
-  is structurally well-founded but not verified byte-for-byte.
+  behavior) is verbatim-confirmed against the same files. The **final
+  aggregation formula** is now partially recovered (§3 step 1): a weighted
+  count over an incidence matrix, not a mean — so `score.ts`'s current
+  mean-of-facets is confirmed to be a **structurally different operation**
+  from 1987's real method, not merely "unverified against" it.
 - `GPAQUEST.ASF` strings confirm "Client Relationship" is THOR's own name for
   this module ("THE CLIENT RELATIONSHIP MODULE renders a diagnosis of the
   extent to which you have managed to build trust and credibility...").
@@ -145,18 +149,46 @@ at whatever granularity the actual worked examples turn out to have.
    chains with 0 breaks, confirms parse-not-decompile for this region. But it
    only indexes 22% of the file (51025 / 225280 bytes) — the other 78% holds
    the narrative/ladder/refusal content already verified, so there's at least
-   one more structure here. **Negative result, tested not assumed:** the two
-   long bitmaps in records 2/3 (960 and 1540 bits) were the obvious
-   item-to-dimension incidence-matrix hypothesis — tested against real counts
-   (59 scored dims in `MV6COMBO.ASC`, ≤245 item records), neither factors to
-   match. Ruled out rather than kept refining toward a fit (that refinement-
-   until-it-fits move is exactly the failure mode to avoid here).
-   No weight tables, no arithmetic in the indexed 22%. Fable-pass target
-   order, updated: (1) APL workspaces (`MGP*.ASF`, confirmed `APL*PLUS/PC
-   RTSVERS 7.1`) + `GPATHOR?.EXE` — interpreted, often recoverable without
-   decompilation; (2) the unindexed 78% of `GPASCORE.ASF`; (3) `CPCSP.AWS`/
-   `GPCSP.AWS` (89861 bytes each, same size — paired, worth one look).
-   Ground truth: still none. `MV6COMBO.ASC` confirmed not sufficient (§2).
+   one more structure here. ~~**Negative result:** the two long bitmaps in
+   records 2/3 (960/1540 bits) are NOT an incidence matrix — tested against
+   real counts, neither factors to match.~~ **OVERTURNED, see below — the
+   factor test was sound but the premise (global totals) was wrong; the
+   bitmaps ARE incidence data, just sectional.**
+
+   **Breakthrough (builder-3, 2026-10-16): APL source recovered as text —
+   the real aggregation is a WEIGHTED COUNT over an incidence matrix, not a
+   mean.** `GPALIB.ASF` (the APL function library) survives as text — line
+   numbers, labels, localised-variable headers; the glyphs are lost but
+   control flow is legible. Recovered so far (DEV/CULT branch, not yet CR):
+   `GENANSM` builds an incidence matrix (`ANSM`) from the answer vector via
+   `FREAD STN,n` component reads (`n=2,3,5,7` seen) — this is why the earlier
+   factor test against *global* counts never matched: the bitmaps are
+   **per-section**, not file-wide. `CALC`'s arithmetic:
+   `R←R='1' ... R[7;]×4 ... R[9 23;]×2 ... R←+/R` — booleanise the incidence
+   matrix, multiply specific rows by integer weights, plus-reduce. **So
+   `score.ts`'s mean-of-facet-means is not just unverified against 1987 — it
+   is a structurally different operation** (mean vs. weighted count). The
+   deterministic pass, once CR's own weights are recovered, implements a
+   weighted count, not a mean.
+
+   **Self-correction worth keeping, builder-3's own words:** "a failed factor
+   test is not evidence of absence... I should have said inconclusive, not
+   not the incidence matrix." Declining to fit noise toward a hypothesis is
+   right; a failed test only refutes the specific thing tested (global
+   totals), not the broader hypothesis (incidence data in general).
+
+   Fable pass launched, targeting (in order): the CR analogue of
+   `CALC`/`GENANSM` (may be in one of 7 sibling `GP?LIB.ASF` files), the
+   actual CR weights, the normalisation behind `MV6COMBO.ASC`'s six columns,
+   confirm-or-refute on the `CALC` reading above. Briefed to label every
+   claim VERIFIED/INFERRED/GUESSED, that "not recoverable" is an acceptable
+   result, and explicitly not to fit a plausible formula to look complete —
+   a formula that reproduces one example isn't recovered unless it's
+   distinguished from the alternatives. Given what was just gotten wrong in
+   the *other* direction (declaring absence too early), that instruction is
+   load-bearing in both directions now.
+
+   Ground truth: still none for CR specifically. Gate unmet.
 2. **Build real tests against that ground truth FIRST**, before the
    deterministic scorer is trusted anywhere near a real session. Same
    shape as THOR's F8: if the reverse-engineered formula doesn't reproduce
