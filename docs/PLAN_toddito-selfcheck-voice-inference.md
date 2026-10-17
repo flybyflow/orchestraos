@@ -1,0 +1,807 @@
+# Toddito self-check: voice-modernize the input (operator-confirmed: B, free-form inference)
+
+- **Requested by:** operator, via gm, Telegram, 2026-10-08. Confirmed
+  choice: (B) — free-form inference, explicitly "just like we did already
+  with the original org diagnostic, so far it's yielding incredible
+  results."
+- **Research:** builder-3, `docs/BRIEF_self-check-voice-input-research.md`
+  (`6f5bf78`) + two addenda (`256744d`, `97221b6`) — full findings folded
+  in below, not re-derived.
+- **Not urgent** — normal pace, proper process. This doc is the planning
+  phase; nothing built yet.
+
+## 0. Architecture — CONFIRMED ALREADY EXISTS, corrected twice before landing here
+
+The operator pointed at THOR's extract→deterministic-score pattern
+(`thor-extract.ts` + `thor-score.ts`) as "the thing I meant by reverse-
+engineered weights." **builder-3 confirmed this is already the self-
+check's own architecture** — `score.ts`'s own header comment: *"Mirrors
+how THOR already splits extraction from scoring."* `prompt.ts` extracts a
+1-7 rating per item from the transcript; `score.ts` computes the result
+deterministically (`orientedRating`, facet means, band thresholds) with
+**zero model involvement in the scoring math itself**. So the operator's
+architectural instinct is correct, and the answer is "already built,"
+not "needs re-architecting." Two real mistakes this seat made while first
+writing this up, corrected before any build started on the wrong premise:
+
+**Mistake 1 — wrong scale.** First draft said the extraction should emit
+THOR's own `-2/-1/+1/+2/null` scale. `score.ts`'s `MIN=1, MAX=7` and its
+input sanitizer reject anything outside `1-7` — emitting THOR's scale
+would make every item fail validation and null out, refusing every
+report. **Self-check's extraction must emit 1-7, in the item's own
+stated polarity** (the scorer's `orientedRating()` does the reverse-item
+flip; the model answers the item's literal statement, not an "is this
+facet healthy" judgment).
+
+**Mistake 2 — no weight matrix exists to port.** THOR has a real 438-pair
+weight matrix (migration 012) to port into TypeScript. **Self-check has
+no equivalent matrix** — no `self_check_weights` table, nothing in
+`supabase/`. The 1987 aggregation formula is *compiled* in `GPASCORE.ASF`,
+not recovered as readable logic (confirmed, `97221b6`). There's nothing
+to port because `score.ts` already IS the deterministic scorer, built
+directly from the facet structure builder-3 verified against the source
+(§2 below) — not a THOR-style weight-matrix computation, a different
+(simpler, already-shipped) one.
+
+**Mistake 3, the one that would have done real damage if it had landed:
+architecture does not resolve the four gates in §1. The gates are entirely
+about MODEL BEHAVIOUR; no architecture choice changes model behaviour.**
+`score.ts` already accepts `null` per item — that makes null
+*representable*. It does not make the extraction model *use* null, honor
+reverse polarity, or preserve within-facet disagreement. **Representability
+is not behaviour** — same shape as this project's own guard-testing lesson
+earlier tonight (an affordance nobody exercises is indistinguishable from
+no affordance). Worse: modeling the new extraction prompt directly on
+`thor-extract.ts`'s own instructions would import a line that actively
+fights GATE 1 — *"be decisive — pick +2 or -2"* — written for THOR because
+180 questions and a tolerant weight matrix can absorb some noise. Self-
+check has 16 items and gates that depend on the model declining when it
+should. **Do not inherit that instruction.** GATE 1 is elevated risk under
+a thor-extract-modeled prompt specifically because of this, not resolved
+by one.
+
+**Bottom line scope, corrected:** the only new component is the voice-
+transcript extractor (a new `prompt.ts`-style extraction step, 1-7 per
+item, the item's own polarity, modeled on `thor-extract.ts`'s SHAPE but
+NOT its decisiveness instruction). `score.ts` stays genuinely unchanged —
+that part of the original claim holds and is still a real, valuable scope
+reduction. All four gates below remain live, un-resolved, go/no-go
+requirements on the new prompt.
+
+## 1. The go/no-go gates on the extraction prompt — not optional, not resolved by architecture (GATE 5, on the voice agent itself, is in §3c — more severe than all four of these, found later, testable sooner)
+
+**gm's explicit instruction: these are GO/NO-GO gates on the build plan,
+not something `test` runs at the end for a report.** A prompt draft that
+fails any one does not proceed to voice infrastructure. None needs infra,
+a voice agent, or an API key — all four are checkable against the
+existing pure `scoreSelfCheck`/synthetic transcripts.
+
+```
+GATE 1 -- null-emission survives (ELEVATED RISK under a thor-extract-
+          modeled prompt, see Mistake 3 above -- do not inherit
+          "be decisive")
+  Severity, corrected by enumeration (all 64 nulling patterns): the
+  refusal gate is vacuous in only 6/64 (fabricate everything, or null
+  exactly 1 of the 5 smaller facets) -- it regains FULL power once 2+
+  facets are nulled. Real bar: the prompt must be ABLE to null 2 facets
+  when genuinely untouched, not null often. Also found: the ITEM gate
+  (MIN_ANSWERED=12) does more real catching than the FACET gate here --
+  `access` (4 items) vanishing lands exactly on the 12-answer threshold,
+  `trust` (5 items) tips it over. FAIL = prompt cannot null even 2 facets
+  on a transcript that genuinely never covers them; do not proceed.
+
+GATE 2 -- polarity / raw-emission contract
+  Score a transcript of unambiguous, one-sided praise. Check `awareness`
+  (both items reverse-coded) does NOT come back `weak` while the overall
+  reads `solid` -- that specific signature means the prompt emitted
+  already-oriented values instead of raw per-item agreement, and
+  score.ts's orientedRating() double-flipped it. Contract: model emits
+  RAW agreement with the item's own (possibly negative) statement;
+  score.ts does ALL orientation, unchanged, already mutation-tested on
+  all five reverse items. FAIL = prompt is polarity-blind; do not
+  proceed.
+
+GATE 3 -- within-facet variance survives
+  On a transcript with genuine mixed signal within one facet, confirm
+  the model emits disagreeing item-level ratings rather than smoothing
+  to one facet-level impression, and confirm a `thin`-band result is
+  reachable at all (needs facet mean 3.10-3.99 via real item
+  disagreement -- no uniform fill can produce it). FAIL = the 1987
+  ladder's "uneven relationship" rung is dead on arrival; do not
+  proceed.
+
+GATE 4 -- `expectations` can be returned unscored, AND IS ALREADY DISCLOSED
+  Single-item facet, 1/6 of the headline weight when SCORED. Confirmed
+  via self-test + code read: `score.ts`'s `omittedFacets` is populated
+  on the SUCCESS path (not just refusal) and the report UI
+  (`page.tsx:188`) already surfaces it when `omittedFacets.length > 0` --
+  a correct null is NOT silently indistinguishable from fabrication to
+  the reader. This was nearly misreported as an open gap; it isn't one.
+  Remaining requirement, narrower than first framed: confirm the model
+  abstains on this item when untouched (same mechanism as GATE 1) --
+  the disclosure half is already solved.
+```
+
+**Sharpening GATE 3's framing, from the self-test's own arithmetic:**
+"expectations is 1/6 of the headline" describes a SCORED item moving the
+mean; it does NOT describe the cost of an UNSCORED one, which is a
+different operation and much cheaper on average: `(omitted facet's value
+− mean of the others) / 6`. Measured example: correctly nulling
+`expectations` moved the overall by 0.23 (same band) when the facet
+wasn't an outlier; had it been (e.g. a badly-managed-expectations case
+scored 1.67 against a 6.95 mean elsewhere), the same omission would have
+moved it 0.88 — enough to cross a band. **Omission is cheap on average
+and expensive exactly when the omitted facet would have been the
+outlier** — the two "1/6" framings invite contradictory intuitions if
+stated without this distinction.
+
+**Status:** computable halves of GATES 1-3 done without a model call
+(enumeration, structural reachability); GATE 4's disclosure half
+confirmed already-shipped. Behavioural halves (does a real model
+actually fabricate, does it actually reach band extremes under real
+inference) need a model call — no `ANTHROPIC_API_KEY` available to this
+fleet yet. A one-sided self-test (builder-3 answering their own draft
+prompt on a transcript with a deliberate expectations-adjacency trap —
+heavily caveated, N=1, primed, a pass proves nothing) ran clean:
+correctly nulled the untouched item, and separately validated GATE 2's
+raw-emission contract on real prose (a reverse-coded item's raw
+agreement correctly inverted to the right answer; emitting an already-
+oriented value instead would have produced the exact acquiescence
+fingerprint computed earlier). The one thing still genuinely open is
+whether the PRODUCTION model does this unprompted and untested — that
+needs the key, not more self-testing.
+
+## 2. Self-check's structure, corroborated against the real 1987 source — different risk shape from THOR's F8
+
+builder-3 checked THOR's own known-bug warning (F8, below) against the
+actual 1987 program (`GPASCORE.ASF`, `~/conductor/repos/mic-program-
+toddito`) rather than assuming it transfers either way. Verified, not
+inferred:
+
+- The refusal message is **verbatim** 1987 ("Too many items were omitted
+  to permit the generation of an overall score or description").
+- The 6 **facets** and a facet's item count (e.g. `network` = 2 items)
+  match 1987's own wording exactly.
+- The 4-rung **ladder** is 1987's own language (*"has done a good job" /
+  "a slightly greater effort" / "a greater effort" / "a much greater
+  effort"*).
+- 1987 had per-facet partial-answer branches — **more** granular than
+  self-check's facet-level scored/unscored; a faithful simplification,
+  not a deviation.
+
+**Only the final aggregation formula is unverified** (compiled in the
+1987 binary, not recovered as logic). Different risk shape from THOR:
+THOR's weight matrix is unverified AND known-wrong against real ground
+truth (F8, below). Self-check's inputs check out against the source;
+only the last combination step is open.
+
+**Real consequence: this reframes the `expectations`-carries-1/6-of-
+headline item** (already accepted by the operator for v1, ship-as-is-
+iterate-later) as a property **inherited from 1987's own facet-first
+design**, not an arbitrary artifact of this build — 1987 treats facets
+as first-class units with their own scores/ladders/narratives, so an
+overall built from facet-level means is the natural reading of the
+source. If ever revisited, the real question is "do we want to depart
+from 1987 here," not "should we fix our mistake."
+
+## 2a. F8 — real, pre-existing, already-tracked bug on the ORG-DIAGNOSTIC side; checked whether it transfers (it doesn't, directly)
+
+`docs/ROADMAP.md`: "THOR ground-truth harness: legacy runs as fixtures;
+**weights diverge from the legacy program (F8)** — documented via
+`it.fails` tests; THOR = directional," and "Parked: re-derive THOR
+weights from the legacy SCORE.ASF binaries" — explicitly unresolved,
+predates this initiative entirely.
+
+**Doesn't transfer directly** — F8 is the ORG-DIAGNOSTIC's weight matrix
+(migration 012, 438 pairs, derived from THOR's own ground truth). Self-
+check's weights come from a different 1987 instrument and were
+independently verified during PR #2 (facet-weighting math re-derived,
+reverse-scoring mutation-tested). **The cautionary precedent transfers
+directly though:** a ported 1987 process silently produced wrong
+rankings, caught only by deliberate ground-truth tests against real
+legacy output, not by type-checking. Self-check's new extraction step
+needs that same discipline applied to itself.
+
+## 3. Claims-framing — DECIDED, final (operator delegated, 2026-10-08T23:30 UTC)
+
+Operator: "bshr and make the call, I trust your recommendation." The
+layered framing below is now **final, not provisional**. Original
+question was a binary "does the report claim 1987 provenance, yes/no" —
+caught as wrong before it went out, since **provenance is layered, not
+binary**, checked against `GPASCORE.ASF` layer by layer:
+
+| layer | 1987? | basis |
+|---|---|---|
+| the 16 items | yes | recovered verbatim, `GPAQUEST.ASF` offset 42276 |
+| the 6 facets + membership | yes | named narrative blocks in source |
+| the four-rung ladder | yes | 1987's own wording |
+| refusing sparse data | yes | refusal string verbatim |
+| aggregation into the overall | ours | well-founded by 1987's facet-first structure, but unverified (arithmetic compiled, not recovered) |
+| the ratings under (B) | no | model-inferred from speech, not self-reported |
+
+**Final report copy, this exact framing — checked against the already-
+shipped form, two real refinements found:**
+
+**1. ADD to the existing copy, don't replace it.** The shipped form
+(`dashboard/self-check/[id]/page.tsx:285`) already says *"This is your
+own read of the relationship, not {client}'s. It is a prompt for a
+conversation, not a measurement of one. The 16 questions come from the
+Client Relationship module of a 1987 consulting diagnostic, recovered
+verbatim and reworded for plain English."* Already layered correctly
+(1987 claimed for the questions only), and "not a measurement of one" is
+a STRONGER disclaimer than the locked sentence alone carries — it's what
+stops a consultant treating the number as a measurement at all. Swapping
+the locked sentence IN PLACE OF this line would be a net downgrade in
+honesty. The locked sentence explains provenance; the existing line
+manages the claim. Ship both.
+
+**2. The copy cannot be one static string — it must vary by input
+modality.** "The voice-inferred ratings are ours" is only true for
+voice-completed reports; the shipped form correctly says "your own read"
+because on the FORM the ratings genuinely are the consultant's own. Once
+both input paths coexist, applying the voice sentence to a
+form-completed report would wrongly tell a consultant their own
+self-ratings were ours — exactly the downgrade §3 point 1 warns about,
+in the other direction. **Key the sentence on the same `output_kind`-
+style discriminator the pipeline already uses for routing:**
+
+```
+form:   ... the four-step interpretation are verbatim 1987; the final
+        score's formula is ours, and the ratings are your own.
+voice:  ... the four-step interpretation are verbatim 1987; the final
+        score's formula and the voice-inferred ratings are ours.
+```
+
+Nothing blocking, nothing shipped needs changing today — this is a build
+requirement for whenever the voice path actually ships, flagged now so a
+single hard-coded string doesn't get written later by whoever builds it
+without this context.
+
+## 3b. Extraction prompt draft v1 — committed, two real design choices worth recording
+
+`docs/BRIEF_self-check-extraction-prompt-draft.md` (builder-3). Reasoned
+entirely from the instrument's structure; **nothing run against a model
+yet** — all four gates are the acceptance tests and all need a key, so
+this draft is exactly as unvalidated as the architecture it serves.
+
+- **Deliberately omits THOR's own "do NOT default to null" instruction.**
+  That instruction is a correct inference from THOR's structure (180
+  questions, a noise-tolerant weight matrix — a null there genuinely
+  costs signal) and the exact wrong inference for self-check (16 items,
+  no redundancy, nulling IS how the instrument refuses, recovered
+  verbatim from the 1987 source). Same instruction, opposite
+  correctness — GATE 1 stays elevated specifically because this is the
+  trap a thor-extract-modeled prompt would walk into.
+- **GATE 3 solved by STRUCTURE, not instruction:** the draft presents
+  the 16 items flat and never names the facets to the model. `thin`
+  only exists via within-facet disagreement; showing the model its own
+  groupings invites it to reason "how is trust going" and smooth 5
+  items into one impression, deleting the band silently. Not handing it
+  the grouping at all is a strong control; instructing it not to
+  generalize would have been a weak one. `score.ts` needs the facet
+  structure; the model doesn't.
+- The silence-handling block names four specific do-not-infer patterns,
+  two of which (absence-of-complaint, adjacent-topic) are exactly the
+  traps the self-test transcript used — aimed at a demonstrated failure
+  mode, not a hypothetical one.
+
+**New risk surfaced, bigger than the extraction prompt itself, nobody
+has started it:** the extraction prompt only covers half the problem.
+**The voice AGENT's own side — how it covers 16 topics conversationally
+without reading them aloud as a checklist — is a separate, harder design
+question**, unstarted. This may be the real risk to (B) producing usable
+coverage at all, more than the extraction prompt's correctness. Flagging
+as its own scope item, not yet assigned.
+
+## 3c. Voice agent design v1 — committed, one NEW HARD GATE found, plus a real unblock
+
+`docs/BRIEF_self-check-voice-agent-design.md` (builder-3). Ready for gm
+to create the actual ElevenLabs agent from.
+
+**The natural-conversation-vs-checklist tension dissolved, against
+builder-3's own first instinct:** the org agent's real production
+history (`TUL-34`, `TUL-41`) already tried the "adaptive, latitude-given"
+version and paid for it specifically — temp 0.7→0.3 after improvised
+off-script follow-ups, and the agent literally self-answering its own
+probe on Haiku. The scripted sequence isn't timidity, it's the residue of
+trying the alternative. Resolution: the org diagnostic's 25 probes are
+open QUESTIONS, not items to rate, with no 1:1 question-to-dimension map
+— so self-check gets **10 fixed conversational questions in order**
+whose natural answers cover all 16 items, no item text ever read aloud,
+naturalness living in the questions themselves, not agent latitude.
+Production's own fixes carried forward verbatim: the CRITICAL ROLE RULE
+block, Sonnet (not Haiku), temp 0.3, no invented follow-ups.
+
+**GATE 5 (NEW, HARD) — the agent can fabricate the transcript, and
+already has (TUL-41, observed, not hypothetical).** This is the most
+severe gate found so far: all four existing gates operate downstream of
+the transcript, so a fabricated respondent answer (the agent generating
+speech nobody said) is invisible to every one of them — worse, it makes
+`answered` go UP, pushing the refusal gates toward PASSING rather than
+refusing the exact thing they exist to catch. More severe here than on
+the org diagnostic: 180 THOR questions with a noise-tolerant weight
+matrix absorb one bad answer; 16 self-check items have no redundancy,
+and `expectations` is a single item — one fabrication scores a sixth of
+the headline outright, invented. **GATE 5 belongs on the AGENT, not the
+extractor** — nothing downstream can detect it once it happens.
+
+**Real unblock: GATE 5 is testable right now, no human respondent, no
+Anthropic key.** `docs/ELEVENLABS_AGENT.md` documents a validation
+harness (EL's simulate-conversation API + eval criteria) already used to
+validate the Lite agent as "8/8 probes in order, no self-answering,
+clean end_call" — "no self-answering" is already an eval criterion
+there. Coverage is half-testable the same way: simulate N conversations,
+measure which facets come back scored, two-facet-refusal as the pass
+bar. **This makes GATE 5 the first gate that can be validated, ahead of
+the extraction-side gates which still need the key.**
+
+**Probe design reasoning, not arbitrary:** all 5 reverse-coded items
+need event-based probes ("tell me about a time...", "how do you know
+that?"), never self-assessment questions — nobody volunteers "my client
+doesn't trust my full range" as a self-report, but a reverse-coded item
+exists precisely where free conversation would systematically
+underperform if asked directly. Two probes do specific, non-obvious
+work: P8 asks for a specific EVENT (not "do they know your full range,"
+which invites "yes"); P10's "...and how do you know that?" clause is
+load-bearing (the self-test transcript's own trap failed exactly here —
+satisfaction is not evidence of deliberate expectation-setting).
+
+**Live config check (builder-3, 2026-10-16) — the agent was never updated
+from its creation defaults, confirmed via `agents_get`:** `llm: qwen35-397b-a17b`
+(not Sonnet), `temperature: 0` (not 0.3), `built_in_tools: {}` (`end_call`
+not enabled), `created_at == updated_at`. The prompt itself is correct —
+all ten probes verbatim, CRITICAL ROLE RULE, follow-up rules, banned
+phrases — only the config was never applied.
+
+Two things this is worse than "just unconfigured":
+1. **The config contradicts its own prompt.** The prompt's last line
+   instructs the agent to invoke `end_call` to hang up; `built_in_tools` is
+   empty, so the agent has no such tool. A real call cannot terminate as
+   designed — it runs to `max_duration_seconds` or improvises an ending.
+2. **`temperature: 0` is not a safer version of 0.3 — it's closer to the
+   documented failure GATE 5 exists to prevent.** TUL-34's 0.7→0.3 fix
+   targeted *improvisation*; TUL-41's self-answering was Haiku at **low**
+   temperature, "attracted to complete-the-turn patterns" — temp 0
+   maximises exactly that pull. `temp 0` + non-Sonnet is adjacent to TUL-41,
+   not a conservative fallback from it.
+
+**New item, not in the original design (builder-3's own gap, named as
+such): `speculative_turn: true`.** The agent starts generating before turn
+confidence is reached — for an interview whose central rule is "wait out
+silence, never fill it," this biases toward speaking into a pause, adjacent
+to self-answering. Add `speculative_turn: false` to the GATE 5 config list.
+
+**Decided (plan, 2026-10-16): authorized to apply via `agents_update`,
+builder-3 has the needed permissions (`agent_edit_llm`,
+`agent_manage_attached_tools`).** This is executing the already-committed
+design above (Sonnet/0.3/`end_call`/no-invented-follow-ups), not a new
+decision — `speculative_turn: false` folds into the same GATE 5 rationale.
+Low external risk: `ELEVENLABS_AGENT_ID_SELF_CHECK` is still deliberately
+unset, so no real call currently routes to this agent — fixing its config
+now is pre-launch, not a live-traffic change. If the MCP's advanced-body
+escape hatch rejects these fields again (prior history, noted by
+builder-3), report back rather than forcing it — that may still need
+dashboard access, which stays the fallback. Verify every field via a fresh
+`agents_get` after applying, not from the write call's own response.
+
+**Open, stated honestly, not guessed past:** can the agent track
+coverage mid-call (no, not reliably on a system prompt alone — the
+10-fixed-probes design deliberately doesn't require it); whether 10
+probes can shrink to match Lite's 8 if needed (merge 5+6 if forced,
+never cut 8/9/10 — they're the only route to 4 of 6 facets); whether the
+event-recall probes actually land in practice (measurable by
+simulation). **Nothing here is validated against a real conversation
+yet** — reasoned from the instrument and from documented production
+failures, ready to build an agent from, not yet confirmed correct.
+
+## 3d. PR #24 (a666915) — real bug found and fixed, free off-switch discovered, provenance blocked on a migration, one must-not-skip sequencing item
+
+**Real, severe bug found and fixed before it shipped:** `elevenlabs-
+config` picked the voice agent from `session.tier` alone, never checking
+`output_kind` — and self-check sessions carry `tier: "lite"` only because
+the column requires SOME value (per the self-check route's own comment:
+"not a new tier... neither lite/full prompt applies here"). **The first
+live voice self-check would have been handed the 25-probe ORG
+interviewer**, asking about the respondent's company, while self-check's
+own extraction prompt pulled 16 client-relationship ratings out of
+answers to the wrong questions entirely. Every rating in-range, every
+rating about the wrong subject, nothing downstream able to detect it —
+a sixth (new) failure mode worse than anything GATES 1-5 cover, because
+it's not about the model's behavior at all, it's a routing bug. Fixed:
+`output_kind` checked before `tier`, no tier fallback.
+
+**That fix is also the off-switch — no feature flag needed.** An unset
+`ELEVENLABS_AGENT_ID_SELF_CHECK` drops into the route's existing
+not-configured path (503, call never starts). Going live is setting one
+env var once the agent is actually ready — an ops action, not a code
+change.
+
+**Two of the four originally-dispatched build items already existed** —
+found, not rebuilt: `src/lib/self-check/prompt.ts` + `run.ts` already
+implement transcript→ratings with the null affordance (with a base rate,
+an improvement on the draft), the polarity rule, and the flat,
+facet-free manifest (GATE 3's structural solution, already shipped from
+PR #2). Pipeline wiring was already done in PR #2 too. Real new work was
+narrower: silence-is-not-disagreement with four do-not-infer patterns,
+and a worked polarity example on a real reverse-coded item.
+
+**Provenance copy is BLOCKED, not skipped — real gap, needs a migration
+builder-3 correctly didn't add themselves.** It cannot be keyed on
+`output_kind` as planned: both the form and voice paths are `self_check`.
+The actual discriminator (consultant self-rated vs. model-inferred) is
+recorded NOWHERE — `self_check_reports` has no such column.
+`supabase/migrations/` is Moe's CONFIRMED-ACTIVE restricted path (PR #15)
+— needs a `ratings_source text` column + one upsert field + one read
+branch from whoever owns that boundary, before the voice path's first
+real report, or the shipped "your own read" copy becomes a wrong claim
+the moment a voice-completed report exists. Latent today only because no
+agent is wired yet.
+
+**Update 2026-10-15 — PR #24 landed (`93fa545`).** Migration 035
+(`ratings_source` provenance column, `02e79a1`, builder-2) exists on
+`feat/self-check-ratings-source` but had no PR yet — dispatched builder-2
+to open it through the normal pipeline and record the DO_NOT_EDIT.md
+override note (same pattern as the demo-page override: operator's direct
+instruction, not the fleet's own judgement, standing restriction
+otherwise unchanged).
+
+**Correction, same day — the precondition note itself was incomplete.**
+review found: migration 035 landing alone fixes nothing, since nothing
+reads the new column yet. Corrected precondition, to be written into
+both the `.env.production.example` and `elevenlabs-config/route.ts`
+comment sites: **"Before setting ELEVENLABS_AGENT_ID_SELF_CHECK:
+`ratings_source` must exist AND the report's read-back copy must branch
+on it, so a voice report does not claim to be the consultant's own
+read."** The copy-branch work itself (keying the "your own read" vs
+"ours" sentence on `ratings_source`) is dispatched to builder-3
+separately. Not blocking anything today (env var stays unset either
+way) — just keeping the precondition accurate before anyone acts on it.
+
+**Update — PR #27 open** (`feat/self-check-ratings-source`, `6ffccfc`,
+builder-2): migration 035 + the DO_NOT_EDIT.md override entry +
+`.env.production.example`'s precondition comment already corrected
+(crossed with the builder-3 dispatch above — narrowed their scope to
+just `elevenlabs-config/route.ts`'s comment to avoid duplicate edits).
+Review+test dispatched.
+
+**Update 2026-10-15T21:10 UTC — DEPLOY-ORDERING HAZARD, urgent: migration
+035 merged but NOT applied to production.** PR #27 merged the code that
+writes `ratings_source` on every self-check persist, unconditionally.
+Checked prod directly: `self_check_reports.ratings_source` **does not
+exist** there. If the merged code deploys before the migration applies,
+**the next real self-check submission fails at `persist()`** —
+PostgREST rejects the unknown column, the consultant gets nothing.
+Status as of this check: armed, not fired — last self-check
+session/report is 6 days old (2026-10-09), nobody has hit the broken
+path yet. This is a deploy-ordering problem, not a code bug: **someone
+needs to confirm migration 035 is actually pushed to the production
+Supabase project**, not just merged to git. One silver lining: with the
+column absent, the `absent → self-reported` fallback (§3a's provenance
+logic) is load-bearing in production right now, correctly rendering
+every existing row.
+
+**Also found while checking, same session — real, escalated, not
+builder-3's to fix:** production has **zero constraint preventing a
+second `accounts.is_founder = true` row.** `accounts_total: 2,
+is_founder=true: 1, unique index on is_founder: 0`. One INSERT away from
+`founderAccount()` returning null and admin login silently 401ing with
+no error anywhere — fails closed (the safe direction), but it's a
+one-row-away silent lockout with no guard against it. Needs a partial
+unique index; `supabase/migrations/` is Moe's path, escalating rather
+than filing as a local-only finding.
+
+**Update — PR #26 open** (`8b412f6`, builder-3, **stacked on PR #27 —
+must land after it**): the actual copy-branch work. Form says "your own
+read"; voice adds "but the ratings behind it were inferred from what you
+said, not set by you" — both facts kept deliberately (didn't choose the
+numbers, but the view is still theirs). The "prompt for a conversation,
+not a measurement of one" sentence stays on BOTH paths, confirming the
+add-don't-replace call. Fallback direction, deliberately conservative:
+missing column → self-reported (correct, since voice is unreachable in
+that window anyway); present-but-unrecognized → INFERRED, never
+self-reported (never overstate settledness — nobody double-checks the
+confident claim). builder-3 independently caught the identical mistake
+(column-exists ≠ fix) in their own monitoring cron and self-corrected
+(`182b0af3` replaces the flawed `51cd7da3`). **Honest status: the voice
+path has never produced a real report** (1 row total, form-path, 16/16
+answered) — PR #26's voice branch is untested against reality and can't
+be until the agent's dashboard params are fixed and the env var is set.
+Stated plainly in the PR.
+
+**MUST-NOT-SKIP sequencing item, separate from the code landing:**
+`ELEVENLABS_AGENT_ID_SELF_CHECK` must stay UNSET until the dashboard
+fix (§3c: Sonnet 4.5, temp 0.3, `end_call` tool, dynamic variables)
+actually lands. The agent currently runs qwen at temp 0 with no
+`end_call` — exactly the configuration GATE 5 exists to prevent. Setting
+the env var before that fix means the first live call runs precisely the
+failure mode GATE 5 was written to catch. Not blocking the PR (code-
+only); blocking the moment anyone considers flipping the env var "to go
+live" per the operator's override.
+
+## 4. Sequencing
+
+```
+1. GATES 1-4 on the extraction prompt, iterating on synthetic transcripts
+   (praise-only, criticism-only, mixed, silence-on-one-facet,
+   silence-on-expectations) until all four pass. Pure prompt engineering
+   against the existing `scoreSelfCheck` -- no infra, no voice agent.
+   Must NOT be gated on the voice agent existing yet.
+
+2. Only once all four gates pass: move to voice infrastructure.
+
+3. THEN the build-time blockers, which don't block steps 1-2:
+   - **ElevenLabs agent — UNBLOCKED, 2026-10-09T09:57 UTC.** gm has live
+     ElevenLabs MCP access against the real toddito/Pulse workspace
+     (confirmed via agents_list showing Pulse Lite/Full), can create the
+     self-check voice agent directly via `agents_create` once the
+     voice-agent conversational design (§3b's flagged risk) exists. No
+     dashboard access needed from anyone else.
+   - **ANTHROPIC_API_KEY — still open.** Operator says it's set on
+     Coolify, but that only means the deployed app can call Claude, not
+     that the fleet's local test harness can. gm asking for the actual
+     value or another path directly.
+   - Real validation needs more production self-check data than exists
+     (1 account, 0 self-check rows as of tonight) -- synthetic
+     transcripts carry the validation burden until usage accumulates.
+
+**Update 2026-10-09T10:06 UTC — agent created, NOT ready, one real
+blocker needs dashboard access.** gm created `agent_3101m4g20d5ce9tb0fmw7sfb65wa`
+("Pulse Self-Check") via ElevenLabs MCP using builder-3's approved
+design/probes — name/voice/language/first_message/prompt are correct.
+**The MCP connector's advanced-settings escape hatch is broken** ("Unexpected
+argument(s): body" on every attempt), so four settings defaulted WRONG and
+would reproduce the exact production failures GATE 5 exists to prevent if
+tested as-is:
+
+```
+llm: qwen35-397b-a17b           needed: claude-sonnet-4-5 (GATE 5 -- this
+                                 exact model fixed TUL-41 self-answering)
+temperature: 0                  needed: 0.3 (GATE 5 -- fixed TUL-34
+                                 improvised off-script follow-ups)
+tools: []                       needed: end_call system tool, or the
+                                 agent can't hang up after probe 10
+dynamic_variable_placeholders:  needed: consultant_name, client_name --
+  {}                            referenced throughout the prompt
+```
+
+**5-minute manual fix, needs ElevenLabs dashboard access:** Agent settings
+→ LLM: Claude Sonnet 4.5, Temperature: 0.3, add the `end_call` system
+tool, add the two dynamic variables. Correctly NOT reported as ready or
+tested against — gm flagged this rather than claiming false progress.
+This is now THE blocker on GATE 5 testing specifically (the one gate that
+was supposed to be testable without further operator action).
+
+**Operator deferred the fix (2026-10-09T10:23 UTC) — no rush, will do
+later. GATE 5's simulate-conversation eval is explicitly HELD until the
+fix lands** (testing against qwen/temp-0 now would validate the wrong
+model and wouldn't predict the real agent's behavior). Design, probes,
+and prompt content stay approved and don't wait on this.
+
+**Operator update, 2026-10-09T10:26 UTC — proceed to build/review/ship
+NOW on everything that doesn't need a live model call** (superseded
+below, kept for the record of how this was sequenced).
+
+**OPERATOR OVERRIDE, 2026-10-09T14:42 UTC — ship self-check live, skip
+the GATE 1-5 hold.** Operator, explicit: "Just put it live and we're
+gonna QA it ourselves." This replaces the gated-off instruction above —
+the operator is taking on the behavioral validation personally, not
+asking the fleet to hold for it. **Current instruction: finish the
+extraction code/wiring, land it through the normal review/ship pipeline,
+then wire the live entry point live once the code itself is reviewed and
+shipped — no gate-hold.** One requirement carried through: the PR itself
+must note plainly that the behavioral gates (1-5) are unvalidated against
+a real model/agent and the operator is QAing directly, so review/test
+know what they're actually gating is code correctness, not model
+behavior — don't let a clean review read as "the gates passed."
+```
+
+## 5. What's reusable vs. new
+
+```
+REUSABLE AS-IS:
+  ElevenLabs voice-call infrastructure (signed-URL minting, webhook
+    receipt pattern) -- same shape as the org-diagnostic's, new agent ID
+  FOCUS EVIDENCE's absence-is-affirmative-evidence invariant (PLAN §14,
+    production-proven on the org-diagnostic side)
+  self_check_reports table / migration 034 (already live) -- schema
+    doesn't change, only how `responses` gets populated
+  score.ts entirely -- orientedRating, facet means, band thresholds,
+    all four refusal gates -- genuinely unchanged
+
+NEW:
+  The voice-transcript extraction prompt (1-7 per item, item's own
+    polarity, modeled on thor-extract.ts's SHAPE but explicitly NOT its
+    decisiveness instruction)
+  GATES 1-4 as explicit acceptance tests on that new prompt
+  A new ElevenLabs agent + voice UI replacing the current Likert form
+```
+
+## What to tell the operator
+
+Architecture confirmed as already-built (extract→deterministic, matching
+the THOR precedent) — not new work, and `score.ts` (the most-tested code)
+doesn't change at all. The real new work is a voice-transcript extraction
+prompt, and it must NOT be modeled too literally on THOR's own extraction
+prompt (THOR's "be decisive" instruction would actively work against
+self-check's refusal gates). Four go/no-go gates on that new prompt, none
+needing a voice agent or API key to check computationally; the behavioural
+halves need a real model call. Self-check's structure independently
+corroborates the real 1987 source on four of six layers — only the final
+aggregation formula and (under voice) the ratings themselves are new.
+Provenance claim question is with the operator now, properly layered.
+Real build blocked on: a new ElevenLabs agent (dashboard access), an API
+key (same standing ask), and more production usage to validate against.
+
+## 6. Status check + dispatch (2026-10-16) — operator priority redirect, voice entry UI confirmed missing
+
+**Operator (via gm): "keep going with the buildout, get this working toward
+being a voice agent rather than 1-7 scoring."** This is now the priority;
+the separate dual-pass deterministic-scoring research track
+(`docs/PLAN_toddito-selfcheck-dual-pass-scoring.md`) is paused for timeline
+reasons, builder-3 reassigned here.
+
+**Confirmed directly against the synced repo (not assumed, not relayed):**
+
+- Backend is partly ready. `src/app/api/sessions/[id]/elevenlabs-config/route.ts`
+  already branches on `session.output_kind === "self_check"` and reads
+  `ELEVENLABS_AGENT_ID_SELF_CHECK` — this is shared plumbing with the main
+  interview's signed-URL mint, not new code. Leaving the var unset is the
+  documented off-switch (503/`configured:false`), gated on two preconditions
+  written beside it in `.env.production.example`: (1) the agent itself runs
+  Sonnet 4.5 / temp 0.3 / `end_call` / the CRITICAL ROLE RULE — **not yet
+  checked this session, verify via the ElevenLabs MCP before anyone sets the
+  var**; (2) the read-back copy branches on `ratings_source` — **this one is
+  landed** (`src/lib/self-check/provenance.ts` exists, per PR #26).
+- **The UI entry point does not exist.** `src/app/dashboard/self-check/[id]/page.tsx`
+  (306 lines, checked directly) has zero voice wiring — no
+  `useElevenLabsSession`, no call to `elevenlabs-config`, no start-call
+  affordance. `src/app/session/[id]/page.tsx` is the reference pattern gm
+  pointed at (confirmed via the operator's instinctai.io/lab/pulse pointer,
+  see the earlier message thread) — personal link, mobile-first voice call,
+  `useElevenLabsSession` hook, progress tracking not-started→in-progress→scored.
+- A self-check voice session is a `sessions`-table row with
+  `output_kind = "self_check"` (same table the main interview uses, not the
+  separate `self_check_reports` REST resource under `/api/self-check/[id]`,
+  which is the existing form-based flow) — worth confirming exactly how such
+  a row gets created today (if at all) before building the entry UI, since
+  that's the piece that would wire a self-check voice call to the
+  already-existing backend branch above.
+
+**Dispatched to builder-3**, who has the standing self-check focus boundary
+and the deepest context here: build the voice-call entry point into
+`src/app/dashboard/self-check/[id]/page.tsx`, mirroring
+`src/app/session/[id]/page.tsx`'s `useElevenLabsSession` pattern against a
+self-check-kind session rather than the org-diagnostic's. Building the UI
+does **not** require setting `ELEVENLABS_AGENT_ID_SELF_CHECK` yet — that's a
+separate ops action gated on precondition (1) above, not on this UI
+existing. Normal pace: plan → build → review → ship, same as the rest of
+this arc.
+
+**Pre-build answer (builder-3): no new creation route needed.**
+`POST /api/self-check {client_label}` already produces a voice-compatible
+row (`output_kind: 'self_check'`, `tier: 'lite'`, etc.) — `SelfCheckForm.tsx`
+is its only caller today, driving the form path. The entry UI's real job is
+smaller than assumed: take that existing `session_id` to a voice page
+instead of the question grid.
+
+**Decided (plan, 2026-10-16): drop `{{consultant_name}}` from the agent
+prompt, don't echo `display_name`.** builder-3 found the agent prompt
+references `{{consultant_name}}`, which nothing in `elevenlabs-config`'s
+dynamic-variable payload supplies (only `client_name` and five other fields
+are echoed). Two options: echo `display_name` (widens the SEC-03 bounded-PII-
+exposure surface by one field — the browser is the courier, not the
+consumer, per that route's existing reasoning) or drop the variable (zero
+security cost, interview reads fine without it). **Dropping it strictly
+dominates** — there's no scenario where adding a PII field for a cosmetic
+personalization touch is worth it. Not escalating; this is a standard
+security-conservative default, not a product-risk call. Apply when
+`agents_update` is unblocked (see below) — remove the `{{consultant_name}}`
+line from the prompt.
+
+**Open: does the `agents_update` body bug (reproduced by builder-3) also
+block the config fix I authorized earlier this session (llm/temperature/
+`end_call`/`speculative_turn`)?** Not yet confirmed either way — asked
+builder-3 directly rather than assuming the two calls share the same
+failure path.
+
+**PR #30 open (`45a9b1d`, `brollistika/toddito`) — the voice entry UI,
+smaller than the dispatch assumed.** Three pieces: `voice/[id]/page.tsx`
+(server-gated — 404 on a mismatched account or a non-`self_check` session;
+already-scored sessions redirect to the report rather than allowing a
+re-call, since the webhook upserts on `session_id` and a re-call would
+silently replace a report someone may have read); `SelfCheckVoiceCall.tsx`
+(reuses `useElevenLabsSession` unchanged; "Question N of 10" not a
+percentage, since a skipped probe isn't a failure and a bar would
+misrepresent that); `SelfCheckForm.start()` taking a destination so both
+entry buttons create the same row. `tsc` 0 / `vitest` 36 files, 288 + 2
+expected-fail / `next build` 0. Does not set
+`ELEVENLABS_AGENT_ID_SELF_CHECK` — intended pre-launch posture, still
+blocked on the `agents_update` bug regardless.
+
+**Test-g2 independently verified the two safety properties — and found
+they had zero existing test coverage.** `tsc`/`vitest`/`next build`
+matched builder-3's numbers, but a build log registering the route proves
+nothing about the guard logic inside it, and no `page.test.tsx` existed.
+Wrote a throwaway harness calling `SelfCheckVoicePage()` directly across 6
+scenarios (mismatched account, wrong `output_kind`, nonexistent session,
+already-scored, matched+unscored, no workspace account) — all passed.
+**Then checked the harness itself wasn't vacuous**: commented out the
+account/`output_kind` guard, reran, 3/6 failed as expected (including a
+null-session crash the guard was also preventing) — confirmed it catches
+real logic, not passing by construction. Deleted the throwaway file,
+restored `page.tsx`, worktree clean. Both safety properties now genuinely
+verified, not just asserted by the PR description.
+
+**Real security finding, flagged by builder-3, not resolved — escalating
+rather than deciding it myself, same as SEC-01/SEC-02 earlier this
+session.** `elevenlabs-config` is public by design for the org diagnostic
+(respondent arrives via an emailed secret-link UUID — UUID-as-bearer-token
+is the intended model there). Self-check's output is workspace-private, a
+different confidentiality bar, and PR #30's new UI is authenticated — but
+**the UI's auth only gates the new surface, not the route underneath it.**
+A self-check session's UUID still reaches the public `elevenlabs-config`
+route directly, bypassing both the new page's auth check AND its
+already-scored → redirect-to-report protection. Concretely: anyone who
+has or guesses a self-check session's UUID can mint a signed URL and start
+a voice call against it directly — and since the webhook upserts on
+`session_id`, that call's completion would **silently overwrite an existing
+report a consultant may have already read**, not just leak data. Shared
+plumbing with the org path, so narrowing it needs a SEC-06-style decision,
+not a fleet-internal call. Needs: gm/operator to decide whether this route
+needs session-id-scoped auth for the self-check branch specifically, or
+whether the UUID-as-bearer-token model is accepted as sufficient here too
+(same as the org diagnostic) given self-check UUIDs aren't distributed via
+a public channel the way org links sometimes are.
+
+**`agents_update` bug independently confirmed (plan, 2026-10-16) — real,
+not a malformed call on builder-3's part.** Fetched the agent directly
+(`agent_3101m4g20d5ce9tb0fmw7sfb65wa`, confirmed it's `Pulse Self-Check`,
+matches builder-3's numbers exactly: qwen, temp 0, empty `built_in_tools`,
+`created_at == updated_at`). Attempted both rejected paths myself:
+top-level `prompt` with the corrected (consultant-name-removed) text →
+`{"error": "Unexpected argument(s): prompt"}`; the `body` escape hatch with
+`llm`/`temperature`/`built_in_tools`/`speculative_turn` → `{"error":
+"Unexpected argument(s): body"}`. Both fields are declared in the tool's
+own schema and both are rejected by its implementation — a genuine
+schema/implementation mismatch in the MCP tool itself, confirmed by two
+independent callers now.
+
+**Untried lead for builder-3: `agents_create_draft`.** Structurally
+different tool — not `agents_update` — that takes a full
+`conversation_config` object (plus `platform_settings`, `workflow`,
+`name`, all required) rather than a patch. Not attempted: it requires
+reconstructing the agent's entire config (large, fetched via `agents_get`
+above) rather than a targeted patch, and no `agents_publish_version` tool
+surfaced in this session's loaded set — unclear whether a created draft
+needs a separate promotion step this session can't reach, or whether
+that's dashboard-only too. Handing to builder-3 rather than attempting the
+full reconstruction myself: higher value-density for them given their
+existing context, and a malformed hand-copied config is a worse outcome
+than leaving the agent alone.
+
+**Resolved by builder-3: the lead is real, but declining anyway — the step
+after the one I flagged as unclear is worse than reconstruction.**
+Proved `agents_create_draft`'s `body` reaches the real API with a free
+probe — sent only `name`, got ElevenLabs' own 422 validator (missing
+`conversation_config`/`platform_settings`/`workflow`), not the MCP's
+`"Unexpected argument(s)"` error, so nothing was created and the mismatch
+is now isolated specifically to `agents_update` (not a pattern across
+agent-mutation tools). But the promotion step isn't draft-then-publish —
+`agents_create_deployment` operates on **branches** and sets the **live
+traffic split** (replaces the whole split, percentages must total 100).
+So the real route is reconstruct → draft/branch → merge-or-deploy-a-
+traffic-split, and that last step is a materially bigger, differently-
+scoped action than "fix four config fields" — it would need its own
+authorization, not ride on the config-fix approval.
+
+**Declining, correctly:** reconstruction risk is asymmetric (known-bad,
+documented, gated-off beats an unknown-bad state from a malformed ~8KB
+hand-retyped write); the promotion step exceeds what plan/gm actually
+authorized; and the value is low right now since the five fixes are
+preconditions on an already-gated-off agent, not blockers on anything
+live. **De-risked version proposed for if this becomes urgent:**
+`agents_duplicate` the agent, reconstruct on the copy, verify by diffing
+against the original via `agents_get`, then point the env var at the
+corrected duplicate (or repeat on the original once verified) — never
+touches a traffic split, and the tooling for it is confirmed working
+rather than assumed. Not executed — not urgent, nothing blocking on it.
