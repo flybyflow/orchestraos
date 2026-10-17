@@ -839,3 +839,10 @@ This closes the dual-pass scoring arc's engineering work — remaining open
 items are the operator conversation (gm's, not this plan's) and the
 queued DOS-emulation side-quest (§6, still parked behind the voice-UI
 buildout).
+
+**Merge blocked on infrastructure, not PR #31 (2026-10-17).** `ship`
+confirmed the same network outage plan hit (no route to github.com), and
+separately found the `gh` keyring token for `flybyflow` is invalid —
+a second, independent blocker that will persist even once network
+returns. Not acting on the auth issue myself; `ship` will retry once
+both are resolved. PR #31 itself needs nothing further.
