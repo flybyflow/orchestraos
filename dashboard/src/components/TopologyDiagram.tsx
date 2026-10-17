@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { clsx } from 'clsx';
 import { StatusDot } from './StatusDot';
 import { TierBadge } from './TierBadge';
@@ -6,6 +6,9 @@ import { lineageDepthTier, describeLineage } from '../lib/generations';
 import type { PairCountRow } from '../lib/api';
 import { lineWidthPx, pairKey, shortAgo, partitionTopology } from '../lib/topologyLines';
 import { dotColor, type TrafficMessage } from '../lib/fleetTraffic';
+import { TopologyOverlay, RimNode, useNodePositions, type OverlayEdge, type ReplayFiredEvent } from './TopologyOverlay';
+import { externalEndpoints } from '../lib/rimNodes';
+import { selectCrossEdges, busiestDrawn, edgeLiveness, edgeDirection, filterExistedByAsof, trafficByAgent, nodeScaleTier, type NodeScaleTier } from '../lib/overlayGeometry';
 
 interface Agent {
   id: string;
@@ -52,6 +55,45 @@ interface TopologyDiagramProps {
    *  (spec §4). The page owns the poll-diff and the expiry; this component only draws what
    *  it is handed, so a dot can never appear without a real message behind it (spec §2). */
   dots?: TrafficMessage[];
+  /** Every agent id the fleet has ever known, retired rows included. Distinguishes "a
+   *  hidden agent" from "not an agent at all" — without it a retired seat like gm-g2
+   *  would be misclassified as an external endpoint and get a rim node of its own. */
+  allAgentIds?: string[];
+  /** Pairs with historic traffic but none in the window (API `dead_pairs`). Drawn
+   *  differently from quiet — see overlayGeometry.edgeLiveness. */
+  deadPairs?: PairCountRow[];
+  /** Layer visibility. Cross edges and the rim are independently toggleable from the
+   *  hierarchy, which always renders (spec: hierarchy is the skeleton). */
+  layers?: {
+    cross?: boolean; external?: boolean; counts?: boolean;
+    /** /field-named render layers (operator QA item 3) — see TopologyOverlay's props for
+     *  what each one gates. Absent 'orbs': see the Layers row comment in Agents.tsx. */
+    edges?: boolean; edgeGlows?: boolean; arrowSprites?: boolean; messageLabels?: boolean;
+    statusGlow?: boolean;
+  };
+  /** Cap on cross edges drawn, highest count first. null = show all. */
+  crossTopN?: number | null;
+  /** Per-node escalation / held-message counts, windowed. From lib/nodeAlerts. */
+  nodeAlerts?: Record<string, { escalate: number; held: number }>;
+  /** Per-edge escalation counts, keyed by pairKey. An escalation is a fact about the
+   *  CONVERSATION as well as the recipient, so the edge carries it too. */
+  edgeAlerts?: Record<string, { escalate: number }>;
+  /** The moment being viewed, when the time bar is scrubbed. Threaded in rather than
+   *  read from a clock, so edge liveness is judged against what was true THEN — an
+   *  edge whose only traffic is after this instant did not exist yet. */
+  asof?: string | null;
+  /** GROW mode. `null`/absent means normal: everything is present. A Set means the replay
+   *  is growing the chart, and ONLY these ids (agents) / pairKeys (edges) have been touched
+   *  by a replayed event so far; everything else is hidden until its first event lands.
+   *  Two sets rather than one derived from the other: an edge needs BOTH ends born, but a
+   *  node can be born by a spawn event with no edge at all, so neither implies the other. */
+  bornIds?: ReadonlySet<string> | null;
+  bornEdges?: ReadonlySet<string> | null;
+  /** Replay pulses and scrub trail, passed straight through to the overlay. This component
+   *  does not interpret them — it only knows which edges exist, and the overlay is the only
+   *  thing that knows where they are drawn. */
+  fired?: ReplayFiredEvent[];
+  trail?: { event: { from?: string; to?: string }; weight: number }[];
 }
 
 /** A box or a line is a real control when it has a handler and plain markup when it does not.
@@ -59,13 +101,22 @@ interface TopologyDiagramProps {
  *  would drift. `button` over `div onClick` so the graph is usable from a keyboard (spec §2
  *  says everything is clickable — that has to include people not using a mouse). */
 function Clickable({
-  onClick, title, className, children,
+  onClick, title, className, children, elRef, dataAgentId,
 }: {
   onClick?: () => void; title?: string; className: string; children: React.ReactNode;
+  /** Both shells forward the ref: the overlay has to measure a node whether or not
+   *  it happens to be interactive, or an unclickable box would have no position and
+   *  every edge touching it would silently vanish. */
+  elRef?: (el: HTMLElement | null) => void;
+  /** Scroll/focus target, forwarded on BOTH shells for the same reason as the ref:
+   *  "take me to this agent" must work whether or not the box happens to be clickable. */
+  dataAgentId?: string;
 }) {
-  if (!onClick) return <div title={title} className={className}>{children}</div>;
+  if (!onClick) {
+    return <div ref={elRef} data-agent-id={dataAgentId} title={title} className={className}>{children}</div>;
+  }
   return (
-    <button type="button" onClick={onClick} title={title}
+    <button type="button" ref={elRef} data-agent-id={dataAgentId} onClick={onClick} title={title}
       className={clsx(className, 'text-left focus:outline-none focus:ring-2 focus:ring-sky-500')}>
       {children}
     </button>
@@ -164,9 +215,52 @@ function isWorking(agent: Agent): boolean {
   return agent.status === 'working' && (agent.alive || agent.tmux_alive) === true;
 }
 
+// Node scaling by traffic (operator ask, /field: "busy agents bigger or brighter"). Full
+// literal class strings per tier, indexed 0..3 — NOT a template built from the tier number,
+// which Tailwind's JIT scanner cannot statically see and would silently purge from the build.
+// Size grows via padding/min-width only, never font-size: the name and tier badge must read
+// at exactly the same size at every tier (operator's own "keep legible" constraint).
+const NODE_SIZE_BY_TIER: readonly string[] = [
+  'px-3 py-2.5 min-w-[110px]',
+  'px-3.5 py-3 min-w-[122px]',
+  'px-4 py-3.5 min-w-[134px]',
+  'px-4.5 py-4 min-w-[148px]',
+];
+// "Brighter" modulates the SAME status-coloured glow's blur/opacity rather than adding a
+// second colour channel — a separate neutral glow would fight the status glow for the same
+// visual real estate and risk reading as a different signal.
+const WORKING_GLOW_BY_TIER: readonly string[] = [
+  'shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]',
+  'shadow-[0_0_16px_-2px_rgba(56,189,248,0.75)]',
+  'shadow-[0_0_20px_-1px_rgba(56,189,248,0.8)]',
+  'shadow-[0_0_26px_0px_rgba(56,189,248,0.85)]',
+];
+const DOWN_GLOW_BY_TIER: readonly string[] = [
+  'shadow-[0_0_10px_-3px_rgba(248,113,113,0.65)]',
+  'shadow-[0_0_14px_-2px_rgba(248,113,113,0.7)]',
+  'shadow-[0_0_18px_-1px_rgba(248,113,113,0.75)]',
+  'shadow-[0_0_24px_0px_rgba(248,113,113,0.8)]',
+];
+
 function AgentNode({
-  agent, onSelect, selected, dimmed,
-}: { agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean }) {
+  agent, onSelect, selected, dimmed, nodeRef, alerts, unborn, showStatusGlow = true, scaleTier = 0,
+}: {
+  agent: Agent; onSelect?: (id: string) => void; selected?: boolean; dimmed?: boolean;
+  /** Registers this box with the overlay's position tracker. */
+  nodeRef?: (el: HTMLElement | null) => void;
+  /** Escalations and held messages landing ON this agent, already windowed. */
+  alerts?: { escalate: number; held: number };
+  /** GROW mode. `undefined` outside growth; `true` = not yet revealed; `false` = revealed
+   *  during this growth run, which is what triggers the one-shot reveal flash. */
+  unborn?: boolean;
+  /** /field-named 'status' layer (operator QA item 3): the working/down glow, independent
+   *  of the status DOT and border colour below, which are information and stay regardless —
+   *  only the glow is decoration this layer hides. */
+  showStatusGlow?: boolean;
+  /** 0 (baseline) .. 3 (busiest node in view this window). lib/overlayGeometry.ts's
+   *  nodeScaleTier — relative to the busiest node actually drawn, not an absolute count. */
+  scaleTier?: NodeScaleTier;
+}) {
   const working = isWorking(agent);
   // A lineage reads as a STACK: sheets peeking out from under the card. The silhouette is the
   // one channel nothing else on this node claims — the dot is liveness, the border is status,
@@ -185,16 +279,48 @@ function AgentNode({
   const subtitle = working ? (agent.current_task || 'working').trim() : '';
   return (
     <Clickable
+      elRef={nodeRef}
+      // Same attribute the agent cards already carry, so "scroll to this agent" is one
+      // selector that works in either view rather than two that drift.
+      dataAgentId={agent.id}
       onClick={onSelect ? () => onSelect(agent.id) : undefined}
       className={clsx(
-        'relative flex flex-col items-center gap-1 rounded-lg border-2 bg-neutral-900 px-3 py-2.5 min-w-[110px] transition hover:bg-neutral-800',
-        working ? 'border-sky-400 shadow-[0_0_12px_-2px_rgba(56,189,248,0.7)]' : getNodeBorder(agent),
+        'relative flex flex-col items-center gap-1 rounded-lg border-2 bg-neutral-900 transition hover:bg-neutral-800',
+        // Node scaling by traffic (operator ask, /field): bigger, via padding/min-width
+        // only — see NODE_SIZE_BY_TIER's own comment for why never font-size.
+        NODE_SIZE_BY_TIER[scaleTier],
+        // Status GLOW, not just a dot (spec step 3). The dot stays — it is the thing
+        // that survives prefers-reduced-motion and a colourblind read — and the glow is
+        // an additional, redundant cue on the same fact. A down seat gets a red glow at
+        // lower intensity than a working seat's blue: down is a state to notice, working
+        // is a state that is changing, and the brighter one should be the live one.
+        // The BORDER colour is information (spec §2, must never be hidden) and always
+        // applies; only the shadow glow is the /field 'status' layer showStatusGlow gates.
+        working ? 'border-sky-400' : getNodeBorder(agent),
+        showStatusGlow && working && WORKING_GLOW_BY_TIER[scaleTier],
+        showStatusGlow && !working && !agent.alive && !agent.tmux_alive
+          && DOWN_GLOW_BY_TIER[scaleTier],
+        // An escalation landing here outranks both: it is the one state that is asking
+        // a human for something. Ring rather than border swap, so the status colour
+        // underneath is never destroyed (spec section 2).
+        (alerts?.escalate ?? 0) > 0 && 'ring-2 ring-red-500/70',
         // Selection reads as a ring, not a border swap: overwriting the border would throw
         // away the status colour, which is the one thing that must never be hidden (spec §2).
         selected && 'ring-2 ring-sky-300 ring-offset-2 ring-offset-neutral-900',
         // Fade, not hide: a down agent that is also unrelated to the selection still has to
         // stay on screen and still has to be red (spec §2, §7 — nothing important is hidden).
         dimmed && 'opacity-30',
+        // GROW: `invisible`, NOT conditional render and NOT `hidden`. Removing the box from
+        // the flex flow would reflow the whole tree every time a seat is revealed, which
+        // moves every other box, which invalidates every position the overlay measured —
+        // the edges would jump on every reveal. visibility:hidden keeps the geometry frozen
+        // so a reveal is a box fading in at the coordinates the overlay already knows.
+        unborn && 'invisible',
+        // unborn === false means GROW is running AND this seat has been revealed (outside
+        // growth the prop is undefined, not false). The class appears on the frame the seat
+        // arrives, so the one-shot animation in index.css fires exactly then and never
+        // again — no timer, no state, no effect.
+        unborn === false && 'grow-reveal',
         getNodeOpacity(agent)
       )}
       title={[
@@ -218,6 +344,18 @@ function AgentNode({
             )} />
           )}
         </>
+      )}
+      {/* Held-message badge. Top-LEFT, because the working pulse owns top-right and two
+          indicators on the same corner read as one smudge. Not aria-hidden: unlike the
+          pulse (which duplicates the border colour) this is the only place the count
+          appears, so hiding it from a screen reader would lose the fact entirely. */}
+      {(alerts?.held ?? 0) > 0 && (
+        <span
+          title={`${alerts!.held} held message${alerts!.held === 1 ? '' : 's'} waiting for ${agent.id}`}
+          className="absolute -top-1.5 -left-1.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-neutral-950 text-[10px] font-bold flex items-center justify-center"
+        >
+          {alerts!.held}
+        </span>
       )}
       {working && (
         <span
@@ -255,11 +393,20 @@ function AgentNode({
  *  `stubPx` is the length of the line above and below the label, so the caller keeps the
  *  spacing the tree already had instead of this component guessing at layout. */
 function Connection({
-  a, b, lookup, windowHours, onSelect, stubPx, dimmed, dots,
+  a, b, lookup, windowHours, onSelect, stubPx, dimmed, dots, labelRef, unborn,
 }: {
   a: string; b: string; lookup: PairLookup; windowHours: number;
   onSelect?: (a: string, b: string) => void; stubPx: number;
   dimmed?: boolean; dots?: TrafficMessage[];
+  /** GROW mode: no replayed event has touched this pair yet. */
+  unborn?: boolean;
+  /** Registers the count pill as a routing OBSTACLE.
+   *
+   *  builder-1 measured 12 of 12 cross edges overlapping something on the real page,
+   *  26 overlaps in total, and the single biggest cause was that these pills were
+   *  never obstacles at all — the router only ever saw AgentNode boxes. A perfect
+   *  routing algorithm cannot avoid a rectangle nobody told it about. */
+  labelRef?: (el: HTMLElement | null) => void;
 }) {
   const row = lookup.get(a, b);
   const count = row?.count ?? 0;
@@ -278,6 +425,7 @@ function Connection({
   // everyone). No onSelect and it degrades to plain text rather than a dead button.
   const label = onSelect ? (
     <button
+      ref={labelRef as ((el: HTMLButtonElement | null) => void) | undefined}
       type="button"
       onClick={() => onSelect(a, b)}
       title={tip}
@@ -292,6 +440,7 @@ function Connection({
     </button>
   ) : (
     <span
+      ref={labelRef as ((el: HTMLSpanElement | null) => void) | undefined}
       title={tip}
       className={clsx('text-[10px] bg-neutral-950 px-1.5 py-0.5 rounded z-10 relative',
         count ? 'text-neutral-400' : 'text-neutral-600')}
@@ -302,7 +451,11 @@ function Connection({
   return (
     // `relative` so a dot animates across the WHOLE connection, label included, rather than
     // across one half of it — over a 30px segment, half the travel reads as a flicker.
-    <div className={clsx('relative flex flex-col items-center gap-0', dimmed && 'opacity-30')}>
+    // `invisible` for the same reason AgentNode uses it: the count pill is a registered
+    // routing obstacle, so removing it from the flow during GROW would change every route
+    // mid-replay. Hidden but still occupying its box keeps the geometry identical.
+    <div className={clsx('relative flex flex-col items-center gap-0', dimmed && 'opacity-30',
+      unborn && 'invisible')}>
       {line}
       {label}
       {line}
@@ -323,7 +476,24 @@ function Connection({
 export function TopologyDiagram({
   agents, pairs, windowHours = 24, onSelectConnection, onSelectAgent, selectedAgentId,
   onClearSelection, dots, brightIds,
+  allAgentIds, deadPairs, layers, crossTopN = 12, nodeAlerts, edgeAlerts, asof = null,
+  bornIds = null, bornEdges = null, fired, trail,
 }: TopologyDiagramProps) {
+  // GROW predicates. Both collapse to `false` when the sets are absent, so every call site
+  // below is a no-op outside growth rather than a branch each one has to remember.
+  // undefined outside growth, so a call site can tell "not growing" from "growing and this
+  // one has arrived" — the second is what earns the reveal flash, the first must be silent.
+  const unbornNode = (id: string) => (bornIds == null ? undefined : !bornIds.has(id));
+  const unbornEdge = (a: string, b: string) => (bornEdges == null ? undefined : !bornEdges.has(pairKey(a, b)));
+  const containerRef = useRef<HTMLDivElement>(null);
+  const { positions, register, size: overlaySize } = useNodePositions(containerRef);
+  const showCross = layers?.cross ?? true;
+  const showExternal = layers?.external ?? true;
+  const showEdges = layers?.edges ?? true;
+  const showEdgeGlows = layers?.edgeGlows ?? true;
+  const showArrowSprites = layers?.arrowSprites ?? true;
+  const showMessageLabels = layers?.messageLabels ?? true;
+  const showStatusGlow = layers?.statusGlow ?? true;
   // Partition first: the set of lines the tree will draw is what the thickness denominator has
   // to be computed from, so it cannot wait until render. partitionTopology computes `rest` by
   // SUBTRACTION — whatever the tree does not claim is still rendered — because the previous
@@ -348,6 +518,14 @@ export function TopologyDiagram({
   }, [agents]);
   const { root: gm, leads: pms, workersByLead: workersByParent, rest: orphanAgents } = partition;
 
+  // GROW cosmetics (operator QA item 4): the gm->PM trunk and the PM-row bus bar are
+  // structural connectors, not tied to any one pair, so unbornEdge (which only knows
+  // about specific (a, b) pairs) never gated them — they used to draw immediately at
+  // t=0, before a single lead was born, implying a structure that GROW had not revealed
+  // yet. Same `invisible`-not-unmounted treatment every other GROW-gated element uses
+  // (geometry stays frozen so nothing reflows when a lead is finally revealed).
+  const leadRowBorn = bornIds == null || pms.some((pm) => bornIds.has(pm.id));
+
   const lookup = usePairLookup(pairs, drawnKeys);
   const selectionBright = useBrightSet(selectedAgentId, pairs);
   // An explicit highlight wins over the selection-derived set: the two are different questions
@@ -358,6 +536,110 @@ export function TopologyDiagram({
     [brightIds, selectionBright],
   );
   const dotsByPair = useDotsByPair(dots);
+  // Node scaling by traffic (operator ask, /field: "busy agents bigger or brighter").
+  // RELATIVE to the busiest node actually in view this window, same reasoning as
+  // busiestDrawn() for edge thickness just above — an absolute threshold would leave every
+  // node maxed-out on a busy fleet or flat on a quiet one.
+  const scaleTierByAgent = useMemo(() => {
+    const traffic = trafficByAgent(pairs ?? []);
+    const maxTraffic = Math.max(0, ...traffic.values());
+    const tiers = new Map<string, NodeScaleTier>();
+    for (const [id, count] of traffic) tiers.set(id, nodeScaleTier(count, maxTraffic));
+    return tiers;
+  }, [pairs]);
+  // External endpoints: things with traffic that are not agents. `allAgentIds` is the
+  // FULL registry so a retired seat reads as a hidden agent rather than a new external
+  // endpoint; the visible list is what the tree actually drew.
+  const rim = useMemo(() => {
+    if (!showExternal) return { endpoints: [], dropped: [] };
+    const visible = agents.map((a) => a.id);
+    return externalEndpoints(pairs ?? [], allAgentIds ?? visible, visible);
+  }, [pairs, agents, allAgentIds, showExternal]);
+
+  // The VIEWED moment. While the time bar is scrubbed this is asof, not the wall clock —
+  // otherwise an edge whose only traffic is after the scrubbed moment gets described as
+  // "quiet", which is a claim about a conversation that had not happened yet. Computed
+  // once, ahead of crossSelection, because the existed-by-asof filter below needs it too.
+  const viewedNow = useMemo(() => {
+    const parsed = asof ? Date.parse(asof) : Date.now();
+    return Number.isFinite(parsed) ? parsed : Date.now();
+  }, [asof]);
+
+  // Cross edges: every pair with traffic that the hierarchy tree does not already draw.
+  // Dead pairs ride the same path so they are routed and hit-tested identically —
+  // the only difference is how they are stroked.
+  //
+  // Existed-by-asof filtering happens HERE, before the top-N cap, not after (operator live
+  // QA, 2026-09-30). It used to run after: selectCrossEdges capped the busiest N pairs by
+  // their CURRENT/all-time count, with no notion of the scrubbed moment, and only then did
+  // the caller drop the ones that turned out not to have existed yet. A pair with heavy
+  // traffic TODAY but none yet at a scrubbed Sep 25 could easily be in the top 12 by count
+  // and then get discarded as absent — spending a cap slot on a pair that was never a real
+  // candidate, and bumping out a pair that genuinely existed at that moment. Scrubbed to
+  // Sep 25: top-12 drew 2 edges, uncapped drew 6, at least 15 real existed-by-asof pairs
+  // were dropped. Filtering first means the cap only ever competes among pairs that could
+  // actually be drawn.
+  const crossSelection = useMemo(() => {
+    if (!showCross) return null;
+    const rows = filterExistedByAsof(
+      [...(pairs ?? []), ...(deadPairs ?? [])], viewedNow, windowHours * 3600_000,
+    );
+    const positioned = new Set(positions.keys());
+    return selectCrossEdges(rows, positioned, drawnKeys, pairKey, crossTopN);
+  }, [pairs, deadPairs, positions, drawnKeys, crossTopN, showCross, viewedNow, windowHours]);
+
+  const overlayEdges: OverlayEdge[] = useMemo(() => {
+    if (!crossSelection) return [];
+    const denom = busiestDrawn(crossSelection.drawn, lookup.busiest);
+    // flatMap rather than map().filter(): dropping the absent case here narrows
+    // `liveness` for the compiler as a side effect of the early return, instead of
+    // needing a type predicate to re-assert something the filter already guaranteed.
+    return crossSelection.drawn.flatMap((p): OverlayEdge[] => {
+      const byType = p.by_type ?? {};
+      const top = Object.entries(byType).sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+      const lastAt = p.last_at ? Date.parse(p.last_at) : null;
+      const liveness = edgeLiveness(
+        p.count, Number.isNaN(lastAt as number) ? null : lastAt, viewedNow, windowHours * 3600_000,
+      );
+      // Belt and braces: crossSelection's rows are already filtered to existed-by-asof
+      // pairs above, so this should never fire now — kept as the second check rather than
+      // trusted away, the same reason the missing-position guard a few lines down in
+      // TopologyOverlay is kept even though selectCrossEdges already filters unpositioned
+      // pairs out.
+      if (liveness === 'absent') return [];
+      return [{
+        a: p.a, b: p.b, count: p.count, type: top, byType,
+        direction: edgeDirection(p.a_to_b ?? 0, p.b_to_a ?? 0),
+        liveness,
+        widthPx: lineWidthPx(p.count, denom),
+        // Same rule hierarchy lines use: an edge stays bright only if the selected
+        // agent is one of its two ends.
+        dimmed: bright !== null && p.a !== selectedAgentId && p.b !== selectedAgentId,
+        // An escalation on this pair overrides the type colour. Type tells you WHAT
+        // the traffic was; an escalation tells you something needs a human, and that
+        // is the more urgent fact for a glance across the whole graph.
+        escalate: edgeAlerts?.[pairKey(p.a, p.b)]?.escalate ?? 0,
+      }];
+    });
+  }, [crossSelection, lookup.busiest, windowHours, bright, selectedAgentId, viewedNow]);
+
+  // GROW: a cross edge is drawn only once a replayed event has touched it. Filtered AFTER
+  // the memo, not inside it, so widthPx keeps the live `denom` — a growing chart whose
+  // surviving lines rescaled on every reveal would read as traffic changing when only
+  // visibility did. Unlike the DOM nodes this needs no invisible-box trick: SVG paths are
+  // absolutely positioned, so removing one moves nothing.
+  const drawnOverlayEdges = bornEdges == null
+    ? overlayEdges
+    : overlayEdges.filter((e) => bornEdges.has(pairKey(e.a, e.b)));
+
+  // Same GROW gate as drawnOverlayEdges above, applied to the hierarchy skeleton: a hierarchy
+  // connector that has not been revealed yet is `invisible` (unbornEdge, below), so a pulse
+  // must not ride it either — a travelling dot on a line that is not there yet is the same
+  // "spoil the reveal" bug the cross-edge gate already exists to prevent.
+  const hierarchyPairsForOverlay = bornEdges == null
+    ? drawnKeys
+    : new Set([...drawnKeys].filter((k) => bornEdges.has(k)));
+
   const isDim = (id: string) => bright !== null && !bright.has(id);
   // A line stays bright only if the selected agent is one of its two ends.
   const lineDim = (a: string, b: string) =>
@@ -368,37 +650,91 @@ export function TopologyDiagram({
     // click that bubbled up from a node or a line does not immediately undo the selection
     // it just made — without that check, selecting anything is impossible.
     <div
-      className="flex flex-col items-center gap-0 py-6 overflow-x-auto"
+      ref={containerRef}
+      // `relative` is what the absolutely-positioned overlay measures against — every
+      // node box is converted into coordinates local to THIS element.
+      className="relative flex flex-col items-center gap-0 py-6 overflow-x-auto"
       onClick={(e) => { if (onClearSelection && e.target === e.currentTarget) onClearSelection(); }}
     >
+      {/* Edges first in document order so node boxes paint OVER them: an opaque
+          bg-neutral-900 node then covers any line passing near it, which is the
+          cheap half of "no lines through boxes" (routeEdge does the real half).
+          No double-render of nodes, one fewer thing to keep in sync.
+          Unconditional now, not gated on drawnOverlayEdges.length: the hierarchy skeleton
+          (drawnKeys, passed below) always has pairs to route pulses for even when there is
+          not a single CROSS edge on screen — gating on cross-edge count is what silently
+          dropped every hierarchy-pair pulse before (build QA: 49% of replayed events, every
+          hierarchy one). An empty overlay with no edges and no pulses costs one <svg><defs>. */}
+      <TopologyOverlay
+        width={overlaySize.w}
+        height={overlaySize.h}
+        edges={drawnOverlayEdges}
+        fired={fired}
+        trail={trail}
+        positions={positions}
+        windowHours={windowHours}
+        onSelectConnection={onSelectConnection}
+        hierarchyPairs={hierarchyPairsForOverlay}
+        showEdges={showEdges}
+        showEdgeGlows={showEdgeGlows}
+        showArrowSprites={showArrowSprites}
+        showMessageLabels={showMessageLabels}
+      />
       {/* T0: GM */}
       {gm && (
         <>
-          <AgentNode agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} />
+          <AgentNode nodeRef={register(gm.id)} alerts={nodeAlerts?.[gm.id]} agent={gm} onSelect={onSelectAgent} selected={selectedAgentId === gm.id} dimmed={isDim(gm.id)} unborn={unbornNode(gm.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(gm.id) ?? 0} />
           {/* Trunk down to the PM bar. Deliberately unlabelled: this is a bus, not a pair,
               and the "hub-spoke" string it replaces described the shape rather than the
               traffic. The real gm<->pm counts sit on each PM's own segment below. */}
-          <div className="w-px h-12 bg-neutral-700" />
+          <div className={clsx('w-px h-12 bg-neutral-700', !leadRowBorn && 'invisible')} />
         </>
       )}
 
       {/* T1: PMs row */}
       {pms.length > 0 && (
         <>
-          {/* Horizontal connector */}
-          <div className="relative flex items-start justify-center">
-            {/* Horizontal line spanning all PMs */}
-            {pms.length > 1 && (
-              <div
-                className="absolute top-0 h-px bg-neutral-700"
-                style={{
-                  left: `calc(50% - ${(pms.length - 1) * 80}px)`,
-                  width: `${(pms.length - 1) * 160}px`,
-                }}
-              />
-            )}
+          {/* The bus line over the lead row.
+              It used to be pure arithmetic — left: calc(50% - (n-1)*80px), width:
+              (n-1)*160px — which assumes every lead sits exactly 160px from the next.
+              Nothing enforces that, so the bar pointed at coordinates the leads were
+              not at, and the moment the row wrapped it was describing a layout that no
+              longer existed. Measured from the real lead boxes instead: first centre to
+              last centre, in the same overlay-local space the edges already use.
+              Falls back to the old arithmetic only before the first measurement. */}
+          <div className="relative flex items-start justify-center w-full">
+            {pms.length > 1 && (() => {
+              const first = positions.get(pms[0].id);
+              const last = positions.get(pms[pms.length - 1].id);
+              const container = containerRef.current;
+              if (first && last && container) {
+                return (
+                  <div
+                    className={clsx('absolute top-0 h-px bg-neutral-700', !leadRowBorn && 'invisible')}
+                    style={{ left: `${first.cx}px`, width: `${Math.max(0, last.cx - first.cx)}px` }}
+                  />
+                );
+              }
+              return (
+                <div
+                  className={clsx('absolute top-0 h-px bg-neutral-700', !leadRowBorn && 'invisible')}
+                  style={{
+                    left: `calc(50% - ${(pms.length - 1) * 80}px)`,
+                    width: `${(pms.length - 1) * 160}px`,
+                  }}
+                />
+              );
+            })()}
           </div>
-          <div className="flex items-start gap-8 flex-wrap justify-center">
+          {/* NO flex-wrap. Wrapping put `review` on a second row under `think` while its
+              stub still pointed up at a bus bar that was no longer above it, and left
+              `think` and `test` hanging off connectors that reached nothing — which is
+              what the operator meant by the hierarchy being off. The container is
+              already overflow-x-auto, so a fleet too wide to fit now scrolls, which
+              keeps every connector pointing at the thing it connects to. Scrolling is
+              honest about running out of room; wrapping silently lies about structure.
+              min-w-max stops the row being squashed instead of scrolling. */}
+          <div className="flex items-start gap-8 justify-center min-w-max">
             {pms.map((pm) => {
               const pmWorkers = workersByParent[pm.id] || [];
               return (
@@ -406,28 +742,40 @@ export function TopologyDiagram({
                   {/* The gm<->pm line itself: count, thickness and click all live here. */}
                   {gm && (
                     <Connection
+                      labelRef={register(`label:${pairKey(gm.id, pm.id)}`)}
                       a={gm.id} b={pm.id} lookup={lookup} windowHours={windowHours}
                       onSelect={onSelectConnection} stubPx={18}
                       dimmed={lineDim(gm.id, pm.id)}
                       dots={dotsByPair.get(pairKey(gm.id, pm.id))}
+                      unborn={unbornEdge(gm.id, pm.id)}
                     />
                   )}
-                  <AgentNode agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} />
+                  <AgentNode nodeRef={register(pm.id)} alerts={nodeAlerts?.[pm.id]} agent={pm} onSelect={onSelectAgent} selected={selectedAgentId === pm.id} dimmed={isDim(pm.id)} unborn={unbornNode(pm.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(pm.id) ?? 0} />
 
                   {/* Workers under this PM. Each worker gets its OWN line to the PM rather
                       than sharing one "mesh" label for the group — a per-pair count is the
-                      whole point, and one label for six workers can't carry six numbers. */}
+                      whole point, and one label for six workers can't carry six numbers.
+                      NO flex-wrap here either, same reason as the lead row above: a wrapped
+                      worker (operator-reported — `think` wrapped under `brain`/`bshr`) keeps
+                      its Connection stub pointing straight up at wherever the PM WOULD be if
+                      this were still a single row, which after a wrap is empty space, not the
+                      PM. The old max-w-xs (320px) is exactly what forced the wrap for any PM
+                      with more than ~3 workers. min-w-max plus the page's own overflow-x-auto
+                      (line ~575) makes a wide worker row scroll instead of wrapping, the same
+                      trade the lead row already made. */}
                   {pmWorkers.length > 0 && (
-                    <div className="flex items-start gap-3 flex-wrap justify-center max-w-xs">
+                    <div className="flex items-start gap-3 justify-center min-w-max">
                       {pmWorkers.map((w) => (
                         <div key={w.id} className="flex flex-col items-center gap-0">
                           <Connection
+                            labelRef={register(`label:${pairKey(pm.id, w.id)}`)}
                             a={pm.id} b={w.id} lookup={lookup} windowHours={windowHours}
                             onSelect={onSelectConnection} stubPx={14}
                             dimmed={lineDim(pm.id, w.id)}
                             dots={dotsByPair.get(pairKey(pm.id, w.id))}
+                            unborn={unbornEdge(pm.id, w.id)}
                           />
-                          <AgentNode agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+                          <AgentNode nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(w.id) ?? 0} />
                         </div>
                       ))}
                     </div>
@@ -445,7 +793,43 @@ export function TopologyDiagram({
           <p className="text-xs text-neutral-600 text-center mb-3">Not in the tree ({orphanAgents.length})</p>
           <div className="flex items-start gap-3 flex-wrap justify-center">
             {orphanAgents.map((w) => (
-              <AgentNode key={w.id} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} />
+              <AgentNode key={w.id} nodeRef={register(w.id)} alerts={nodeAlerts?.[w.id]} agent={w} onSelect={onSelectAgent} selected={selectedAgentId === w.id} dimmed={isDim(w.id)} unborn={unbornNode(w.id)} showStatusGlow={showStatusGlow} scaleTier={scaleTierByAgent.get(w.id) ?? 0} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* External endpoints on the rim. These have real traffic and no node, so before
+          this they were invisible AND their busiest pair (gm<->telegram, the largest in
+          the whole dataset) was unreachable. Dashed border and no status dot: they are
+          not agents and must not be mistaken for one. */}
+      {rim.endpoints.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-neutral-800 w-full">
+          <p className="text-xs text-neutral-600 text-center mb-3">
+            External ({rim.endpoints.length})
+            {rim.dropped.length > 0 && (
+              // Say what is NOT drawn rather than leaving a silent gap. Today this is
+              // exactly one pair: an endpoint whose other end is a retired seat the
+              // fleet view hides on purpose, so the edge has nowhere to land.
+              <span
+                className="text-neutral-700"
+                title={rim.dropped.map((d) => `${d.a} ⇄ ${d.b} (${d.count}) — ${d.hiddenId} is retired and not drawn`).join('\n')}
+              >
+                {' · '}{rim.dropped.length} not drawn
+              </span>
+            )}
+          </p>
+          <div className="flex items-start gap-3 flex-wrap justify-center">
+            {rim.endpoints.map((e) => (
+              <RimNode
+                key={e.id}
+                id={e.id}
+                count={e.count}
+                nodeRef={register(e.id)}
+                onSelect={onSelectAgent}
+                dimmed={isDim(e.id)}
+                unborn={unbornNode(e.id)}
+              />
             ))}
           </div>
         </div>

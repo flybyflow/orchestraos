@@ -18,14 +18,47 @@ import { mkdtempSync, mkdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import Database from 'better-sqlite3';
-import { pairCounts, pairMessages, parseAsof } from './messages.js';
+import { pairCounts, deadPairs, pairMessages, parseAsof, oldestMessageAt, alertMessages } from './messages.js';
 
 function hoursAgo(h: number): string {
   return new Date(Date.now() - h * 3600_000).toISOString();
 }
 
 /** Fixture: gm<->build 3 rows in-window + 1 row 40 days old, gm<->plan 1, one self-send,
- *  one archived row, and one row written in the column's DEFAULT format (no 'T', no offset). */
+ *  one archived row, one row written in the column's DEFAULT format (no 'T', no offset),
+ *  and gm<->ship with ONLY a 40-day-old row (a real pair, zero traffic in a 24h window —
+ *  the dead-link case). gm<->build's in-window rows are deliberately mixed type (task,
+ *  reply, task) so the same fixture also exercises the by_type breakdown without a second db.
+ *  Direction fixtures: plan<->test is majority one-way (4 plan->test, 1 test->plan);
+ *  brain<->think is exactly even (2 each way — a real "must not get a direction" case);
+ *  bshr<->ship is a single message (one side 1, the other 0). */
+/**
+ * Alert fixture, deliberately SEPARATE from makeDb(). makeDb is shared and several
+ * tests assert exact counts and sums against it — adding escalations there would
+ * silently change other people's expected numbers, which is how a shared fixture
+ * becomes a source of spooky failures. Cheaper to build a second one.
+ */
+function makeAlertDb(): string {
+  const data = mkdtempSync(join(tmpdir(), 'orch-alerts-'));
+  mkdirSync(join(data, 'state'));
+  const db = new Database(join(data, 'state', 'tasks.db'));
+  db.exec(`create table messages (id text primary key, conversation_id text, from_agent text,
+           to_agent text, type text, subject text, body text, priority text, status text,
+           created_at text, delivered_at text, acknowledged_at text, archived_at text)`);
+  const ins = db.prepare(`insert into messages
+    (id,from_agent,to_agent,type,subject,body,priority,status,created_at,archived_at)
+    values (?,?,?,?,?,?,'high','pending',?,?)`);
+  ins.run('a1', 'review', 'build', 'escalate', 's', 'b', hoursAgo(2), null);
+  ins.run('a2', 'build', 'gm', 'escalate', 's', 'b', hoursAgo(3), null);
+  ins.run('a3', 'gm', 'reflect', 'held_message', 's', 'b', hoursAgo(4), null);
+  ins.run('a4', 'review', 'build', 'escalate', 's', 'b', hoursAgo(24 * 30), null); // outside 24h
+  ins.run('a5', 'gm', 'build', 'reply', 's', 'b', hoursAgo(1), null);              // not an alert
+  ins.run('a6', 'gm', 'gm', 'escalate', 'self', 'b', hoursAgo(1), null);           // self-send
+  ins.run('a7', 'ea', 'gm', 'escalate', 's', 'b', hoursAgo(1), hoursAgo(0.5));     // archived
+  db.close();
+  return data;
+}
+
 function makeDb(): string {
   const data = mkdtempSync(join(tmpdir(), 'orch-pairs-'));
   mkdirSync(join(data, 'state'));
@@ -47,6 +80,19 @@ function makeDb(): string {
   // Lexicographically this sorts BEFORE every ISO row; julianday() places it correctly.
   ins.run('m8', 'gm', 'review', 'task', 'default-fmt', 'b8',
     new Date(Date.now() - 2 * 3600_000).toISOString().replace('T', ' ').replace(/\..*$/, ''), null);
+  ins.run('m9', 'gm', 'ship', 'task', 'long-dead', 'b9', hoursAgo(24 * 40), null); // dead: real pair, zero in-window traffic
+  ins.run('m10', 'gm', 'test', 'task', 'archived-only', 'b10', hoursAgo(24 * 40), hoursAgo(24 * 39)); // archived AND outside the window — not a real pair at all
+  // Direction fixtures.
+  ins.run('m11', 'plan', 'test', 'task', 'd1', 'x', hoursAgo(4), null);
+  ins.run('m12', 'plan', 'test', 'task', 'd2', 'x', hoursAgo(3.5), null);
+  ins.run('m13', 'plan', 'test', 'task', 'd3', 'x', hoursAgo(3), null);
+  ins.run('m14', 'plan', 'test', 'task', 'd4', 'x', hoursAgo(2.5), null);
+  ins.run('m15', 'test', 'plan', 'reply', 'd5', 'x', hoursAgo(2), null); // 4 plan->test, 1 test->plan
+  ins.run('m16', 'brain', 'think', 'task', 'e1', 'x', hoursAgo(4), null);
+  ins.run('m17', 'brain', 'think', 'task', 'e2', 'x', hoursAgo(3), null);
+  ins.run('m18', 'think', 'brain', 'reply', 'e3', 'x', hoursAgo(2), null);
+  ins.run('m19', 'think', 'brain', 'reply', 'e4', 'x', hoursAgo(1), null); // exactly even: 2 and 2
+  ins.run('m20', 'bshr', 'ship', 'task', 'single', 'x', hoursAgo(1), null); // single message: one side 1, other 0
   db.close();
   return data;
 }
@@ -77,6 +123,139 @@ test('pairCounts collapses both directions, honours the window, drops self-sends
   assert.equal(wide.get('build|gm')?.count, 4);
 
   assert.deepEqual(pairCounts(join(data, 'nowhere'), 24), []);  // no db = empty, never throws
+});
+
+test('by_type breaks down per pair and always sums to the existing total', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const byPair = new Map(rows.map((r) => [`${r.a}|${r.b}`, r]));
+
+  // m1 (task) + m2 (reply) + m3 (task) = build|gm, mixed types.
+  const buildGm = byPair.get('build|gm');
+  assert.ok(buildGm, 'build|gm must be present, or this proves nothing');
+  assert.deepEqual(buildGm.by_type, { task: 2, reply: 1 });
+  assert.equal(buildGm.by_type.task + buildGm.by_type.reply,
+    buildGm.count, 'the cheap invariant: breakdown sums to the total');
+
+  // A single-type pair still gets a breakdown, just with one key.
+  assert.deepEqual(byPair.get('gm|plan')?.by_type, { task: 1 });
+
+  // The sum invariant holds for every row, not just the one hand-picked above.
+  for (const r of rows) {
+    const sum = Object.values(r.by_type).reduce((a, b) => a + b, 0);
+    assert.equal(sum, r.count, `by_type for ${r.a}|${r.b} sums to ${sum}, not count ${r.count}`);
+  }
+});
+
+test('a_to_b + b_to_a always sums to count, for every row', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  assert.ok(rows.length > 0, 'fixture must return rows, or this proves nothing');
+  for (const r of rows) {
+    assert.equal(r.a_to_b + r.b_to_a, r.count,
+      `${r.a}|${r.b}: a_to_b ${r.a_to_b} + b_to_a ${r.b_to_a} != count ${r.count}`);
+  }
+});
+
+test('a one-way pair reports the traffic on the CORRECT side, not just that they differ', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const planTest = new Map(rows.map((r) => [`${r.a}|${r.b}`, r])).get('plan|test');
+  assert.ok(planTest, 'plan|test must be present');
+  // a='plan', b='test'. 4 rows plan->test (a_to_b), 1 row test->plan (b_to_a). Asserting the
+  // SPECIFIC side, not just inequality — a/b inversion is the obvious bug here and a
+  // differ-only assertion ("a_to_b !== b_to_a") cannot see the ends swapped.
+  assert.equal(planTest.a_to_b, 4, 'a_to_b must be the plan->test count, not test->plan');
+  assert.equal(planTest.b_to_a, 1, 'b_to_a must be the test->plan count, not plan->test');
+});
+
+test('an exactly even pair returns equal a_to_b/b_to_a — must not get a direction', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const brainThink = new Map(rows.map((r) => [`${r.a}|${r.b}`, r])).get('brain|think');
+  assert.ok(brainThink, 'brain|think must be present');
+  assert.equal(brainThink.a_to_b, 2);
+  assert.equal(brainThink.b_to_a, 2);
+  assert.equal(brainThink.a_to_b, brainThink.b_to_a, 'a genuinely even split must report as equal, not a coin flip');
+});
+
+test('a single-message pair: one side is 1, the other is 0', () => {
+  const data = makeDb();
+  const rows = pairCounts(data, 24);
+  const bshrShip = new Map(rows.map((r) => [`${r.a}|${r.b}`, r])).get('bshr|ship');
+  assert.ok(bshrShip, 'bshr|ship must be present');
+  // a='bshr', b='ship'; the single row is bshr->ship, i.e. a_to_b.
+  assert.equal(bshrShip.a_to_b, 1);
+  assert.equal(bshrShip.b_to_a, 0);
+});
+
+test('deadPairs rows: a_to_b and b_to_a are both 0, no divide-by-anything, no crash', () => {
+  const data = makeDb();
+  const dead = deadPairs(data, 24);
+  assert.ok(dead.length > 0, 'fixture must return dead pairs, or this proves nothing');
+  for (const r of dead) {
+    assert.equal(r.a_to_b, 0, `${r.a}|${r.b}: a dead pair must report a_to_b 0`);
+    assert.equal(r.b_to_a, 0, `${r.a}|${r.b}: a dead pair must report b_to_a 0`);
+  }
+});
+
+test('deadPairs: a pair with traffic only outside the window comes back with count 0 and a real (all-time) last_at', () => {
+  const data = makeDb();
+  const dead = deadPairs(data, 24);
+  const byPair = new Map(dead.map((r) => [`${r.a}|${r.b}`, r]));
+
+  const ship = byPair.get('gm|ship');
+  assert.ok(ship, 'gm<->ship has real (40-day-old) traffic and zero in-window traffic — must be reported dead');
+  assert.equal(ship?.count, 0);
+  // last_at is the row's actual timestamp (~40 days ago), NOT null and NOT a windowed value —
+  // this is the field that lets the client render DEAD differently from QUIET.
+  assert.ok(ship?.last_at, 'last_at must be a real timestamp, not null');
+  assert.ok(Date.now() - new Date(String(ship?.last_at)).getTime() > 39 * 86_400_000,
+    'last_at must be the ALL-TIME last message, not clipped to the window');
+
+  // A pair whose ONLY row is archived is not a real pair at all — must not appear as "dead".
+  assert.equal(byPair.get('gm|test'), undefined, 'archived-only traffic must not be reported as a dead pair');
+
+  // A pair with in-window traffic is a live pair, not a dead one — must not appear here too.
+  assert.equal(byPair.get('build|gm'), undefined, 'a pair with in-window traffic is not dead');
+});
+
+test('a pair with traffic inside the window is unaffected by the by_type/dead_pairs changes', () => {
+  const data = makeDb();
+  // Same assertion the original suite made before this change — count must be identical.
+  const rows = pairCounts(data, 24);
+  const byPair = new Map(rows.map((r) => [`${r.a}|${r.b}`, r]));
+  assert.equal(byPair.get('build|gm')?.count, 3);
+  assert.equal(byPair.get('gm|plan')?.count, 1);
+});
+
+test('activeConnections-style consumers do not see dead links as active', () => {
+  const data = makeDb();
+  const live = pairCounts(data, 24);
+  const dead = deadPairs(data, 24);
+
+  // The in-window row count/length — what an "N connections active" consumer reads — is
+  // unaffected by dead_pairs existing at all: they are a SEPARATE array, never merged in.
+  const liveIds = new Set(live.map((r) => `${r.a}|${r.b}`));
+  const deadIds = new Set(dead.map((r) => `${r.a}|${r.b}`));
+  for (const id of deadIds) {
+    assert.ok(!liveIds.has(id), `${id} is in both pairCounts() and deadPairs() — it would double-count as active`);
+  }
+  // Concretely: gm<->ship is dead and must not inflate the live/active pair count.
+  assert.ok(!live.some((r) => `${r.a}|${r.b}` === 'gm|ship'));
+  assert.ok(dead.some((r) => `${r.a}|${r.b}` === 'gm|ship'));
+});
+
+test('archived_at is null is respected on both pairCounts and deadPairs', () => {
+  const data = makeDb();
+  // m7 (gm<->build, archived) must not inflate the live count above the 3 real in-window rows.
+  const live = pairCounts(data, 24);
+  assert.equal(new Map(live.map((r) => [`${r.a}|${r.b}`, r])).get('build|gm')?.count, 3);
+
+  // m10 (gm<->test) is archived AND its only row is outside the window — archived_at excludes
+  // it from consideration entirely, so it must not show up as a dead pair either.
+  const dead = deadPairs(data, 24);
+  assert.equal(new Map(dead.map((r) => [`${r.a}|${r.b}`, r])).get('gm|test'), undefined);
 });
 
 test('pairMessages pages newest-first by a created_at cursor, past the window', () => {
@@ -244,5 +423,95 @@ test('G1: the row list never contains a message sent after the moment being view
   for (const m of second.messages) {
     assert.ok(new Date(String(m.created_at)).getTime() <= fourHoursAgo,
       `paged row ${m.id} at ${m.created_at} is AFTER the viewed moment`);
+  }
+});
+
+test('oldestMessageAt finds the true oldest, not the lexicographic one', () => {
+  // The scrubber clamps its range to this. On the real install the oldest message is 254h old
+  // while the largest window option was 72h, so the control was concealing 182h of real
+  // traffic — that is the operator's complaint this exists to fix.
+  const data = mkdtempSync(join(tmpdir(), 'orch-oldest-'));
+  mkdirSync(join(data, 'state'));
+  const db = new Database(join(data, 'state', 'tasks.db'));
+  db.exec(`create table messages (id text primary key, conversation_id text, from_agent text,
+           to_agent text, type text, subject text, body text, priority text, status text,
+           created_at text, delivered_at text, acknowledged_at text, archived_at text)`);
+  const ins = db.prepare(`insert into messages
+    (id,from_agent,to_agent,type,subject,body,priority,status,created_at,archived_at)
+    values (?,?,?,?,'s','b','medium','pending',?,?)`);
+  ins.run('m2', 'gm', 'build', 'task', '2026-06-10T12:00:00+00:00', null);   // the true oldest
+  ins.run('m3', 'gm', 'build', 'task', '2026-06-15T12:00:00+00:00', null);
+  // A DEFAULT-format row (space separator, no offset) that must be on the SAME DATE as the
+  // true oldest for this to bite. My first version of this fixture put it on 06-20: the date
+  // digits then decide the comparison before the separator is ever consulted, so a plain
+  // min(created_at) returned the right answer anyway and the mutation survived. Third time
+  // this exact trap has appeared tonight. Same day, later in real time, sorts EARLIER because
+  // ' ' (0x20) < 'T' (0x54) — so a string min returns THIS row, which is not the oldest.
+  ins.run('m4', 'gm', 'build', 'task', '2026-06-10 23:00:00', null);
+  db.close();
+
+  assert.equal(oldestMessageAt(data), '2026-06-10T12:00:00+00:00',
+    'must be the true oldest by time; a string min() returns the same-day 23:00 DEFAULT-format row');
+
+  // Archived rows are not history the scrubber should reach for.
+  const d2 = mkdtempSync(join(tmpdir(), 'orch-oldest2-'));
+  mkdirSync(join(d2, 'state'));
+  const db2 = new Database(join(d2, 'state', 'tasks.db'));
+  db2.exec(`create table messages (id text primary key, created_at text, archived_at text,
+            from_agent text, to_agent text, type text, subject text, body text, priority text,
+            status text, conversation_id text, delivered_at text, acknowledged_at text)`);
+  db2.prepare(`insert into messages (id,created_at,archived_at) values (?,?,?)`)
+     .run('a1', '2026-01-01T00:00:00+00:00', '2026-02-01T00:00:00+00:00');
+  db2.prepare(`insert into messages (id,created_at,archived_at) values (?,?,?)`)
+     .run('a2', '2026-05-05T00:00:00+00:00', null);
+  db2.close();
+  assert.equal(oldestMessageAt(d2), '2026-05-05T00:00:00+00:00', 'archived rows are excluded');
+
+  // Empty store and missing db are null, NOT a fabricated date — null means "no history",
+  // which the UI must render differently from a real old timestamp.
+  const d3 = mkdtempSync(join(tmpdir(), 'orch-oldest3-'));
+  mkdirSync(join(d3, 'state'));
+  new Database(join(d3, 'state', 'tasks.db')).exec(`create table messages (id text primary key, created_at text, archived_at text)`);
+  assert.equal(oldestMessageAt(d3), null, 'empty store -> null');
+  assert.equal(oldestMessageAt(join(d3, 'nowhere')), null, 'missing db -> null, never throws');
+});
+
+// ── /messages/alerts — the badge data source ────────────────────────────────
+// THE BUG THIS PREVENTS: feeding the alert badges from /recent. Measured on the live
+// store, the most recent 40 messages contain ONE escalation while the last 24h contain
+// thirty-five, so a /recent-fed badge is wrong by a factor of 35 AND flickers as
+// ordinary traffic pushes escalations off the end. Same paginated-undercount shape as
+// by_type. These assert the filter is real, not that a function exists.
+test('alertMessages returns ONLY escalate and held_message, and nothing else', () => {
+  const dir = makeAlertDb();
+  const rows = alertMessages(dir, 24);
+  assert.ok(rows.length > 0, 'fixture must contain at least one alert or this proves nothing');
+  const types = [...new Set(rows.map((r) => r.type))].sort();
+  assert.deepEqual(types.filter((t) => t !== 'escalate' && t !== 'held_message'), [],
+    'a non-alert type leaking in means the badge would count ordinary traffic');
+});
+
+test('alertMessages respects the window — an older alert is excluded', () => {
+  const dir = makeAlertDb();
+  const inWindow = alertMessages(dir, 24).map((r) => r.id).sort();
+  // a4 is 30 days old and a7 is archived; a5 is a reply and a6 is a self-send.
+  assert.deepEqual(inWindow, ['a1', 'a2', 'a3'],
+    'exactly the in-window, unarchived, non-self alerts — nothing else');
+  assert.ok(alertMessages(dir, 24 * 365).some((r) => r.id === 'a4'),
+    'and the old one IS returned once the window reaches it, so it was filtered not lost');
+});
+
+test('alertMessages excludes self-sends, same as every other pair query', () => {
+  const dir = makeAlertDb();
+  assert.deepEqual(alertMessages(dir, 24 * 365).filter((r) => r.from_agent === r.to_agent), []);
+});
+
+test('alertMessages carries to_agent — the badge hangs on the RECIPIENT', () => {
+  const dir = makeAlertDb();
+  const rows = alertMessages(dir, 24 * 365);
+  for (const r of rows) {
+    assert.ok(typeof r.to_agent === 'string' && r.to_agent.length > 0,
+      'without to_agent there is no node to put the badge on');
+    assert.ok(typeof r.id === 'string' && r.id.length > 0, 'id is needed to dedupe across polls');
   }
 });

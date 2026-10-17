@@ -379,3 +379,18 @@ main {
 @media (prefers-reduced-motion: reduce) {
   .fleet-dot-down, .fleet-dot-up { top: 50%; }
 }
+
+/* GROW reveal. A node appearing mid-replay gets ONE ring flash so the eye catches which box
+   just arrived. A CSS animation rather than a 700ms setState timer per node: the timer
+   version needed a useEffect that called setState synchronously, which is the cascading-
+   render pattern react-hooks/set-state-in-effect exists to stop — and eighteen of those
+   firing during a 60fps replay is exactly the cost it is warning about. The animation plays
+   once when the class is first applied and does nothing on later renders, which is the
+   behaviour we wanted anyway. motion-reduce suppresses it; nothing but decoration is lost,
+   the box itself still appears. */
+@keyframes grow-reveal {
+  from { box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.9); }
+  to   { box-shadow: 0 0 0 3px rgba(125, 211, 252, 0); }
+}
+.grow-reveal { animation: grow-reveal 700ms ease-out 1; }
+@media (prefers-reduced-motion: reduce) { .grow-reveal { animation: none; } }

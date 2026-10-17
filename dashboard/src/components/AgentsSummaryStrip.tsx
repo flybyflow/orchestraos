@@ -85,7 +85,20 @@ export function AgentsSummaryStrip({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-neutral-400 min-w-0">
           <span className="whitespace-nowrap">{formatAgentsUp(agentsUp, agentsTotal)}</span>
           <span className="whitespace-nowrap">{messages24h} messages ({windowHours}h)</span>
-          <span className="whitespace-nowrap">{activeConnections} active connections</span>
+          {/* "(undirected)" is load-bearing, not decoration. /field reports ~63 connections
+              where this reports 31, and the gap is a counting CONVENTION, not a defect on
+              either side: this counts unordered PAIRS (the SQL groups by
+              min/max(from_agent,to_agent), matching pairKey() in topologyLines.ts), while a
+              directed-edge count treats gm->build and build->gm as two. Roughly double, which
+              is what the two numbers are. Unlabelled, the smaller number reads as the wrong
+              one and the obvious "fix" is to break the correct side. */}
+          <span
+            className="whitespace-nowrap"
+            title={`${activeConnections} unordered agent pairs exchanged messages in the last ${windowHours}h. Counted per PAIR, not per direction — a directed-edge count would be roughly double.`}
+          >
+            {activeConnections} active connections{' '}
+            <span className="text-neutral-600">(undirected)</span>
+          </span>
           {busiest && onSelectBusiest ? (
             <button
               type="button"

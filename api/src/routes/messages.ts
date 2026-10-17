@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { execFileSync } from 'child_process';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { isSafeAgentId, containedPath } from '../lib/agentPaths.js';
 import { fileURLToPath } from 'url';
@@ -77,7 +77,20 @@ export function recentMessages(dataDir: string, limit = 50): RecentMessage[] {
 const PAIR_COLUMNS = `id, conversation_id, from_agent, to_agent, type, subject, body, priority,
                       status, created_at, delivered_at, acknowledged_at`;
 
-export interface PairCount { a: string; b: string; count: number; last_at: string | null; }
+export interface PairCount {
+  a: string; b: string; count: number; last_at: string | null;
+  /** Message count per type for this pair, IN THE SAME WINDOW as `count` — same query, same
+   *  instant, so the breakdown can never disagree with the total the way two separate
+   *  requests could. Always sums to `count`. A null `type` column groups under 'unknown'
+   *  rather than being silently dropped. */
+  by_type: Record<string, number>;
+  /** Directional split of `count`: a_to_b is messages sent FROM a TO b, b_to_a is the reverse
+   *  (a/b are the same min/max-sorted ids as the row itself). Always a_to_b + b_to_a === count.
+   *  Deliberately two raw numbers, not a precomputed "direction" — what counts as one-way vs.
+   *  genuinely even (e.g. 53 vs 53) is a display threshold, a client decision, not this API's. */
+  a_to_b: number;
+  b_to_a: number;
+}
 
 function openMessagesDb(dataDir: string): Database.Database | null {
   const dbPath = join(dataDir, 'state', 'tasks.db');
@@ -109,7 +122,18 @@ function windowBounds(windowHours: number, asofMs?: number | null): { from: stri
   return { from: new Date(to - windowHours * 3600_000).toISOString(), to: new Date(to).toISOString() };
 }
 
-/** Message count per UNORDERED agent pair inside the window, newest activity first.
+/** Message count per UNORDERED agent pair inside the window, newest activity first, each row
+ *  carrying a per-type breakdown (spec: "17 replies" must read distinctly from "17 tasks" on
+ *  every edge) AND a directional split (spec: arrows / majority-direction flow dashes —
+ *  min/max grouping throws direction away by construction, so it has to be recovered here,
+ *  not guessed client-side from an already-collapsed row).
+ *  Both the breakdown and the direction split are computed in the SAME window bounds, in the
+ *  SAME handler invocation — not a second endpoint at a possibly later instant — so neither
+ *  can drift from `count` the way two separate requests could ("49 vs 40" was exactly two
+ *  things reading different instants). a_to_b/b_to_a come straight off this one query as two
+ *  more conditional aggregates (from_agent compared against that row's own min/max(from_agent,
+ *  to_agent), which is invariant within the group); by_type still needs its own query since a
+ *  third grouping column (type) would split rows back apart.
  *  Both directions of an exchange collapse into one row, because a connection line is
  *  one line. Self-sends (from === to) are excluded: they are real rows, but a line needs
  *  two ends. Missing db/table => []. */
@@ -118,17 +142,97 @@ export function pairCounts(dataDir: string, windowHours = 24, asofMs?: number | 
   if (!db) return [];
   const { from, to } = windowBounds(windowHours, asofMs);
   try {
-    return db.prepare(
+    const rows = db.prepare(
       `select min(from_agent, to_agent) as a, max(from_agent, to_agent) as b,
-              count(*) as count, max(created_at) as last_at
+              count(*) as count, max(created_at) as last_at,
+              sum(case when from_agent = min(from_agent, to_agent) then 1 else 0 end) as a_to_b,
+              sum(case when from_agent = max(from_agent, to_agent) then 1 else 0 end) as b_to_a
          from messages
         where archived_at is null
           and from_agent <> to_agent
           and julianday(created_at) >= julianday(?)
           and julianday(created_at) <= julianday(?)
         group by a, b
-        order by count desc`).all(from, to) as PairCount[];
+        order by count desc`).all(from, to) as Omit<PairCount, 'by_type'>[];
+
+    const typeRows = db.prepare(
+      `select min(from_agent, to_agent) as a, max(from_agent, to_agent) as b,
+              type, count(*) as n
+         from messages
+        where archived_at is null
+          and from_agent <> to_agent
+          and julianday(created_at) >= julianday(?)
+          and julianday(created_at) <= julianday(?)
+        group by a, b, type`).all(from, to) as { a: string; b: string; type: string | null; n: number }[];
+
+    const byPairType = new Map<string, Record<string, number>>();
+    for (const r of typeRows) {
+      const key = `${r.a}|${r.b}`;
+      const bucket = byPairType.get(key) ?? {};
+      bucket[r.type ?? 'unknown'] = (bucket[r.type ?? 'unknown'] ?? 0) + r.n;
+      byPairType.set(key, bucket);
+    }
+
+    return rows.map((r) => ({ ...r, by_type: byPairType.get(`${r.a}|${r.b}`) ?? {} }));
   } catch { return []; } finally { db.close(); }
+}
+
+/** All-time-real pairs with ZERO traffic in the given window — dead links, returnable so the
+ *  client can style them distinctly from "quiet" instead of them not existing at all (a pair
+ *  with no traffic in the window simply never appeared in pairCounts() before this). A
+ *  SEPARATE array from pairCounts() on purpose: pairCounts()'s rows and pairs.length are an
+ *  existing on-screen contract (activeConnections, the busiest-edge calc) and must keep
+ *  meaning exactly what they meant before — a 0-count row folded into that array would make
+ *  "N connections" count dead links as active, silently. `last_at` here is the ALL-TIME last
+ *  message on that pair (NOT windowed) — that is what actually distinguishes DEAD (last
+ *  traffic long ago) from QUIET (last traffic just outside this window's edge); a windowed
+ *  last_at would be null for every dead pair by definition and carry no signal at all.
+ *  No `by_type` here: a dead pair has no in-window traffic to break down, so every bucket
+ *  would just be zero — not worth the row weight for a row whose only job is "count: 0,
+ *  last_at: when it stopped." Same reasoning for a_to_b/b_to_a: both are 0, no division, no
+ *  direction to report for a pair with no in-window traffic. Missing db/table => []. */
+export function deadPairs(dataDir: string, windowHours = 24, asofMs?: number | null): PairCount[] {
+  const db = openMessagesDb(dataDir);
+  if (!db) return [];
+  const { from, to } = windowBounds(windowHours, asofMs);
+  try {
+    const rows = db.prepare(
+      `select min(from_agent, to_agent) as a, max(from_agent, to_agent) as b,
+              0 as count, max(created_at) as last_at
+         from messages
+        where archived_at is null
+          and from_agent <> to_agent
+        group by a, b
+       having sum(case when julianday(created_at) >= julianday(?)
+                         and julianday(created_at) <= julianday(?) then 1 else 0 end) = 0
+        order by last_at desc`).all(from, to) as Omit<PairCount, 'by_type' | 'a_to_b' | 'b_to_a'>[];
+    return rows.map((r) => ({ ...r, by_type: {}, a_to_b: 0, b_to_a: 0 }));
+  } catch { return []; } finally { db.close(); }
+}
+
+/**
+ * The oldest unarchived message in the store, or null if there are none.
+ *
+ * The time scrubber clamps its range to this so the bar cannot imply history that does not
+ * exist, and — the operator's actual complaint — cannot hide history that does. Measured on
+ * this install: the oldest message is 254h old while the largest window option was 72h, so the
+ * control was silently concealing 182h of real traffic.
+ *
+ * Ordered by julianday() rather than taking a plain min(created_at), for the same reason every
+ * other comparison in this file does: the column DEFAULT writes 'YYYY-MM-DD HH:MM:SS', which
+ * sorts BEFORE every ISO row lexicographically (space < 'T'), so a string min could return a
+ * row that is not actually the oldest. Returns the value in its stored format.
+ */
+export function oldestMessageAt(dataDir: string): string | null {
+  const db = openMessagesDb(dataDir);
+  if (!db) return null;
+  try {
+    const row = db.prepare(
+      `select created_at from messages
+        where archived_at is null and created_at is not null
+        order by julianday(created_at) asc limit 1`).get() as { created_at: string } | undefined;
+    return row?.created_at ?? null;
+  } catch { return null; } finally { db.close(); }
 }
 
 export interface PairPage {
@@ -261,6 +365,41 @@ router.get('/recent', (req: Request, res: Response) => {
   res.json({ messages: recentMessages(ORCHESTRA, limit) });
 });
 
+/**
+ * Alert-bearing messages in the window — escalations and held messages only.
+ *
+ * Deliberately NOT served by /recent. The badge needs a COUNT over the window and
+ * /recent is capped at 200: measured on the live store, the most recent 40 messages
+ * contain ONE escalation while the last 24h contain thirty-five. A badge fed from
+ * /recent would have been wrong by a factor of 35 and would have flickered as ordinary
+ * traffic pushed escalations off the end of the list.
+ *
+ * Filtering server-side is what keeps this cheap: the whole 24h window is ~42 rows,
+ * versus the ~1000 a client would have to download to count them itself. Same reasoning
+ * as by_type on pair-counts — aggregate where the data is.
+ */
+export function alertMessages(dataDir: string, windowHours = 24, asofMs?: number | null): AlertRow[] {
+  const db = openMessagesDb(dataDir);
+  if (!db) return [];
+  try {
+    const { from, to } = windowBounds(windowHours, asofMs);
+    return db.prepare(
+      `select id, from_agent, to_agent, type, created_at
+         from messages
+        where archived_at is null
+          and type in ('escalate', 'held_message')
+          and from_agent <> to_agent
+          and julianday(created_at) >= julianday(?)
+          and julianday(created_at) <= julianday(?)
+        order by created_at desc`).all(from, to) as AlertRow[];
+  } catch { return []; }
+}
+
+export interface AlertRow {
+  id: string; from_agent: string; to_agent: string;
+  type: string; created_at: string | null;
+}
+
 function windowHoursFrom(q: unknown): number {
   const h = parseInt(String(q ?? '24'), 10);
   return Number.isFinite(h) && h > 0 ? Math.min(24 * 90, h) : 24;
@@ -268,6 +407,113 @@ function windowHoursFrom(q: unknown): number {
 
 // GET /api/messages/pair-counts?hours=24 — message count per connection line.
 // The ONLY source for any count rendered on a line (spec §16).
+// GET /api/messages/alerts?hours=24 — escalations and held messages in the window.
+// Only the rows the graph draws alerts from, so the client counts a few dozen rows
+// instead of downloading a thousand to find them.
+router.get('/alerts', (req: Request, res: Response) => {
+  const hours = windowHoursFrom(req.query.hours);
+  const raw = req.query.asof ? String(req.query.asof) : null;
+  const asofMs = raw ? parseAsof(raw) : null;
+  if (raw && asofMs === null) {
+    res.status(400).json({ error: 'asof is not a parseable instant', code: 'bad_asof', asof: raw });
+    return;
+  }
+  res.json({ window_hours: hours, asof: asofMs == null ? null : new Date(asofMs).toISOString(),
+             messages: alertMessages(ORCHESTRA, hours, asofMs) });
+});
+
+/**
+ * PLAY/GROW/LIVE replay timeline (ported from /Users/flybyflow/second-brain-3d, read-only
+ * reference, not shared code). Every message in the window, ascending, for dashboard/src/lib/
+ * replayEngine.ts to play back.
+ *
+ * Deliberately reuses THIS file's own julianday()-safe window predicate rather than /field's
+ * `datetime(created_at) > datetime('now', ?)` — both dodge the same 'T' vs ' ' trap this file
+ * has hit before (see the block comment above pairCounts), so there is no reason to carry a
+ * second way of doing it.
+ *
+ * "Skip muted messages the same way the rest of this file skips them": this file's existing
+ * skip mechanism everywhere else is `archived_at is null` — there is no separate "muted" concept
+ * in this schema. /field's own MUTED_FLOWS is a single hardcoded rule for one agent
+ * (`lineage_soft_handoff` -> `codex-dev-1`) that does not exist in this fleet, so there is
+ * nothing there to literally port; `archived_at is null` is this codebase's real equivalent and
+ * is applied below like every other query in this file.
+ */
+export interface HistoryEvent {
+  t: string; from: string; to: string; type: string; subject: string; id: string;
+}
+
+export function historyEvents(dataDir: string, windowHours = 24): HistoryEvent[] {
+  const db = openMessagesDb(dataDir);
+  if (!db) return [];
+  try {
+    const { from, to } = windowBounds(windowHours, null);
+    const rows = db.prepare(
+      `select id, created_at, from_agent, to_agent, type, subject
+         from messages
+        where archived_at is null
+          and to_agent is not null
+          and julianday(created_at) >= julianday(?)
+          and julianday(created_at) <= julianday(?)
+        order by julianday(created_at) asc
+        limit 20000`).all(from, to) as
+      { id: string; created_at: string; from_agent: string; to_agent: string; type: string | null; subject: string | null }[];
+    return rows.map((r) => ({
+      t: r.created_at, from: r.from_agent, to: r.to_agent,
+      type: r.type ?? '', subject: (r.subject ?? '').slice(0, 80), id: r.id,
+    }));
+  } catch { return []; } finally { db.close(); }
+}
+
+export interface SpawnEvent { t: string; kind: 'spawn'; id: string; name: string }
+
+/**
+ * Agent spawn times for GROW's node-reveal, ported from /field's /api/spawns. This install's
+ * <data>/state/agent-sessions.json (same path /field reads) DOES exist but, checked directly:
+ * none of its 21 entries carry spawned_at/created_at/launched_at — so the primary signal /field
+ * prefers is absent here. What IS present on every entry is `conversation_path`, so this falls
+ * back to that file's filesystem birthtime exactly the way /field's own code does (ctimeMs if
+ * birthtimeMs is unavailable). This is a real signal, not a fabricated one — it is when the
+ * session's transcript file was first created, not a guess — but it is a proxy for "spawned",
+ * not a stored application fact, and worth knowing if GROW's spawn flashes look mistimed.
+ */
+export function spawnEvents(orchestraDir: string, windowHours = 24): SpawnEvent[] {
+  const sessionsPath = join(orchestraDir, 'state', 'agent-sessions.json');
+  if (!existsSync(sessionsPath)) return [];
+  const cutoff = Date.now() - windowHours * 3600_000;
+  try {
+    const sessions = JSON.parse(readFileSync(sessionsPath, 'utf-8')) as Record<string, Record<string, unknown>>;
+    const events: SpawnEvent[] = [];
+    for (const [id, entry] of Object.entries(sessions)) {
+      let tMs: number | null = null;
+      const raw = (entry.spawned_at ?? entry.created_at ?? entry.launched_at) as string | undefined;
+      if (raw) { const parsed = Date.parse(raw); if (Number.isFinite(parsed)) tMs = parsed; }
+      if (tMs === null && typeof entry.conversation_path === 'string') {
+        try {
+          const st = statSync(entry.conversation_path);
+          tMs = st.birthtimeMs || st.ctimeMs;
+        } catch { /* file gone — no signal for this agent */ }
+      }
+      if (tMs === null || tMs < cutoff) continue;
+      const name = typeof entry.name === 'string' && entry.name ? entry.name : id;
+      events.push({ t: new Date(tMs).toISOString(), kind: 'spawn', id, name });
+    }
+    events.sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
+    return events;
+  } catch { return []; }
+}
+
+// GET /api/messages/history?hours=N — the PLAY/GROW/LIVE replay timeline: every message plus
+// every spawn in the window, merged and sorted ascending by t. Parsed via Date.parse() rather
+// than a raw string compare for the same reason every other time comparison in this file avoids
+// one — see the block comment above pairCounts.
+router.get('/history', (req: Request, res: Response) => {
+  const hours = windowHoursFrom(req.query.hours);
+  const events = [...historyEvents(ORCHESTRA, hours), ...spawnEvents(ORCHESTRA, hours)]
+    .sort((a, b) => Date.parse(a.t) - Date.parse(b.t));
+  res.json({ hours, count: events.length, events });
+});
+
 router.get('/pair-counts', (req: Request, res: Response) => {
   const hours = windowHoursFrom(req.query.hours);
   const raw = req.query.asof ? String(req.query.asof) : null;
@@ -281,7 +527,14 @@ router.get('/pair-counts', (req: Request, res: Response) => {
   res.json({
     window_hours: hours,
     asof: asofMs === null ? null : new Date(asofMs).toISOString(),
+    // How far back history actually goes, so the scrubber can clamp to it instead of to
+    // window arithmetic. null means an empty store, which is distinct from "unknown".
+    oldest_at: oldestMessageAt(ORCHESTRA),
     pairs: pairCounts(ORCHESTRA, hours, asofMs),
+    // Dead links: real pairs, zero traffic in this window. A SEPARATE array from `pairs` on
+    // purpose (see deadPairs() doc) — existing consumers of `pairs`/`pairs.length` are
+    // unaffected unless they explicitly opt into reading this new field.
+    dead_pairs: deadPairs(ORCHESTRA, hours, asofMs),
   });
 });
 

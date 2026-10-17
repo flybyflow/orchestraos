@@ -58,12 +58,36 @@ export const deleteTask = (project: string, phaseIdx: number, taskIdx: number): 
 // via the `before` cursor. Do not reach for /messages/thread/:conversationId or
 // /messages/conversations/:agentId from this view — they read JSONL, and disagreeing with
 // this table is exactly the "49 vs 40" bug the spec exists to kill.
-export interface PairCountRow { a: string; b: string; count: number; last_at: string | null }
+export interface PairCountRow {
+  a: string; b: string; count: number; last_at: string | null;
+  /** Per-message-type breakdown for this pair, summing to `count` (asserted API-side).
+   *  Not computable on the client: pairMessages carries type but is paginated at 40,
+   *  and a busy pair runs to several hundred in-window. Absent on an older API. */
+  by_type?: Record<string, number>;
+  /** Directional split within the pair: a_to_b counts messages sent BY `a`. Two raw
+   *  numbers, not a precomputed direction — how lopsided a conversation must be before
+   *  it reads as one-way is a display judgement (see edgeDirection), and keeping it
+   *  client-side means changing the threshold needs no backend deploy. */
+  a_to_b?: number;
+  b_to_a?: number;
+}
 export const fetchPairCounts = (hours = 24, asof?: string | null) => {
   const q = new URLSearchParams({ hours: String(hours) });
   if (asof) q.set('asof', asof);   // omitted entirely means live
-  return get<{ window_hours: number; asof: string | null; pairs: PairCountRow[] }>(
-    `/messages/pair-counts?${q}`);
+  return get<{
+    window_hours: number;
+    asof: string | null;
+    /** Oldest unarchived message in the store, or null for an empty store. The time scrubber
+     *  clamps its track to this so the bar cannot hide real history — measured on this install,
+     *  the oldest message was 254h old while the largest window was 72h. */
+    oldest_at: string | null;
+    pairs: PairCountRow[];
+    /** Pairs with real history but NOTHING in the window. A separate field, not count-0
+     *  rows folded into `pairs`: the summary strip's connection count and the thickness
+     *  denominator both read `pairs`, so adding rows there would silently turn 32 active
+     *  connections into 51. Opt-in by construction. */
+    dead_pairs?: PairCountRow[];
+  }>(`/messages/pair-counts?${q}`);
 };
 
 export interface PairMessage {
@@ -99,6 +123,21 @@ export interface RecentMessageRow {
 }
 export const fetchRecentMessages = (limit = 50) =>
   get<{ messages: RecentMessageRow[] }>(`/messages/recent?limit=${limit}`);
+
+/** Escalations and held messages in the window — the only rows the alert badges need.
+ *  NOT /messages/recent: that is capped, and measured live the most recent 40 messages
+ *  contain ONE escalation while the last 24h contain thirty-five. A badge fed from
+ *  /recent is wrong by a factor of 35 and flickers as ordinary traffic pushes
+ *  escalations off the end. Feed the result to nodeAlerts() in lib/nodeAlerts.ts. */
+export interface AlertMessageRow {
+  id: string; from_agent: string; to_agent: string; type: string; created_at: string | null;
+}
+export const fetchAlerts = (hours = 24, asof?: string | null) => {
+  const q = new URLSearchParams({ hours: String(hours) });
+  if (asof) q.set('asof', asof);
+  return get<{ window_hours: number; asof: string | null; messages: AlertMessageRow[] }>(
+    `/messages/alerts?${q}`);
+};
 
 export const fetchProjects = () => get('/projects');
 // A live (QuestionnaireStore) questionnaire: its questions, and the answers route the phone uses too.

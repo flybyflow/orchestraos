@@ -19,12 +19,22 @@ import { StatusDot } from '../components/StatusDot';
 import { TierBadge } from '../components/TierBadge';
 import { AgentCard } from '../components/AgentCard';
 import { TopologyDiagram } from '../components/TopologyDiagram';
-import { isFleetMember } from '../lib/topologyLines';
+import { isFleetMember, pairKey } from '../lib/topologyLines';
+import { externalEndpoints } from '../lib/rimNodes';
 import { getRecentAgents, loadAndMergeRecentAgents, type RecentAgent } from '../lib/user-actions';
 import { GenChip } from '../components/GenChip';
 import NewAgentModal from '../components/NewAgentModal';
 import { NEW_AGENT_EVENT } from '../lib/newAgent';
 import { showNewAgent } from '../lib/features';
+import { fraction } from '../lib/replayEngine';
+import { useReplay } from '../lib/useReplay';
+import { bornUpTo } from '../lib/overlayGeometry';
+
+// GROW bookkeeping lives in overlayGeometry.growBorn(); the replay hook itself is
+// lib/useReplay.ts. NO_BORN is the "not growing" sentinel: one shared object so the
+// not-growing branch of the fold below bails on identity instead of committing a new pair
+// of empty Sets on every frame.
+const NO_BORN = { nodes: new Set<string>() as ReadonlySet<string>, edges: new Set<string>() as ReadonlySet<string> };
 
 const TIERS = ['For You', 'Recent', 'All', 'T0', 'T1', 'T2', 'T3'] as const;
 // Spec §3 names these All / Active / Down. 'Dead' was the pre-existing label; review's
@@ -55,6 +65,26 @@ export default function Agents() {
   // Defaulting to 'Active' meant a down agent was invisible until you thought to
   // look for it, which is the opposite of what this page is for. Default is All.
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  // Layer toggles (spec step 4). Hierarchy is the skeleton and always draws, so it is
+  // not toggleable — hiding it would leave edges floating with nothing to anchor them.
+  // Default is top-12 cross edges: drawing all 30 at once is the "calm by default"
+  // violation the spec warns about, and show-all is one click away.
+  //
+  // DECLARED HERE, WITH THE OTHER HOOKS, AND NOT FURTHER DOWN. There is an
+  // `if (isLoading) return ...` early return below this point. A useState placed after
+  // it runs on the loaded render and NOT on the loading one, so the hook count changes
+  // between renders — React error #310, "rendered more hooks than during the previous
+  // render", which unmounts the tree and renders the entire page BLANK. That is exactly
+  // what shipped: first paint fine, queries fire, data arrives, page goes white.
+  // /field-named render layers (operator QA item 3, ported from /Users/flybyflow/second-brain-3d/
+  // public/index.html's LAYERS object and its checkbox panel — read-only reference, not shared
+  // code). /field also has `lobes` (3D brain-region boundaries) and `fx` (retro post-processing);
+  // neither has an equivalent in this 2D view, so they are not ported. `orbs` (agent nodes) is
+  // in /field's list but deliberately NOT here — see the Layers row below for why.
+  const [layers, setLayers] = useState({
+    cross: true, external: true, showAllCross: false,
+    edges: true, edgeGlows: true, arrowSprites: true, messageLabels: true, statusGlow: true,
+  });
   const [clientFilter, setClientFilter] = useState<string>('All');
   const [machineFilter, setMachineFilter] = useState<string>('All');
   const [recentAgents, setRecentAgents] = useState<RecentAgent[]>(getRecentAgents());
@@ -293,6 +323,55 @@ export default function Agents() {
     });
   }, [tierFilter, adaptiveScores, filtered, defaultSorted, recentAgents]);
 
+  // PLAY / GROW / LIVE. Declared HERE, above the isLoading early return, and it has to stay
+  // there: this component renders N hooks while loading and N+1 after, which is React error
+  // #310 and a blank page. That is not hypothetical — this exact file shipped it once, from a
+  // useState added below this line. Every hook goes above it.
+  const replay = useReplay(windowHours);
+  const growing = replay.state.growth;
+  // GROW: what has appeared so far is DERIVED from the replay's own cursor index, not
+  // accumulated in state. The accumulating version needed a useEffect that called setState
+  // synchronously every frame, which is the cascading-render pattern
+  // react-hooks/set-state-in-effect exists to stop -- and a 60fps replay is exactly where
+  // that costs something. A memo off one monotonic number is pure and cannot drift out of
+  // sync with the cursor the way a separate accumulator can.
+  const born = useMemo(
+    () => (growing ? bornUpTo(replay.state.events, replay.state.idx, pairKey) : NO_BORN),
+    [growing, replay.state.events, replay.state.idx],
+  );
+
+  // Pillar filters (operator ask): AGENTS/EXTERNAL/REPOS/PROMPTS as highlight-isolate chips.
+  // Not a new selection concept — the SAME setHighlight() mechanism §8's search already uses
+  // ("picking a repo highlights the agents that use it"), just with a pre-computed set
+  // instead of a query match, so a pillar pick and a search pick can never disagree about
+  // what "highlighted" means. externalEndpoints() is the same pure function TopologyDiagram
+  // calls internally for the rim — calling it again here with the same (pairs, allAgents,
+  // agents) inputs is a second call to ONE deterministic function, not a second data source.
+  //
+  // DECLARED HERE, ABOVE THE isLoading EARLY RETURN — same rule as `born` above and the
+  // DECLARED HERE comment near the top of this component: a hook placed below the return
+  // runs on the loaded render and not the loading one, which is React error #310 (hook count
+  // changes between renders). This exact file shipped that bug once already; these three
+  // useMemo calls shipped it again in the same spot before this fix. `pairs` has to move up
+  // here with them since the hooks close over it.
+  const pairs = pairData?.pairs ?? [];
+  const externalIds = useMemo(
+    () => externalEndpoints(
+      pairs,
+      allAgents.map((a: { id: string }) => a.id),
+      agents.map((a: { id: string }) => a.id),
+    ).endpoints.map((e) => e.id),
+    [pairs, allAgents, agents],
+  );
+  const repoAgentIds = useMemo(
+    () => [...new Set((projects?.projects ?? []).flatMap((p) => (p.agents ?? []).map((a) => a.id)))],
+    [projects],
+  );
+  const promptAgentIds = useMemo(
+    () => agents.filter((a: { system_prompt?: string }) => !!a.system_prompt).map((a: { id: string }) => a.id),
+    [agents],
+  );
+
   if (isLoading) {
     return (
       <div className="p-6">
@@ -305,7 +384,6 @@ export default function Agents() {
   // Summary-strip numbers (spec §3). All of them derive from the two canonical sources —
   // /api/agents for liveness, /api/messages/pair-counts for traffic — so the strip cannot
   // disagree with the connection lines or with the status-filter counts below it.
-  const pairs = pairData?.pairs ?? [];
   const messagesInWindow = pairs.reduce((n, p) => n + p.count, 0);
   const activeConnections = pairs.filter((p) => p.count > 0).length;
   const busiest = pairs.length ? pairs[0] : null;   // endpoint already orders by count desc
@@ -334,6 +412,19 @@ export default function Agents() {
       .map((p) => { const other = p.a === id ? p.b : p.a; return { id: other, onGraph: graphIds.has(other) }; })
       .sort((x, y) => Number(y.onGraph) - Number(x.onGraph));
   const panelAgent = panelAgentId ? agents.find((a: { id: string }) => a.id === panelAgentId) : null;
+
+  const hasProjects = (projects?.projects ?? []).length > 0;
+  const pillars: { label: string; agentIds: string[]; disabledReason: string | null }[] = [
+    { label: `Agents (${agents.length})`, agentIds: agents.map((a: { id: string }) => a.id), disabledReason: null },
+    { label: `External (${externalIds.length})`, agentIds: externalIds,
+      disabledReason: externalIds.length === 0 ? 'no external traffic in this window' : null },
+    // REPOS chip disabled with a reason when /api/projects is empty (operator's explicit
+    // instruction) rather than just being unclickable with no explanation.
+    { label: `Repos (${repoAgentIds.length})`, agentIds: repoAgentIds,
+      disabledReason: !hasProjects ? 'no repos registered' : null },
+    { label: `Prompts (${promptAgentIds.length})`, agentIds: promptAgentIds,
+      disabledReason: promptAgentIds.length === 0 ? 'no prompts recorded' : null },
+  ];
 
   // Health summary
   const healthy = agents.filter((a: any) => a.alive).length;
@@ -621,6 +712,94 @@ export default function Agents() {
         <>
         <div className="flex flex-col lg:flex-row gap-4 items-stretch">
           <div className="flex-1 min-w-0 rounded-xl border border-neutral-800 bg-neutral-900 p-4 overflow-x-auto">
+            {/* Layer toggles. Hierarchy is deliberately absent: it is the skeleton every
+                other layer is positioned against, and hiding it would leave cross edges
+                floating with nothing to read them against.
+                'edges' through 'statusGlow' are /field's own checkbox names (see the
+                `layers` useState comment) — each hides/shows its layer independently of
+                the others, same as /field's applyLayer(). 'orbs' (agent nodes) is in
+                /field's panel but skipped here on purpose: an agent box is the only
+                click target for selecting that agent and the thing every edge terminates
+                at, so hiding it would orphan every remaining visible line at one end —
+                the exact reason hierarchy itself is already excluded above. */}
+            <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
+              <span className="text-neutral-600">Layers</span>
+              {([
+                ['cross', 'cross edges'],
+                ['external', 'external'],
+                ['edges', 'edges'],
+                ['edgeGlows', 'edge glows'],
+                ['arrowSprites', 'arrow sprites'],
+                ['messageLabels', 'message labels'],
+                ['statusGlow', 'status glow'],
+              ] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={layers[k]}
+                  onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
+                  className={clsx(
+                    'px-2 py-0.5 rounded border focus:outline-none focus:ring-1 focus:ring-sky-500',
+                    layers[k]
+                      ? 'border-neutral-600 bg-neutral-800 text-neutral-200'
+                      : 'border-neutral-800 text-neutral-600',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={layers.showAllCross}
+                disabled={!layers.cross}
+                onClick={() => setLayers((l) => ({ ...l, showAllCross: !l.showAllCross }))}
+                title={layers.showAllCross
+                  ? 'Showing every cross edge'
+                  : 'Showing the 12 busiest cross edges — click for all'}
+                className={clsx(
+                  'px-2 py-0.5 rounded border focus:outline-none focus:ring-1 focus:ring-sky-500',
+                  'disabled:opacity-40 disabled:cursor-not-allowed',
+                  layers.showAllCross
+                    ? 'border-neutral-600 bg-neutral-800 text-neutral-200'
+                    : 'border-neutral-800 text-neutral-500',
+                )}
+              >
+                {layers.showAllCross ? 'all' : 'top 12'}
+              </button>
+            </div>
+            {/* Pillar filters (operator ask): click isolates the set, fading everything else
+                to 30% via the same `highlight` -> brightIds path search already uses. Click
+                the SAME pillar again to clear, rather than requiring the separate "clear"
+                link below — a toggle is the expected interaction for a pressed filter chip. */}
+            <div className="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
+              <span className="text-neutral-600">Filter</span>
+              {pillars.map((p) => {
+                const active = highlight?.label === p.label;
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    aria-pressed={active}
+                    disabled={!!p.disabledReason}
+                    title={p.disabledReason ?? undefined}
+                    onClick={() => {
+                      if (active) { setHighlight(null); return; }
+                      closePanel();
+                      setHighlight({ label: p.label, agentIds: p.agentIds });
+                    }}
+                    className={clsx(
+                      'px-2 py-0.5 rounded border focus:outline-none focus:ring-1 focus:ring-sky-500',
+                      'disabled:opacity-40 disabled:cursor-not-allowed',
+                      active
+                        ? 'border-sky-600 bg-sky-950/50 text-sky-200'
+                        : 'border-neutral-800 text-neutral-500',
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
+            </div>
             <TopologyDiagram
               // `sorted`, NOT `agents`: Cards and Table got the filtered array and Topology
               // was handed the unfiltered one, so the status filter had NO effect on the
@@ -636,6 +815,23 @@ export default function Agents() {
               onClearSelection={() => { closePanel(); setHighlight(null); }}
               brightIds={highlight?.agentIds ?? null}
               dots={dots}
+              // allAgents, NOT `agents`: the rim needs the FULL registry to tell a
+              // hidden agent (gm-g2, retired) from a genuine external endpoint
+              // (telegram). Handed the filtered list it would invent a rim node for
+              // every retired seat.
+              allAgentIds={allAgents.map((a: { id: string }) => String(a.id))}
+              deadPairs={pairData?.dead_pairs ?? []}
+              layers={layers}
+              crossTopN={layers.showAllCross ? null : 12}
+              // The scrubbed moment, so the graph judges an edge against what was true
+              // THEN. Without it a pair whose traffic is later than the viewed instant
+              // was being described as "quiet".
+              asof={asof}
+              // GROW: null outside growth, so the gating is a true no-op in the live view.
+              bornIds={growing ? born.nodes : null}
+              bornEdges={growing ? born.edges : null}
+              fired={replay.fired}
+              trail={replay.trail}
             />
           </div>
           {(panelAgent || selectedConnection) && (
@@ -658,6 +854,14 @@ export default function Agents() {
                   onClose={closePanel}
                   windowHours={windowHours}
                   asof={asof}
+                  // The authoritative breakdown for the whole window, from the same
+                  // pair-counts row the connection line is drawn from — so the panel
+                  // and the line can never disagree about what they are counting.
+                  byType={pairs.find(
+                    (p: { a: string; b: string }) =>
+                      (p.a === selectedConnection[0] && p.b === selectedConnection[1])
+                      || (p.a === selectedConnection[1] && p.b === selectedConnection[0]),
+                  )?.by_type ?? null}
                 />
               ) : panelAgent ? (
                 <AgentDetailPanel
@@ -704,6 +908,38 @@ export default function Agents() {
             onWindowChange={setWindowHours}
             asof={asof}
             onAsofChange={setAsof}
+            oldestAt={pairData?.oldest_at ?? null}
+            replay={{
+              playing: replay.state.playing,
+              live: replay.state.live,
+              growing,
+              hasEvents: replay.state.events.length > 0,
+              error: replay.error,
+              // The engine's own fraction(), never a second formula for the same fact.
+              fraction: fraction(replay.state),
+              readoutLabel: replay.state.live
+                ? 'live'
+                : new Date(replay.state.cursor).toLocaleString(undefined, {
+                  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+                }),
+              windowHours: replay.windowHours,
+              speed: replay.state.speed,
+              onPlayPause: () => (replay.state.playing ? replay.pause() : replay.play()),
+              // /field's GROW is one button doing four things; the hook keeps them
+              // composable, so the composition lives here. Order matters: growth on,
+              // cursor to the very start, then play. Each call writes the hook's state
+              // ref synchronously, so they compose without waiting for a render.
+              onGrow: () => {
+                if (growing) { replay.setGrowth(false); replay.setLive(); return; }
+                replay.setGrowth(true);
+                replay.seek(0);
+                replay.play();
+              },
+              onLive: replay.setLive,
+              onWindowChange: replay.setWindow,
+              onSeek: replay.seek,
+              onSpeedChange: replay.setSpeed,
+            }}
           />
           {asof ? (
             // §12: never show stale as fresh. The ticker is a live feed by definition, so
