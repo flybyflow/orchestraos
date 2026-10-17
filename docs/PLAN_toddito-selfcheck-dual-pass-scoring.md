@@ -831,3 +831,11 @@ gm: merge now — (b) is sound and honest on its own, and merging doesn't
 foreclose adding a verdict later once (a) has ground truth to calibrate
 against. Holding a fully-reviewed, correct PR idle costs more than
 merging and revisiting.
+
+**gm approved merging (2026-10-17).** Agreed with the reasoning above;
+taking the scope-narrowing (verdict → two side-by-side numbers) to the
+operator directly, not blocking the merge on it. Dispatched to `ship`.
+This closes the dual-pass scoring arc's engineering work — remaining open
+items are the operator conversation (gm's, not this plan's) and the
+queued DOS-emulation side-quest (§6, still parked behind the voice-UI
+buildout).
