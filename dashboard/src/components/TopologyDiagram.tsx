@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { StatusDot } from './StatusDot';
 import { TierBadge } from './TierBadge';
@@ -486,7 +486,39 @@ export function TopologyDiagram({
   const unbornNode = (id: string) => (bornIds == null ? undefined : !bornIds.has(id));
   const unbornEdge = (a: string, b: string) => (bornEdges == null ? undefined : !bornEdges.has(pairKey(a, b)));
   const containerRef = useRef<HTMLDivElement>(null);
-  const { positions, register, size: overlaySize } = useNodePositions(containerRef);
+  // Chart-only zoom (the page itself never resizes). 'fit' shrinks the tree to the width the
+  // chart is given; a number is a manual scale. Persisted so it survives a reload.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState<'fit' | number>(() => {
+    try { const v = localStorage.getItem('topology.zoom'); return v == null || v === 'fit' ? 'fit' : Number(v) || 'fit'; } catch { return 'fit'; }
+  });
+  const [outerW, setOuterW] = useState(0);
+  useEffect(() => {
+    const el = outerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setOuterW(el.clientWidth));
+    ro.observe(el);
+    setOuterW(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const [fitScale, setFitScale] = useState(1);
+  const scale = zoom === 'fit' ? fitScale : zoom;
+  const { positions, register, size: overlaySize } = useNodePositions(containerRef, scale);
+  // Span of the drawn tree (not the container): stable under re-centering, so fit cannot
+  // oscillate as the container widens when the scale drops.
+  useEffect(() => {
+    if (zoom !== 'fit' || outerW === 0 || positions.size === 0) return;
+    let lo = Infinity; let hi = -Infinity;
+    for (const b of positions.values()) { lo = Math.min(lo, b.cx - b.width / 2); hi = Math.max(hi, b.cx + b.width / 2); }
+    const span = hi - lo + 48;
+    const next = Math.max(0.3, Math.min(1, Math.round((outerW / span) * 100) / 100));
+    setFitScale((prev) => (Math.abs(prev - next) < 0.02 ? prev : next));
+  }, [zoom, outerW, positions]);
+  const setZoomPersist = (z: 'fit' | number) => {
+    setZoom(z);
+    try { localStorage.setItem('topology.zoom', String(z)); } catch { /* private mode */ }
+  };
+  const stepZoom = (d: number) => setZoomPersist(Math.max(0.3, Math.min(1.5, Math.round((scale + d) * 100) / 100)));
   const showCross = layers?.cross ?? true;
   const showExternal = layers?.external ?? true;
   const showEdges = layers?.edges ?? true;
@@ -646,9 +678,17 @@ export function TopologyDiagram({
     bright !== null && a !== selectedAgentId && b !== selectedAgentId;
 
   return (
-    // Spec §4: clicking empty space clears. Guarded on e.target === e.currentTarget so a
-    // click that bubbled up from a node or a line does not immediately undo the selection
-    // it just made — without that check, selecting anything is impossible.
+    <div ref={outerRef} className="relative" style={{ height: scale === 1 ? undefined : Math.max(overlaySize.h * scale, 120) }}>
+    <div className="absolute right-2 top-2 z-20 flex items-center gap-1 rounded-md border border-neutral-800 bg-neutral-950/90 px-1 py-0.5 text-[11px] text-neutral-400">
+      <button type="button" onClick={() => stepZoom(-0.1)} aria-label="Zoom chart out" className="px-1.5 hover:text-neutral-100">−</button>
+      <span className="tabular-nums w-9 text-center">{Math.round(scale * 100)}%</span>
+      <button type="button" onClick={() => stepZoom(0.1)} aria-label="Zoom chart in" className="px-1.5 hover:text-neutral-100">+</button>
+      <button type="button" onClick={() => setZoomPersist('fit')} aria-pressed={zoom === 'fit'} className={clsx('px-1.5 rounded', zoom === 'fit' ? 'bg-neutral-700 text-neutral-100' : 'hover:text-neutral-100')}>Fit</button>
+      <button type="button" onClick={() => setZoomPersist(1)} className="px-1.5 hover:text-neutral-100">100%</button>
+    </div>
+    <div style={scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: 'top left', width: `${100 / scale}%` }}>
+    {/* Spec §4: clicking empty space clears (guarded on e.target === e.currentTarget so a click
+        bubbling up from a node or line does not undo the selection it just made). */}
     <div
       ref={containerRef}
       // `relative` is what the absolutely-positioned overlay measures against — every
@@ -839,6 +879,8 @@ export function TopologyDiagram({
       {agents.length === 0 && (
         <p className="text-neutral-600 text-sm py-12">No agents to display</p>
       )}
+    </div>
+    </div>
     </div>
   );
 }

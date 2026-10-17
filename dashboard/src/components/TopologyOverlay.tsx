@@ -59,7 +59,7 @@ export interface OverlayEdge {
  *    wrong node.
  *  - window resize, for the reflow the container observer can miss.
  */
-export function useNodePositions(containerRef: React.RefObject<HTMLElement | null>) {
+export function useNodePositions(containerRef: React.RefObject<HTMLElement | null>, scale = 1) {
   const nodeRefs = useRef(new Map<string, HTMLElement>());
   const [positions, setPositions] = useState<Map<string, Box>>(new Map());
   // The overlay's own size: at least the container's CLIENT box, widened to the tree's
@@ -87,7 +87,7 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
       // Skipping is correct; throwing would lose the positions of every node
       // that IS still mounted.
       if (!el.isConnected) continue;
-      next.set(id, toLocalBox(id, el.getBoundingClientRect(), cRect, container.scrollLeft, container.scrollTop));
+      next.set(id, toLocalBox(id, el.getBoundingClientRect(), cRect, container.scrollLeft, container.scrollTop, scale));
     }
     // Commit ONLY when something moved. The layout effect below deliberately has
     // no dependency array, so this runs after every render; setting a freshly
@@ -104,7 +104,7 @@ export function useNodePositions(containerRef: React.RefObject<HTMLElement | nul
     // would restart the render loop through a second door.
     const { w, h } = overlayContentSize(next, container.clientWidth, container.clientHeight);
     setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
-  }, [containerRef]);
+  }, [containerRef, scale]);
 
   const schedule = useCallback(() => {
     if (frame.current != null) return;

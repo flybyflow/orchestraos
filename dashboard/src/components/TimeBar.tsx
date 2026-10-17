@@ -68,8 +68,8 @@ const SPEEDS: Array<1 | 4 | 16> = [1, 4, 16];
  */
 export function ReplayControls({
   playing, live, growing, hasEvents, error, fraction, readoutLabel, windowHours, speed,
-  onPlayPause, onGrow, onLive, onWindowChange, onSeek, onSpeedChange,
-}: ReplayControlsProps) {
+  onPlayPause, onGrow, onLive, onWindowChange, onSeek, onSpeedChange, windowPicker,
+}: ReplayControlsProps & { windowPicker?: React.ReactNode }) {
   const playDisabled = !hasEvents || Boolean(error);
   const playTitle = error
     ? `replay unavailable: ${error}`
@@ -78,7 +78,8 @@ export function ReplayControls({
       : playing ? 'pause replay' : 'play';
 
   return (
-    <div className="flex flex-wrap items-center gap-2 py-1.5 text-xs border-t border-neutral-900">
+    <div className={clsx('flex flex-wrap items-center gap-2 py-1.5 text-xs', !windowPicker && 'border-t border-neutral-900')}>
+      {windowPicker}
       <button
         type="button"
         onClick={onPlayPause}
@@ -171,17 +172,19 @@ export function ReplayControls({
         {readoutLabel}
       </span>
 
-      <select
-        value={windowHours}
-        onChange={(e) => onWindowChange(Number(e.target.value))}
-        title="replay window"
-        aria-label="replay window"
-        className="bg-neutral-900 border border-neutral-700 text-neutral-300 rounded px-1.5 py-1 shrink-0"
-      >
-        {REPLAY_WINDOW_OPTIONS.map((h) => (
-          <option key={h} value={h}>{windowLabel(h)}</option>
-        ))}
-      </select>
+      {!windowPicker && (
+        <select
+          value={windowHours}
+          onChange={(e) => onWindowChange(Number(e.target.value))}
+          title="replay window"
+          aria-label="replay window"
+          className="bg-neutral-900 border border-neutral-700 text-neutral-300 rounded px-1.5 py-1 shrink-0"
+        >
+          {REPLAY_WINDOW_OPTIONS.map((h) => (
+            <option key={h} value={h}>{windowLabel(h)}</option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
@@ -253,6 +256,7 @@ export function TimeBar({
           </button>
         </div>
       )}
+    {!replay && (
     <div className="flex flex-wrap items-center gap-3 py-2 text-xs">
       <div className="flex rounded-lg border border-neutral-700 overflow-hidden shrink-0">
         {WINDOW_OPTIONS.map((h) => (
@@ -312,7 +316,33 @@ export function TimeBar({
         Live
       </button>
     </div>
-    {replay && <ReplayControls {...replay} />}
+    )}
+    {replay && (
+      // One row, one window: the as-of scrubber + Live that used to sit above this row
+      // duplicated the replay scrubber and window picker, so with replay mounted the window
+      // pills drive BOTH (counts window and replay window) and the second slider is gone.
+      <ReplayControls
+        {...replay}
+        windowPicker={(
+          <div className="flex rounded-lg border border-neutral-700 overflow-hidden shrink-0">
+            {WINDOW_OPTIONS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => { onWindowChange(h); replay.onWindowChange(h); }}
+                aria-pressed={windowHours === h}
+                className={clsx(
+                  'px-2.5 py-1 transition-colors',
+                  windowHours === h ? 'bg-neutral-700 text-neutral-100' : 'bg-neutral-900 text-neutral-400 hover:bg-neutral-800',
+                )}
+              >
+                {windowLabel(h)}
+              </button>
+            ))}
+          </div>
+        )}
+      />
+    )}
     </div>
   );
 }

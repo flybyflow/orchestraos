@@ -32,15 +32,21 @@ export function toLocalBox(
   container: RectLike,
   scrollLeft = 0,
   scrollTop = 0,
+  // CSS transform scale of the diagram wrapper: getBoundingClientRect reports VISUAL px,
+  // the overlay svg draws in LAYOUT px, so divide the scale back out (1 = unscaled).
+  scale = 1,
 ): Box {
-  const left = rect.left - container.left + scrollLeft;
-  const top = rect.top - container.top + scrollTop;
+  const s = scale > 0 ? scale : 1;
+  const left = (rect.left - container.left) / s + scrollLeft;
+  const top = (rect.top - container.top) / s + scrollTop;
+  const width = rect.width / s;
+  const height = rect.height / s;
   return {
     id,
-    cx: left + rect.width / 2,
-    cy: top + rect.height / 2,
-    width: rect.width,
-    height: rect.height,
+    cx: left + width / 2,
+    cy: top + height / 2,
+    width,
+    height,
   };
 }
 
